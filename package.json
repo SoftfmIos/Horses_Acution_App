@@ -1,1 +1,33 @@
-{"name":"riyadh-polo-club-academy","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"vite build","preview":"vite preview --host 0.0.0.0","test":"node --test tests/*.test.js"},"dependencies":{"react":"^18.3.1","react-dom":"^18.3.1","lucide-react":"^0.383.0"},"devDependencies":{"vite":"^5.4.21"}}
+{
+  "name": "riyadh-polo-club-academy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "build": "vite build",
+    "preview": "node --env-file-if-exists=.env server/index.js",
+    "test": "node --test tests/*.test.js",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "format": "prettier --write src server scripts tests vite.config.js",
+    "test:browser": "node tests/browser.mjs",
+    "db:backup": "node --env-file-if-exists=.env scripts/backup.mjs"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "lucide-react": "^0.383.0",
+    "nodemailer": "^10.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.0",
+    "prettier": "^3.9.10",
+    "vite": "^5.4.21"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

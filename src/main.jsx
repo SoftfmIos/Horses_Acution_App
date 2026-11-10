@@ -1,27 +1,2179 @@
-import React, {useState} from 'react';
-import {createRoot} from 'react-dom/client';
-import {LayoutDashboard, CalendarDays, HeartPulse, Users, LogOut, ArrowUpRight, Plus, Search, Bell, ChevronRight, Clock, MapPin, Check, X, Menu, Sprout, BookOpen, ShieldCheck} from 'lucide-react';
-import {bookSession} from './booking';
-import './style.css';
-const words={en:{brand:'Riyadh Polo Club Academy',tag:'A better day at the stable',dashboard:'Overview',schedule:'Schedule & booking',horses:'Our horses',medical:'Health & care',tasks:'Daily tasks',members:'Members',welcome:'Good morning',intro:'A little more organized. A lot more time with your horses.',overview:'Your stable, at a glance',today:'Today at the stable',subtitle:'Care, connection, and everything in between.',book:'Book a session',addHorse:'Add a horse',all:'All sessions',mine:'My bookings',reserve:'Reserve a place',cancel:'Cancel booking',confirmed:'Booked',full:'Class full',capacity:'places left',healthy:'Ready to ride',rest:'On medical rest',owner:'Stable manager',member:'Member',demo:'Local demo · sample data',demoInfo:'Demo profiles are for exploring the app. Secure login and shared server storage are not connected yet.',switch:'Switch demo profile',search:'Search horses…',empty:'Nothing here yet',done:'Completed',pending:'To do',save:'Save horse',name:'Horse name',breed:'Breed',age:'Age',close:'Close',error:'Could not save changes in this browser.',duplicate:'You have already booked this session.',conflict:'You already have a booking at this time.',missing:'Session unavailable.',success:'Your place is reserved.',cancelled:'Booking cancelled.',notifications:'Care reminders',noBooking:'Your next ride starts here. Choose a session to book.',noResults:'No horses match your search.',next:'Coming up',viewAll:'View schedule',active:'Active horses',riders:'Stable members',bookings:'Reservations',care:'Care tasks due',stable:'Riyadh Polo Club Academy',workspace:'STABLE WORKSPACE',available:'Find your next ride',sessionIntro:'Make time for what you love. Find a class that fits your day.',horseIntro:'Every horse has a story. Keep theirs in one place.',healthIntro:'Thoughtful care, every step of the way.',taskIntro:'Small routines. Happier, healthier horses.',memberIntro:'The people who make this place special.',healthNote:'Medical rest blocks new horse assignments. Care records below are sample data.',required:'Please enter a name and breed.',horseSaved:'Horse added.',newHorse:'Meet your newest stablemate',activity:'A well-balanced week',activitySub:'Scheduled riding & care activities',hours:'activities',team:'Your stable team',role:'Role',email:'Email',status:'Status',activeMember:'Active',details:'Care details',medicalDate:'Next due',notes:'Notes',vaccine:'Vaccination',farrier:'Farrier visit',treatment:'Recovery check',taskComplete:'Task updated.'},ar:{brand:'أكاديمية نادي الرياض للبولو',tag:'يوم أجمل في الإسطبل',dashboard:'نظرة عامة',schedule:'الجدول والحجز',horses:'خيولنا',medical:'الصحة والرعاية',tasks:'المهام اليومية',members:'الأعضاء',welcome:'صباح الخير',intro:'تنظيم أفضل، ووقت أطول مع خيولك.',overview:'إسطبلك في لمحة',today:'اليوم في الإسطبل',subtitle:'رعاية وتواصل وكل ما بينهما.',book:'احجز حصة',addHorse:'إضافة حصان',all:'جميع الحصص',mine:'حجوزاتي',reserve:'احجز مكانك',cancel:'إلغاء الحجز',confirmed:'محجوز',full:'الحصة مكتملة',capacity:'أماكن متاحة',healthy:'جاهز للركوب',rest:'راحة طبية',owner:'مدير الإسطبل',member:'عضو',demo:'نسخة تجريبية محلية · بيانات نموذجية',demoInfo:'الملفات التجريبية لاستكشاف التطبيق. تسجيل الدخول الآمن والتخزين المشترك غير متصلين بعد.',switch:'تبديل الملف التجريبي',search:'ابحث عن حصان…',empty:'لا توجد بيانات بعد',done:'مكتمل',pending:'للتنفيذ',save:'حفظ الحصان',name:'اسم الحصان',breed:'السلالة',age:'العمر',close:'إغلاق',error:'تعذر حفظ التغييرات في المتصفح.',duplicate:'لقد حجزت هذه الحصة بالفعل.',conflict:'لديك حجز آخر في هذا الوقت.',missing:'الحصة غير متاحة.',success:'تم حجز مكانك.',cancelled:'تم إلغاء الحجز.',notifications:'تذكيرات الرعاية',noBooking:'رحلتك القادمة تبدأ هنا. اختر حصة للحجز.',noResults:'لا توجد خيول تطابق البحث.',next:'قريباً',viewAll:'عرض الجدول',active:'الخيول النشطة',riders:'أعضاء الإسطبل',bookings:'الحجوزات',care:'مهام الرعاية',stable:'أكاديمية نادي الرياض للبولو',workspace:'مساحة الإسطبل',available:'اختر رحلتك القادمة',sessionIntro:'خصص وقتاً لما تحب. اختر الحصة المناسبة ليومك.',horseIntro:'لكل حصان قصة. احتفظ بها في مكان واحد.',healthIntro:'رعاية مدروسة في كل خطوة.',taskIntro:'روتين بسيط لخيول أكثر صحة وسعادة.',memberIntro:'الأشخاص الذين يصنعون تميز هذا المكان.',healthNote:'الراحة الطبية تمنع إسناد حصص جديدة للحصان. سجلات الرعاية أدناه تجريبية.',required:'يرجى إدخال الاسم والسلالة.',horseSaved:'تمت إضافة الحصان.',newHorse:'تعرف على رفيقك الجديد',activity:'أسبوع متوازن',activitySub:'أنشطة الركوب والرعاية المجدولة',hours:'أنشطة',team:'فريق الإسطبل',role:'الدور',email:'البريد الإلكتروني',status:'الحالة',activeMember:'نشط',details:'تفاصيل الرعاية',medicalDate:'الموعد القادم',notes:'ملاحظات',vaccine:'تطعيم',farrier:'زيارة البيطار',treatment:'فحص التعافي',taskComplete:'تم تحديث المهمة.'}};
-const names={manager:{en:'Sara',ar:'سارة'},member:{en:'Omar',ar:'عمر'}};
-const date=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Riyadh'});
-const seed={horses:[{id:'h1',name:'Shams',ar:'شمس',breed:'Arabian',breedAr:'عربي',age:7,status:'healthy',color:'#dbbd90'},{id:'h2',name:'Atlas',ar:'أطلس',breed:'Thoroughbred',breedAr:'ثوروبريد',age:9,status:'healthy',color:'#9b6e53'},{id:'h3',name:'Luna',ar:'لونا',breed:'Andalusian',breedAr:'أندلسي',age:6,status:'rest',color:'#b0b4ad'},{id:'h4',name:'Barq',ar:'برق',breed:'Arabian',breedAr:'عربي',age:5,status:'healthy',color:'#574d43'}],bookings:[],tasks:[{id:1,en:'Morning feed & fresh water',ar:'العلف الصباحي والمياه النظيفة',time:'07:00',person:'Yousef',personAr:'يوسف',done:true},{id:2,en:'Check Luna’s recovery',ar:'متابعة تعافي لونا',time:'10:00',person:'Dr. Layla',personAr:'د. ليلى',done:false},{id:3,en:'Clean tack & prepare arena',ar:'تنظيف المعدات وتجهيز الميدان',time:'14:00',person:'Yousef',personAr:'يوسف',done:false}]};
-const sessions=[{id:'s1',en:'Morning groundwork',ar:'تدريب أرضي صباحي',type:'Groundwork',typeAr:'تدريب أرضي',start:'08:00',end:'09:00',date,capacity:4,horseId:'h1',trainer:'Layla',trainerAr:'ليلى',level:'All levels',levelAr:'كل المستويات',arena:'Outdoor arena',arenaAr:'الميدان الخارجي'},{id:'s2',en:'Find your rhythm',ar:'اكتشف إيقاعك',type:'Group lesson',typeAr:'حصة جماعية',start:'10:00',end:'11:00',date,capacity:6,horseId:'h2',trainer:'Khalid',trainerAr:'خالد',level:'Beginner',levelAr:'مبتدئ',arena:'Main arena',arenaAr:'الميدان الرئيسي'},{id:'s3',en:'A little further',ar:'خطوة أبعد',type:'Private lesson',typeAr:'حصة خاصة',start:'15:00',end:'16:00',date,capacity:1,horseId:'h4',trainer:'Layla',trainerAr:'ليلى',level:'Intermediate',levelAr:'متوسط',arena:'Main arena',arenaAr:'الميدان الرئيسي'},{id:'s4',en:'Golden hour ride',ar:'جولة الغروب',type:'Trail ride',typeAr:'جولة خارجية',start:'17:00',end:'18:00',date,capacity:4,horseId:'h1',trainer:'Khalid',trainerAr:'خالد',level:'All levels',levelAr:'كل المستويات',arena:'Desert trail',arenaAr:'المسار الصحراوي'}];
-function load(){try{return JSON.parse(localStorage.getItem('rasan-v1'))||seed}catch{return seed}}
-function App(){const [lang,setLang]=useState(()=>localStorage.getItem('rasan-lang')||'en');const [page,setPage]=useState('dashboard');const [profile,setProfile]=useState('manager');const [data,setData]=useState(load);const [tab,setTab]=useState('all');const [q,setQ]=useState('');const [modal,setModal]=useState(null);const [toast,setToast]=useState('');const [menu,setMenu]=useState(false);const t=words[lang];const ar=lang==='ar';const tr=(x)=>ar?x.ar:x.en;document.title=t.brand;document.documentElement.lang=lang;document.documentElement.dir=ar?'rtl':'ltr';
-const notify=m=>{setToast(m);setTimeout(()=>setToast(''),4000)};const persist=n=>{try{localStorage.setItem('rasan-v1',JSON.stringify(n));setData(n);return true}catch{notify(t.error);return false}};
-const go=p=>{setPage(p);setMenu(false)};const active=data.bookings.filter(b=>b.status==='confirmed');const mine=active.filter(b=>b.memberId===profile);const nav=[['dashboard',LayoutDashboard],['schedule',CalendarDays],['horses',HorseIcon],['medical',HeartPulse],['tasks',Sprout],...(profile==='manager'?[['members',Users]]:[])];
-const book=s=>{if(data.horses.find(h=>h.id===s.horseId)?.status==='rest')return;try{const bookings=bookSession(sessions,data.bookings,s.id,profile,crypto.randomUUID());if(persist({...data,bookings}))notify(t.success)}catch(e){notify(t[e.message]||t.full)}};
-const cancel=id=>{if(persist({...data,bookings:data.bookings.map(b=>b.id===id?{...b,status:'cancelled'}:b)}))notify(t.cancelled)};
-const sessionCard=s=>{const b=mine.find(b=>b.sessionId===s.id);const remaining=s.capacity-active.filter(b=>b.sessionId===s.id).length;return <article className="session" key={s.id}><div className="session-top"><span className="eyebrow">{ar?s.typeAr:s.type}</span><span className="level">{ar?s.levelAr:s.level}</span></div><h3>{tr(s)}</h3><p className="muted">{ar?'مع':'with'} {ar?s.trainerAr:s.trainer}</p><div className="session-meta"><span><Clock size={15}/>{s.start} – {s.end}</span><span><MapPin size={15}/>{ar?s.arenaAr:s.arena}</span></div><div className="session-bottom"><small>{remaining} {t.capacity}</small><button className={b?'soft':'primary'} disabled={!b&&remaining===0} onClick={()=>b?cancel(b.id):book(s)}>{b?t.cancel:remaining?t.reserve:t.full}{!b&&<ArrowUpRight size={15}/>}</button></div></article>};
-return <><aside className={menu?'sidebar open':'sidebar'}><a className="brand" href="#" onClick={e=>{e.preventDefault();go('dashboard')}}><img className="academy-logo" src="/logos/riyadh-polo-club-academy.png" alt={ar?"شعار نادي الرياض للبولو":"Polo Club of Riyadh crest"}/><span>{t.brand}<small>{ar?"نظام إدارة الإسطبل":"STABLE MANAGEMENT"}</small></span></a><div className="stable-selector"><span className="stable-symbol">RP</span><div><strong>{t.stable}</strong><small>{t.workspace}</small></div></div><div className="nav-label">{ar?'إدارة الإسطبل':'YOUR WORKSPACE'}</div><nav>{nav.map(([key,Icon])=><button key={key} className={page===key?'selected':''} onClick={()=>go(key)}><Icon size={19}/>{t[key]}{key==='tasks'&&<span className="count">{data.tasks.filter(x=>!x.done).length}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="help"><Sprout size={24}/><strong>{ar?'رعاية أفضل، معاً':'Better care, together.'}</strong><p>{ar?'كل التفاصيل الصغيرة تصنع فرقاً.':'It’s the little things that make a happy stable.'}</p></div><button className="profile" title={t.switch} onClick={()=>{setProfile(profile==='manager'?'member':'manager');setPage('dashboard')}}><span className="avatar">{profile==='manager'?'S':'O'}</span><span><strong>{tr(names[profile])} {ar?'':'Ahmed'}</strong><small>{profile==='manager'?t.owner:t.member}</small></span><LogOut size={16}/></button></div></aside><div className="workspace"><header><button className="mobile-menu icon-button" onClick={()=>setMenu(!menu)} aria-label="Menu"><Menu/></button><div className="breadcrumb"><img className="header-logo" src="/logos/riyadh-polo-club-academy.png" alt=""/>{t.stable}<ChevronRight size={14}/><strong>{t[page]}</strong></div><div className="header-actions"><button className="language" onClick={()=>{const n=ar?'en':'ar';setLang(n);localStorage.setItem('rasan-lang',n)}}>{ar?'English':'العربية'}</button><button className="icon-button bell" onClick={()=>setModal('notifications')} aria-label={t.notifications}><Bell size={19}/><i/></button><span className="avatar small">{profile==='manager'?'S':'O'}</span></div></header><main><div className="demo"><ShieldCheck size={14}/><span>{t.demo}</span><button onClick={()=>setModal('demo')}>{ar?'التفاصيل':'Details'}</button></div><div className="page-title"><div><div className="eyebrow">{new Date().toLocaleDateString(ar?'ar-SA':'en-GB',{weekday:'long',month:'long',day:'numeric',timeZone:'Asia/Riyadh'})}</div><h1>{page==='dashboard'?<>{t.welcome}, {tr(names[profile])}<span className="sun"> ☀</span></>:page==='schedule'?t.available:t[page]}</h1><p>{page==='dashboard'?t.intro:page==='schedule'?t.sessionIntro:page==='horses'?t.horseIntro:page==='medical'?t.healthIntro:page==='tasks'?t.taskIntro:t.memberIntro}</p></div>{page==='dashboard'?<button className="primary" onClick={()=>go('schedule')}><Plus size={17}/>{t.book}</button>:page==='horses'&&profile==='manager'?<button className="primary" onClick={()=>setModal('horse')}><Plus size={17}/>{t.addHorse}</button>:null}</div>
-{page==='dashboard'&&<><section className="stats">{[[HorseIcon,data.horses.length,t.active,'sage'],[Users,2,t.riders,'sand'],[CalendarDays,active.length,t.bookings,'lavender'],[HeartPulse,data.tasks.filter(x=>!x.done).length,t.care,'rose']].map(([Icon,n,label,c])=><div className="stat" key={label}><span className={'stat-icon '+c}><Icon size={21}/></span><div><strong>{n.toLocaleString(ar?'ar-SA':'en')}</strong><span>{label}</span></div><ArrowUpRight size={17} className="stat-arrow"/></div>)}</section><section className="dashboard-grid"><div className="hero"><div className="hero-copy"><span className="eyebrow">{ar?'حياة الفروسية':'THE EQUESTRIAN LIFE'}</span><h2>{ar?<>أيام أجمل.<br/>ركوب أفضل.</>:<>Good days.<br/>Great rides.</>}</h2><p>{ar?'مساحة لكل حصان وفارس وكل لحظة بينهما.':'A place for every horse, every rider, and every moment in between.'}</p><button onClick={()=>go('schedule')}>{t.viewAll}<ArrowUpRight size={18}/></button></div><div className="horse-art"><HorseIcon size={210}/><div className="art-ring"/></div><span className="hero-foot">{ar?'تواصل • توازن • رعاية':'CONNECTION · BALANCE · CARE'}</span></div><div className="panel activity"><div className="section-heading"><div><h3>{t.activity}</h3><p>{t.activitySub}</p></div><span className="pill">{ar?'هذا الأسبوع':'This week'}</span></div><div className="bars">{[4,7,5,9,6,3,2].map((n,i)=><div className="bar-column" key={i}><span>{n}</span><div style={{height:n*12,background:i===2?'var(--gold)':'var(--stone)'}}/><small>{(ar?['س','ح','ن','ث','ر','خ','ج']:['M','T','W','T','F','S','S'])[i]}</small></div>)}</div><small className="chart-caption">{ar?'نموذج توضيحي لتوزيع الأنشطة':'Illustrative activity distribution'}</small></div></section><section className="lower-grid"><div><div className="section-heading"><div><h2>{t.today}</h2><p>{t.subtitle}</p></div><button className="text-button" onClick={()=>go('schedule')}>{t.viewAll}<ArrowUpRight size={15}/></button></div><div className="today-list">{sessions.slice(0,3).map(s=><button key={s.id} className="today-row" onClick={()=>go('schedule')}><span className="time">{s.start}<small>{s.end}</small></span><span className="timeline-dot"/><span className="today-name"><strong>{tr(s)}</strong><small>{ar?s.trainerAr:s.trainer} · {ar?s.arenaAr:s.arena}</small></span><span className="pill">{ar?s.typeAr:s.type}</span><ChevronRight size={17}/></button>)}</div></div><div className="panel task-panel"><div className="section-heading"><h3>{t.tasks}</h3><span className="pill">{data.tasks.filter(x=>x.done).length}/{data.tasks.length}</span></div>{data.tasks.map(task=><div className="task-row" key={task.id}><button className={'checkbox '+(task.done?'checked':'')} aria-label={tr(task)} onClick={()=>{if(profile==='member')return notify(ar?'التعديل متاح للمدير في هذا العرض':'Manager can edit tasks in this demo');persist({...data,tasks:data.tasks.map(x=>x.id===task.id?{...x,done:!x.done}:x)})}}>{task.done&&<Check size={14}/>}</button><span className={task.done?'strike':''}>{tr(task)}<small>{task.time} · {ar?task.personAr:task.person}</small></span></div>)}</div></section></>}
-{page==='schedule'&&<><div className="toolbar"><div className="tabs"><button className={tab==='all'?'active':''} onClick={()=>setTab('all')}>{t.all}</button><button className={tab==='mine'?'active':''} onClick={()=>setTab('mine')}>{t.mine} ({mine.length})</button></div><span className="muted">{new Date().toLocaleDateString(ar?'ar-SA':'en-GB',{timeZone:'Asia/Riyadh'})}</span></div><div className="session-grid">{sessions.filter(s=>tab==='all'||mine.some(b=>b.sessionId===s.id)).map(sessionCard)}</div>{tab==='mine'&&!mine.length&&<div className="empty"><CalendarDays size={36}/><p>{t.noBooking}</p><button className="primary" onClick={()=>setTab('all')}>{t.all}</button></div>}</>}
-{page==='horses'&&<><label className="search"><Search size={18}/><input placeholder={t.search} value={q} onChange={e=>setQ(e.target.value)}/></label><div className="horse-grid">{data.horses.filter(h=>(h.name+' '+h.ar+' '+h.breed).toLowerCase().includes(q.toLowerCase())).map(h=><article className="horse-card" key={h.id}><div className="horse-portrait" style={{background:h.color+'30',color:h.color}}><HorseIcon size={112}/><span className={'pill '+(h.status==='rest'?'warning':'')}>{h.status==='rest'?t.rest:t.healthy}</span></div><div className="horse-info"><h3>{ar?h.ar||h.name:h.name}</h3><p>{ar?h.breedAr||h.breed:h.breed} · {h.age} {ar?'سنوات':'years old'}</p><button className="text-button" onClick={()=>{go('medical')}}>{t.details}<ArrowUpRight size={16}/></button></div></article>)}</div>{!data.horses.some(h=>(h.name+' '+h.ar+' '+h.breed).toLowerCase().includes(q.toLowerCase()))&&<div className="empty">{t.noResults}</div>}</>}
-{page==='medical'&&<><p className="notice"><ShieldCheck size={18}/>{t.healthNote}</p><div className="panel table-wrap"><table><thead><tr><th>{t.horses}</th><th>{t.details}</th><th>{t.medicalDate}</th><th>{t.notes}</th></tr></thead><tbody>{[['Luna','لونا',t.treatment,'2026-11-14',ar?'راحة حتى موافقة الطبيب':'Rest until vet clearance'],['Shams','شمس',t.vaccine,'2026-12-01',ar?'الجرعة الدورية القادمة':'Next routine booster'],['Atlas','أطلس',t.farrier,'2026-11-20',ar?'فحص الحوافر والتقليم':'Hoof check and trim']].map(r=><tr key={r[0]}><td><strong>{ar?r[1]:r[0]}</strong></td><td>{r[2]}</td><td dir="ltr">{r[3]}</td><td>{r[4]}</td></tr>)}</tbody></table></div></>}
-{page==='tasks'&&<div className="panel">{data.tasks.map(task=><div className="task-row large" key={task.id}><button disabled={profile!=='manager'} className={'checkbox '+(task.done?'checked':'')} aria-label={tr(task)} onClick={()=>{if(persist({...data,tasks:data.tasks.map(x=>x.id===task.id?{...x,done:!x.done}:x)}))notify(t.taskComplete)}}>{task.done&&<Check size={14}/>}</button><span className={task.done?'strike':''}>{tr(task)}<small>{task.time} · {ar?task.personAr:task.person}</small></span><span className="pill">{task.done?t.done:t.pending}</span></div>)}</div>}
-{page==='members'&&profile==='manager'&&<div className="panel table-wrap"><table><thead><tr><th>{t.name}</th><th>{t.role}</th><th>{t.status}</th></tr></thead><tbody>{['manager','member'].map(p=><tr key={p}><td><strong>{tr(names[p])}</strong></td><td>{p==='manager'?t.owner:t.member}</td><td><span className="pill">{t.activeMember}</span></td></tr>)}</tbody></table></div>}
-<footer><span>© {new Date().getFullYear()} {t.brand}</span><span>{t.tag}</span></footer></main></div>{toast&&<div className="toast" role="status"><Check size={18}/>{toast}</div>}{modal&&<div className="modal-backdrop" onClick={()=>setModal(null)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={e=>e.stopPropagation()}><button className="modal-close icon-button" aria-label={t.close} onClick={()=>setModal(null)}><X/></button><h2 id="modal-title">{modal==='horse'?t.newHorse:modal==='demo'?t.demo:t.notifications}</h2>{modal==='demo'?<><p>{t.demoInfo}</p><button className="primary" onClick={()=>{setProfile(profile==='manager'?'member':'manager');go('dashboard');setModal(null)}}>{t.switch}</button></>:modal==='notifications'?<>{data.tasks.filter(x=>!x.done).map(x=><p key={x.id}>{x.time} · {tr(x)}</p>)}</>:<form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);const name=f.get('name').trim(),breed=f.get('breed').trim();if(!name||!breed)return notify(t.required);if(persist({...data,horses:[...data.horses,{id:crypto.randomUUID(),name,ar:name,breed,breedAr:breed,age:Number(f.get('age')),status:'healthy',color:'#aa8d61'}]})){setModal(null);notify(t.horseSaved)}}}><label>{t.name}<input name="name" required maxLength={80}/></label><label>{t.breed}<input name="breed" required maxLength={80}/></label><label>{t.age}<input name="age" type="number" min="0" max="50" defaultValue="5" required/></label><button className="primary" type="submit">{t.save}</button></form>}</section></div>}</>}
-function HorseIcon({size=24,...props}){return <svg width={size} height={size} viewBox="0 0 100 100" fill="none" {...props}><path d="M24 86c-4-19 2-34 17-47l-6-8 9-9 5-16 9 13 12-7-2 15 15 19c5 6 4 12-2 15l-9 4-14-9c-8 8-9 18-5 30" fill="currentColor" opacity=".85"/><path d="M24 86h45M41 39c-9 6-15 17-17 29M45 23l-9-7-8 20-8 9 7 7" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/><circle cx="65" cy="36" r="2.3" fill="#f7f6ef"/></svg>}
-createRoot(document.getElementById('root')).render(<App/>);
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  CalendarDays,
+  Users,
+  HeartPulse,
+  LayoutDashboard,
+  Package,
+  Tags,
+  FileText,
+  Bell,
+  Plus,
+  LogOut,
+  Menu,
+  X,
+  Check,
+  RefreshCw,
+  Sprout,
+  Search,
+  Activity,
+  BookOpen,
+} from "lucide-react";
+import { api } from "./api";
+import "./style.css";
+import "./system.css";
+const dict = {
+  en: {
+    academyPortal: "Academy portal",
+    memberPortal: "Member portal",
+    myAccount: "My account",
+    accountBalance: "My balance",
+    sessionBalance: "Lesson credits remaining",
+    credits: "Session credits (packages only)",
+    creditCost: "Credits per booking",
+    package: "Lesson package",
+    requestPackage: "Request package",
+    confirmRequest: "Confirm request",
+    packagePending:
+      "Your package payment request is ready. Credits are added after payment is recorded.",
+    packagePayment:
+      "Requesting a package creates a pro forma payment request. No money is collected here, and credits become available after the academy records full payment.",
+    useCredits: "Use my lesson credits",
+    creditHistory: "Lesson credit history",
+    creditChange: "Credit change",
+    creditReason: "Reason",
+    upcoming: "My upcoming sessions",
+    allInstructors: "All instructors",
+    filterInstructor: "Choose instructor",
+    creditPaid: "Package paid",
+    creditRefunded: "Package refunded",
+    creditUsed: "Session booked",
+    creditRestored: "Booking cancelled",
+    lessonCredits: "Lesson credits",
+    packageNotice:
+      "Package credits are awarded once payment is fully recorded. Regular bookings can be paid in SAR or with eligible lesson credits.",
+
+    brand: "Riyadh Polo Club Academy",
+    overview: "Overview",
+    classes: "Classes & riding",
+    horses: "Horses",
+    medical: "Medical care",
+    feeding: "Feeding plans",
+    tasks: "Tasks",
+    pricing: "Pricing",
+    discounts: "Discount codes",
+    vouchers: "Vouchers",
+    billing: "Payment requests",
+    inventory: "Inventory",
+    reports: "Reports",
+    members: "Members",
+    notifications: "Notifications",
+    login: "Sign in",
+    register: "Create account",
+    logout: "Sign out",
+    email: "Email",
+    password: "Password (12+ characters)",
+    name: "Name",
+    stableName: "Stable name",
+    invite: "Member invitation code",
+    join: "Join an existing stable",
+    newStable: "Create a stable",
+    save: "Save",
+    cancel: "Cancel",
+    add: "Add",
+    edit: "Edit",
+    loading: "Loading…",
+    empty: "No records yet.",
+    welcome: "Your academy workspace",
+    intro: "Riding, care, and your team — connected in one place.",
+    manager: "Manager",
+    member: "Member",
+    price: "Price (SAR)",
+    amount: "Amount (SAR)",
+    kind: "Category",
+    code: "Code",
+    mode: "Discount type",
+    value: "Value (% or SAR)",
+    minAmount: "Minimum spend (SAR)",
+    maxUses: "Maximum redemptions",
+    expiresAt: "Expiry",
+    balance: "Voucher value (SAR)",
+    active: "Active",
+    breed: "Breed",
+    birthDate: "Birth date",
+    microchip: "Microchip / passport",
+    status: "Status",
+    notes: "Notes",
+    title: "Title",
+    startsAt: "Start",
+    endsAt: "End",
+    capacity: "Places",
+    horseIds: "Available horses (select multiple)",
+    instructor: "Instructor",
+    arena: "Arena",
+    planId: "Price plan",
+    horseId: "Horse",
+    type: "Care type",
+    date: "Recorded at",
+    dueAt: "Due at",
+    vet: "Vet / care provider",
+    restriction: "Restrict horse from riding",
+    completed: "Care completed",
+    medication: "Medication",
+    dose: "Dose / route",
+    frequency: "Frequency",
+    feed: "Feed / supplement",
+    quantity: "Quantity",
+    time: "Daily time (Riyadh)",
+    assigneeId: "Assigned to",
+    done: "Done",
+    unit: "Unit",
+    reorderAt: "Reorder level",
+    book: "Book",
+    quote: "Calculate total",
+    confirm: "Confirm booking",
+    discountCode: "Discount code (optional)",
+    voucherCode: "Voucher code (optional)",
+    gross: "Original amount",
+    discount: "Discount",
+    voucher: "Voucher applied",
+    due: "Amount due",
+    proforma: "PRO FORMA — NOT A TAX INVOICE",
+    fiscal:
+      "Official tax invoices are issued only by your separate ZATCA invoicing system.",
+    createRequest: "Create payment request",
+    refund: "Record external refund",
+    memberId: "Member",
+    payment: "Record payment",
+    reference: "Payment reference",
+    externalRef: "External invoice reference",
+    paid: "Payments recorded",
+    outstanding: "Outstanding",
+    recordedPayments: "Recorded payments",
+    bookings: "Confirmed bookings",
+    lowStock: "Low stock items",
+    overdueTasks: "Overdue tasks",
+    discountsTotal: "Discounts applied",
+    voucherUsed: "Vouchers redeemed",
+    inviteMember: "Invite a member",
+    inviteInfo:
+      "Single-use invitation. Expires in 7 days. Share securely with the intended member.",
+    markRead: "Mark read",
+    refresh: "Refresh",
+    ready: "Ready to ride",
+    rest: "Medical rest",
+    retired: "Retired",
+    percent: "Percentage",
+    fixed: "Fixed amount",
+    class: "Group class",
+    private: "Private lesson",
+    ride: "Ride",
+    boarding: "Boarding",
+    other: "Other",
+    open: "Open",
+    settled: "Settled",
+    void: "Void",
+    confirmed: "Confirmed",
+    cancelled: "Cancelled",
+    cancelBooking: "Cancel booking",
+    myBookings: "My bookings",
+    places: "places left",
+    view: "View",
+    print: "Print pro forma",
+    refundNotice:
+      "Record a refund already completed externally. Enter the credit note reference from your invoicing system.",
+    creditRef: "External credit note reference",
+    paymentNotice:
+      "Record a payment already received. This does not collect money or issue a tax invoice.",
+    emailOff:
+      "In-app notifications are active. Email delivery is not configured.",
+    emailOn: "In-app and queued SMTP email notifications are enabled.",
+    dataNotice: "Shared server data · amounts in SAR · Riyadh time",
+    passwordHint:
+      "Use a unique password of at least 12 characters. New stable accounts are managers; invitations create member accounts.",
+    search: "Search…",
+    saved: "Saved successfully.",
+    bookingSaved: "Booking confirmed.",
+    notificationIntro: "Booking updates and scheduled care reminders.",
+    membersIntro:
+      "Invite members to let them view classes and manage their bookings.",
+    back: "Back",
+    select: "Select",
+    usage: "Uses",
+    remaining: "Remaining",
+    restrictionNote:
+      "Completing care does not automatically clear rest. Edit the horse after veterinary clearance.",
+    session: "Class",
+    owner: "Manager",
+    role: "Role",
+    allBookings: "All bookings",
+    noPrices: "Create a price plan and horses before scheduling a class.",
+    copy: "Copy code",
+    copied: "Copied",
+    error: "Could not load data",
+    retry: "Retry",
+    connection: "Connection interrupted; showing last loaded data.",
+    registrationNote:
+      "Public sign-up creates a separate stable. To join this academy, request an invitation.",
+    feedingNote:
+      "Daily feeding plans create assigned tasks in Riyadh time. Save a plan to start the reminders.",
+    cancelPolicy:
+      "Unpaid future bookings can be cancelled and vouchers restored. Paid bookings require external reconciliation.",
+    noBilling: "Book a class to create a pro forma payment request.",
+    purpose: "Stable and member management",
+    unread: "Unread",
+    complete: "Complete",
+    medicalFor: "Medical history",
+  },
+  ar: {
+    academyPortal: "بوابة الأكاديمية",
+    memberPortal: "بوابة العضو",
+    myAccount: "حسابي",
+    accountBalance: "رصيدي",
+    sessionBalance: "رصيد الحصص المتبقي",
+    credits: "عدد الحصص (للباقات فقط)",
+    creditCost: "رصيد الحصص المطلوب للحجز",
+    package: "باقة حصص",
+    requestPackage: "طلب باقة",
+    confirmRequest: "تأكيد الطلب",
+    packagePending: "تم إنشاء طلب دفع الباقة. يضاف رصيد الحصص بعد تسجيل الدفع.",
+    packagePayment:
+      "طلب الباقة ينشئ طلب دفع مبدئياً. لا يتم تحصيل المال هنا؛ يضاف الرصيد بعد تسجيل الأكاديمية للسداد الكامل.",
+    useCredits: "استخدام رصيد حصصي",
+    creditHistory: "حركة رصيد الحصص",
+    creditChange: "التغيير في الرصيد",
+    creditReason: "السبب",
+    upcoming: "حصصي القادمة",
+    allInstructors: "جميع المدربين",
+    filterInstructor: "اختيار المدرب",
+    creditPaid: "سداد الباقة",
+    creditRefunded: "استرداد الباقة",
+    creditUsed: "حجز حصة",
+    creditRestored: "إلغاء الحجز",
+    lessonCredits: "رصيد الحصص",
+    packageNotice:
+      "يضاف رصيد الباقة بعد تسجيل السداد الكامل. يمكن الحجز بالدفع بالريال أو برصيد الحصص المتاح.",
+
+    brand: "أكاديمية نادي الرياض للبولو",
+    overview: "نظرة عامة",
+    classes: "الحصص والركوب",
+    horses: "الخيول",
+    medical: "الرعاية الطبية",
+    feeding: "خطط التغذية",
+    tasks: "المهام",
+    pricing: "الأسعار",
+    discounts: "أكواد الخصم",
+    vouchers: "القسائم",
+    billing: "طلبات الدفع",
+    inventory: "المخزون",
+    reports: "التقارير",
+    members: "الأعضاء",
+    notifications: "الإشعارات",
+    login: "تسجيل الدخول",
+    register: "إنشاء حساب",
+    logout: "تسجيل الخروج",
+    email: "البريد الإلكتروني",
+    password: "كلمة المرور (١٢ حرفاً على الأقل)",
+    name: "الاسم",
+    stableName: "اسم الإسطبل",
+    invite: "رمز دعوة العضو",
+    join: "الانضمام إلى إسطبل",
+    newStable: "إنشاء إسطبل",
+    save: "حفظ",
+    cancel: "إلغاء",
+    add: "إضافة",
+    edit: "تعديل",
+    loading: "جارٍ التحميل…",
+    empty: "لا توجد سجلات بعد.",
+    welcome: "مساحة الأكاديمية",
+    intro: "الركوب والرعاية والفريق — في مكان واحد.",
+    manager: "مدير",
+    member: "عضو",
+    price: "السعر (ريال)",
+    amount: "المبلغ (ريال)",
+    kind: "الفئة",
+    code: "الرمز",
+    mode: "نوع الخصم",
+    value: "القيمة (% أو ريال)",
+    minAmount: "الحد الأدنى للإنفاق (ريال)",
+    maxUses: "أقصى عدد للاستخدام",
+    expiresAt: "الصلاحية",
+    balance: "قيمة القسيمة (ريال)",
+    active: "نشط",
+    breed: "السلالة",
+    birthDate: "تاريخ الميلاد",
+    microchip: "الشريحة / جواز الحصان",
+    status: "الحالة",
+    notes: "ملاحظات",
+    title: "العنوان",
+    startsAt: "البداية",
+    endsAt: "النهاية",
+    capacity: "الأماكن",
+    horseIds: "الخيول المتاحة (اختيار متعدد)",
+    instructor: "المدرب",
+    arena: "الميدان",
+    planId: "خطة السعر",
+    horseId: "الحصان",
+    type: "نوع الرعاية",
+    date: "تاريخ التسجيل",
+    dueAt: "موعد الاستحقاق",
+    vet: "الطبيب / مقدم الرعاية",
+    restriction: "منع الحصان من الركوب",
+    completed: "اكتملت الرعاية",
+    medication: "الدواء",
+    dose: "الجرعة / طريقة الإعطاء",
+    frequency: "التكرار",
+    feed: "العلف / المكمل",
+    quantity: "الكمية",
+    time: "الوقت اليومي (الرياض)",
+    assigneeId: "المكلف",
+    done: "مكتمل",
+    unit: "الوحدة",
+    reorderAt: "حد إعادة الطلب",
+    book: "حجز",
+    quote: "حساب الإجمالي",
+    confirm: "تأكيد الحجز",
+    discountCode: "كود الخصم (اختياري)",
+    voucherCode: "رمز القسيمة (اختياري)",
+    gross: "المبلغ الأصلي",
+    discount: "الخصم",
+    voucher: "القسيمة المستخدمة",
+    due: "المبلغ المستحق",
+    proforma: "طلب دفع مبدئي — ليس فاتورة ضريبية",
+    fiscal:
+      "تصدر الفواتير الضريبية الرسمية حصرياً من نظام الفوترة الخارجي المتوافق مع هيئة الزكاة والضريبة والجمارك.",
+    createRequest: "إنشاء طلب دفع",
+    refund: "تسجيل استرداد خارجي",
+    memberId: "العضو",
+    payment: "تسجيل دفعة",
+    reference: "مرجع الدفع",
+    externalRef: "مرجع الفاتورة الخارجية",
+    paid: "الدفعات المسجلة",
+    outstanding: "المستحق",
+    recordedPayments: "الدفعات المسجلة",
+    bookings: "الحجوزات المؤكدة",
+    lowStock: "أصناف منخفضة المخزون",
+    overdueTasks: "المهام المتأخرة",
+    discountsTotal: "الخصومات المطبقة",
+    voucherUsed: "القسائم المستخدمة",
+    inviteMember: "دعوة عضو",
+    inviteInfo:
+      "دعوة للاستخدام مرة واحدة صالحة لمدة ٧ أيام. شاركها مع العضو المعني فقط.",
+    markRead: "تحديد كمقروء",
+    refresh: "تحديث",
+    ready: "جاهز للركوب",
+    rest: "راحة طبية",
+    retired: "متقاعد",
+    percent: "نسبة مئوية",
+    fixed: "مبلغ ثابت",
+    class: "حصة جماعية",
+    private: "حصة خاصة",
+    ride: "جولة ركوب",
+    boarding: "إيواء",
+    other: "أخرى",
+    open: "مفتوح",
+    settled: "مسدد",
+    void: "ملغى",
+    confirmed: "مؤكد",
+    cancelled: "ملغى",
+    cancelBooking: "إلغاء الحجز",
+    myBookings: "حجوزاتي",
+    places: "أماكن متبقية",
+    view: "عرض",
+    print: "طباعة طلب الدفع",
+    refundNotice:
+      "سجل استرداداً تم تنفيذه خارجياً وأدخل مرجع الإشعار الدائن من نظام الفوترة.",
+    creditRef: "مرجع الإشعار الدائن الخارجي",
+    paymentNotice:
+      "سجل دفعة تم استلامها بالفعل. هذه العملية لا تحصّل المال ولا تصدر فاتورة ضريبية.",
+    emailOff: "إشعارات التطبيق مفعلة. إرسال البريد الإلكتروني غير مهيأ.",
+    emailOn: "إشعارات التطبيق وإرسال البريد الإلكتروني مفعّلان.",
+    dataNotice: "بيانات مشتركة على الخادم · العملة ريال · توقيت الرياض",
+    passwordHint:
+      "استخدم كلمة مرور فريدة من ١٢ حرفاً على الأقل. إنشاء إسطبل يمنح دور المدير، والدعوة تمنح دور العضو.",
+    search: "بحث…",
+    saved: "تم الحفظ بنجاح.",
+    bookingSaved: "تم تأكيد الحجز.",
+    notificationIntro: "تحديثات الحجوزات وتذكيرات الرعاية المجدولة.",
+    membersIntro: "ادع الأعضاء لعرض الحصص وإدارة حجوزاتهم.",
+    back: "رجوع",
+    select: "اختر",
+    usage: "الاستخدامات",
+    remaining: "المتبقي",
+    restrictionNote:
+      "إكمال الرعاية لا يرفع الراحة تلقائياً. عدّل حالة الحصان بعد موافقة الطبيب.",
+    session: "الحصة",
+    owner: "مدير",
+    role: "الدور",
+    allBookings: "جميع الحجوزات",
+    noPrices: "أنشئ خطة سعر وأضف الخيول قبل جدولة حصة.",
+    copy: "نسخ الرمز",
+    copied: "تم النسخ",
+    error: "تعذر تحميل البيانات",
+    retry: "إعادة المحاولة",
+    connection: "انقطع الاتصال؛ يتم عرض آخر بيانات محملة.",
+    registrationNote:
+      "التسجيل العام ينشئ إسطبلاً مستقلاً. للانضمام إلى الأكاديمية اطلب دعوة.",
+    feedingNote:
+      "خطط التغذية اليومية تنشئ مهام بتوقيت الرياض. احفظ الخطة لبدء التذكيرات.",
+    cancelPolicy:
+      "يمكن إلغاء الحجز المستقبلي غير المدفوع واستعادة القسيمة. الحجوزات المدفوعة تتطلب تسوية خارجية.",
+    noBilling: "احجز حصة لإنشاء طلب دفع مبدئي.",
+    purpose: "إدارة الإسطبل والأعضاء",
+    unread: "غير مقروء",
+    complete: "إكمال",
+    medicalFor: "السجل الطبي",
+  },
+};
+const fresh = {
+  creditBalance: 0,
+  creditLedger: [],
+  horses: [],
+  plans: [],
+  classes: [],
+  medical: [],
+  feeding: [],
+  tasks: [],
+  discounts: [],
+  vouchers: [],
+  inventory: [],
+  bookings: [],
+  proformas: [],
+  members: [],
+  notifications: [],
+};
+function App() {
+  const [lang, setLang] = useState(
+      localStorage.getItem("academy-language") || "en",
+    ),
+    [auth, setAuth] = useState(null),
+    [stable, setStable] = useState(null),
+    [data, setData] = useState(fresh),
+    [page, setPage] = useState("overview"),
+    [loading, setLoading] = useState(true),
+    [failure, setFailure] = useState(""),
+    [modal, setModal] = useState(null),
+    [busy, setBusy] = useState(false),
+    [toast, setToast] = useState(""),
+    [menu, setMenu] = useState(false),
+    [instructorFilter, setInstructorFilter] = useState(""),
+    [q, setQ] = useState(""),
+    [reports, setReports] = useState(null);
+  const t = dict[lang],
+    ar = lang === "ar",
+    manager = stable?.role === "owner";
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = ar ? "rtl" : "ltr";
+    document.title = t.brand;
+    localStorage.setItem("academy-language", lang);
+  }, [lang]);
+  async function init() {
+    setLoading(true);
+    try {
+      const a = await api("/auth/me");
+      setAuth(a);
+      setStable(a.stables[0]);
+      setFailure("");
+    } catch (e) {
+      if (e.status !== 401) setFailure(e.message);
+      setAuth(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    init();
+  }, []);
+  const request = (path, opts = {}) =>
+    api(path, { stableId: stable?.id, ...opts });
+  async function refresh(silent = false) {
+    try {
+      const d = await request("/data");
+      setData(d);
+      setFailure("");
+      if (manager) setReports(await request("/reports"));
+    } catch (e) {
+      if (e.status === 401) {
+        setAuth(null);
+        setStable(null);
+      } else setFailure(e.message);
+    }
+  }
+  useEffect(() => {
+    if (!stable) return;
+    setData(fresh);
+    refresh();
+    const timer = setInterval(() => refresh(true), 30000);
+    return () => clearInterval(timer);
+  }, [stable?.id]);
+  const notify = (m) => {
+    setToast(m);
+    setTimeout(() => setToast(""), 5000);
+  };
+  async function action(fn) {
+    setBusy(true);
+    try {
+      await fn();
+      await refresh();
+      return true;
+    } catch (e) {
+      notify(e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  const money = (v) =>
+    new Intl.NumberFormat(ar ? "ar-SA" : "en-SA", {
+      style: "currency",
+      currency: "SAR",
+    }).format((v || 0) / 100);
+  const when = (v) =>
+    v
+      ? new Date(v).toLocaleString(ar ? "ar-SA" : "en-GB", {
+          timeZone: "Asia/Riyadh",
+          dateStyle: "medium",
+          timeStyle: "short",
+        })
+      : "—";
+  const labelHorse = (id) => data.horses.find((h) => h.id === id)?.name || "—";
+  const memberName = (id) => data.members.find((m) => m.id === id)?.name || "—";
+  const go = (p) => {
+    setPage(p);
+    setQ("");
+    setMenu(false);
+  };
+  const nav = [
+    ["overview", LayoutDashboard],
+    ["classes", CalendarDays],
+    ...(!manager ? [["accountBalance", BookOpen]] : []),
+    ["horses", Activity],
+    ...(manager
+      ? [
+          ["medical", HeartPulse],
+          ["feeding", Sprout],
+        ]
+      : []),
+    ["tasks", Check],
+    ["pricing", Tags],
+    ...(manager
+      ? [
+          ["discounts", Tags],
+          ["vouchers", BookOpen],
+        ]
+      : []),
+    ["billing", FileText],
+    ...(manager
+      ? [
+          ["inventory", Package],
+          ["reports", LayoutDashboard],
+          ["members", Users],
+        ]
+      : []),
+    ["notifications", Bell],
+  ];
+  function fields(kind) {
+    const horses = data.horses.map((h) => [h.id, h.name]),
+      members = data.members.map((m) => [m.id, m.name]);
+    return (
+      {
+        horses: [
+          ["name", "text", true],
+          ["breed", "text"],
+          ["birthDate", "date"],
+          ["microchip", "text"],
+          [
+            "status",
+            "select",
+            true,
+            ["ready", "rest", "retired"].map((v) => [v, t[v]]),
+          ],
+          ["notes", "textarea"],
+        ],
+        plans: [
+          ["name", "text", true],
+          ["amount", "money", true],
+          [
+            "kind",
+            "select",
+            true,
+            ["class", "private", "ride", "boarding", "package", "other"].map(
+              (v) => [v, t[v]],
+            ),
+          ],
+          ["credits", "number"],
+          ["active", "checkbox"],
+        ],
+        classes: [
+          ["title", "text", true],
+          ["startsAt", "datetime-local", true],
+          ["endsAt", "datetime-local", true],
+          ["capacity", "number", true],
+          ["creditCost", "number", true],
+          ["horseIds", "multi", true, horses],
+          ["instructor", "text", true],
+          ["arena", "text", true],
+          [
+            "planId",
+            "select",
+            true,
+            data.plans
+              .filter((p) => p.active && !p.credits)
+              .map((p) => [p.id, p.name + " · " + money(p.amount)]),
+          ],
+        ],
+        medical: [
+          ["horseId", "select", true, horses],
+          ["type", "text", true],
+          ["date", "datetime-local", true],
+          ["dueAt", "datetime-local"],
+          ["vet", "text"],
+          ["medication", "text"],
+          ["dose", "text"],
+          ["frequency", "text"],
+          ["notes", "textarea", true],
+          ["restriction", "checkbox"],
+          ["completed", "checkbox"],
+        ],
+        feeding: [
+          ["horseId", "select", true, horses],
+          ["feed", "text", true],
+          ["quantity", "text", true],
+          ["time", "time", true],
+          ["assigneeId", "select", true, members],
+          ["notes", "textarea"],
+        ],
+        tasks: [
+          ["title", "text", true],
+          ["dueAt", "datetime-local", true],
+          ["assigneeId", "select", true, members],
+          ["notes", "textarea"],
+        ],
+        discounts: [
+          ["code", "text", true],
+          ["mode", "select", true, ["percent", "fixed"].map((v) => [v, t[v]])],
+          ["value", "number", true],
+          ["minAmount", "money"],
+          ["maxUses", "number", true],
+          ["expiresAt", "datetime-local", true],
+          ["active", "checkbox"],
+        ],
+        vouchers: [
+          ["code", "text", true],
+          ["balance", "money", true],
+          ["expiresAt", "datetime-local", true],
+        ],
+        inventory: [
+          ["name", "text", true],
+          ["unit", "text", true],
+          ["quantity", "number", true],
+          ["reorderAt", "number"],
+          ["expiresAt", "datetime-local"],
+        ],
+      }[kind] || []
+    );
+  }
+  function defaults(kind) {
+    return {
+      ...(kind === "vouchers"
+        ? {
+            code: "RP-" + crypto.randomUUID().replaceAll("-", "").toUpperCase(),
+          }
+        : {}),
+      active: true,
+      capacity: 1,
+      creditCost: 1,
+      credits: 0,
+      status: "ready",
+      mode: "percent",
+      maxUses: 1,
+      kind: "class",
+      date: new Date().toISOString(),
+      ...(kind === "feeding"
+        ? { time: "07:00", assigneeId: auth.user.id }
+        : {}),
+    };
+  }
+  function openForm(kind, row) {
+    setModal({
+      kind,
+      record: row || null,
+      form: { ...defaults(kind), ...row },
+    });
+  }
+  async function saveRecord(e) {
+    e.preventDefault();
+    const b = { ...modal.form };
+    for (const [key, type] of fields(modal.kind)) {
+      if (type === "number") b[key] = Number(b[key] || 0);
+      if (type === "money") b[key] = Math.round(Number(b[key] || 0) * 100);
+      if (type === "datetime-local" || type === "date")
+        b[key] = b[key]
+          ? new Date(
+              type === "datetime-local" && !/Z$|[+-]\d\d:\d\d$/.test(b[key])
+                ? b[key] + ":00+03:00"
+                : b[key],
+            ).toISOString()
+          : "";
+    }
+    if (modal.kind === "discounts" && b.mode === "fixed")
+      b.value = Math.round(b.value * 100);
+    if (
+      await action(() =>
+        request(
+          "/records/" +
+            modal.kind +
+            (modal.record ? "/" + modal.record.id : ""),
+          { method: modal.record ? "PUT" : "POST", body: b },
+        ),
+      )
+    ) {
+      setModal(null);
+      notify(t.saved);
+    }
+  }
+  function editFormValue(key, type) {
+    const value = modal.form[key];
+    if (type === "money")
+      return value === undefined
+        ? ""
+        : modal.record && !modal.touched?.includes(key)
+          ? value / 100
+          : value;
+    if (type === "datetime-local" && value) {
+      const d = new Date(value);
+      if (!Number.isNaN(+d))
+        return new Date(d.getTime() + 3 * 3600000).toISOString().slice(0, 16);
+    }
+    if (type === "date" && value) return value.slice(0, 10);
+    if (
+      key === "value" &&
+      modal.kind === "discounts" &&
+      modal.form.mode === "fixed" &&
+      modal.record &&
+      !modal.touched?.includes(key)
+    )
+      return value / 100;
+    return value ?? "";
+  }
+  function change(key, value) {
+    setModal((m) => ({
+      ...m,
+      form: { ...m.form, [key]: value },
+      touched: [...(m.touched || []), key],
+      quote: null,
+    }));
+  }
+  function rowCard(kind, r) {
+    return (
+      <article className="panel record-card" key={r.id}>
+        <div className="section-heading">
+          <h3>{r.name || r.title || r.code || labelHorse(r.horseId)}</h3>
+          {manager && kind !== "vouchers" && (
+            <button
+              className="text-button"
+              onClick={() => {
+                const form = { ...r };
+                for (const [k, type] of fields(kind))
+                  if (type === "money") form[k] = (r[k] || 0) / 100;
+                if (kind === "discounts" && r.mode === "fixed")
+                  form.value = r.value / 100;
+                setModal({
+                  kind,
+                  record: r,
+                  form,
+                  touched: fields(kind).map((f) => f[0]),
+                });
+              }}
+            >
+              {t.edit}
+            </button>
+          )}
+        </div>
+        {kind === "horses" ? (
+          <>
+            <p>{r.breed}</p>
+            <span className={"pill " + (r.status === "rest" ? "warning" : "")}>
+              {t[r.status]}
+            </span>
+            <p>{r.notes}</p>
+          </>
+        ) : kind === "plans" ? (
+          <>
+            <div className="big-money">{money(r.amount)}</div>
+            {r.credits > 0 && (
+              <>
+                <p>
+                  {r.credits} {t.lessonCredits}
+                </p>
+                <button
+                  className="primary"
+                  onClick={() => setModal({ kind: "package", record: r })}
+                >
+                  {t.requestPackage}
+                </button>
+              </>
+            )}
+            <p>
+              {t[r.kind]} · {r.active ? t.active : "—"}
+            </p>
+          </>
+        ) : kind === "discounts" ? (
+          <>
+            <div className="big-money">
+              {r.mode === "percent" ? r.value + "%" : money(r.value)}
+            </div>
+            <p>
+              {t.usage}: {r.uses}/{r.maxUses}
+            </p>
+            <p>{when(r.expiresAt)}</p>
+          </>
+        ) : kind === "vouchers" ? (
+          <>
+            <div className="big-money">{money(r.balance)}</div>
+            <p>
+              {t.remaining} · {when(r.expiresAt)}
+            </p>
+          </>
+        ) : kind === "medical" ? (
+          <>
+            <p>
+              <strong>{r.type}</strong> · {r.vet}
+            </p>
+            <p>
+              {r.medication} {r.dose} {r.frequency}
+            </p>
+            <p>{r.notes}</p>
+            <p>
+              {t.date}: {when(r.date)}
+            </p>
+            <p>
+              {t.dueAt}: {when(r.dueAt)}
+            </p>
+            <span className="pill">
+              {r.completed ? t.completed : r.restriction ? t.rest : t.open}
+            </span>
+            {r.completedAt && (
+              <p>
+                {when(r.completedAt)} · {memberName(r.completedBy)}
+              </p>
+            )}
+          </>
+        ) : kind === "feeding" ? (
+          <>
+            <p>
+              <strong>{r.feed}</strong> · {r.quantity}
+            </p>
+            <p>
+              {r.time} · {memberName(r.assigneeId)}
+            </p>
+            <p>{r.notes}</p>
+          </>
+        ) : kind === "tasks" ? (
+          <>
+            <p>
+              {when(r.dueAt)} · {memberName(r.assigneeId)}
+            </p>
+            <p>{r.notes}</p>
+            <button
+              className="soft"
+              disabled={busy}
+              onClick={() =>
+                action(() =>
+                  request("/tasks/" + r.id + "/toggle", { method: "POST" }),
+                )
+              }
+            >
+              {r.done ? "✓ " + t.done : t.complete}
+            </button>
+          </>
+        ) : kind === "inventory" ? (
+          <>
+            <div className="big-money">
+              {r.quantity} <small>{r.unit}</small>
+            </div>
+            <p>
+              {t.reorderAt}: {r.reorderAt}
+            </p>
+            {r.quantity <= r.reorderAt && (
+              <span className="pill warning">{t.lowStock}</span>
+            )}
+            <p>{when(r.expiresAt)}</p>
+          </>
+        ) : null}
+      </article>
+    );
+  }
+  if (loading)
+    return (
+      <div className="auth-page">
+        <p>{t.loading}</p>
+      </div>
+    );
+  if (!auth)
+    return (
+      <div className="auth-page">
+        <button
+          className="language auth-language"
+          onClick={() => setLang(ar ? "en" : "ar")}
+        >
+          {ar ? "English" : "العربية"}
+        </button>
+        <section className="auth-card">
+          <img
+            className="auth-logo"
+            src="/logos/riyadh-polo-club-academy.png"
+            alt={t.brand}
+          />
+          <h1>{t.brand}</h1>
+          <p>{t.purpose}</p>
+          {failure && (
+            <p className="error" role="alert">
+              {failure}
+            </p>
+          )}
+          <AuthForm t={t} onSuccess={init} />
+        </section>
+      </div>
+    );
+  const unread = data.notifications.filter((n) => !n.read_at).length;
+  return (
+    <>
+      <aside className={"sidebar " + (menu ? "open" : "")}>
+        <a
+          href="#"
+          className="brand"
+          onClick={(e) => {
+            e.preventDefault();
+            go("overview");
+          }}
+        >
+          <img
+            className="academy-logo"
+            src="/logos/riyadh-polo-club-academy.png"
+            alt={t.brand}
+          />
+          <span>
+            {t.brand}
+            <small>{t.purpose}</small>
+          </span>
+        </a>
+        <div className="stable-selector">
+          <strong>{stable.name}</strong>
+        </div>
+        <nav>
+          {nav.map(([key, Icon]) => (
+            <button
+              key={key}
+              className={page === key ? "selected" : ""}
+              onClick={() => go(key)}
+            >
+              <Icon size={17} />
+              {key === "overview" && !manager ? t.myAccount : t[key]}
+              {key === "notifications" && unread > 0 && (
+                <span className="count">{unread}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <button
+          className="profile"
+          onClick={() =>
+            action(async () => {
+              await api("/auth/logout", { method: "POST" });
+              setAuth(null);
+              setStable(null);
+              setData(fresh);
+            })
+          }
+        >
+          <span className="avatar">{auth.user.name.slice(0, 1)}</span>
+          <span>
+            <strong>{auth.user.name}</strong>
+            <small>{manager ? t.manager : t.member}</small>
+          </span>
+          <LogOut size={17} />
+        </button>
+      </aside>
+      <div className="workspace">
+        <header>
+          <button
+            className="mobile-menu icon-button"
+            aria-label="Menu"
+            onClick={() => setMenu(!menu)}
+          >
+            <Menu />
+          </button>
+          <div className="breadcrumb">
+            <img
+              className="header-logo"
+              src="/logos/riyadh-polo-club-academy.png"
+              alt=""
+            />
+            {t.brand}
+          </div>
+          <div className="header-actions">
+            <button
+              className="language"
+              onClick={() => setLang(ar ? "en" : "ar")}
+            >
+              {ar ? "English" : "العربية"}
+            </button>
+            <button
+              className="icon-button"
+              aria-label={t.refresh}
+              onClick={() => refresh()}
+            >
+              <RefreshCw size={17} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label={t.notifications}
+              onClick={() => go("notifications")}
+            >
+              <Bell size={17} />
+              {unread > 0 && <small>{unread}</small>}
+            </button>
+          </div>
+        </header>
+        <main>
+          <p className="data-notice">
+            <strong>{manager ? t.academyPortal : t.memberPortal}</strong> ·{" "}
+            {t.dataNotice}
+          </p>
+          {failure && (
+            <p className="error" role="alert">
+              {t.connection} {failure}
+            </p>
+          )}
+          <div className="page-title">
+            <div>
+              <div className="eyebrow">{stable.name}</div>
+              <h1>{page === "overview" && !manager ? t.myAccount : t[page]}</h1>
+              <p>
+                {page === "overview"
+                  ? t.intro
+                  : page === "billing"
+                    ? t.fiscal
+                    : page === "members"
+                      ? t.membersIntro
+                      : page === "feeding"
+                        ? t.feedingNote
+                        : page === "notifications"
+                          ? t.notificationIntro
+                          : ""}
+              </p>
+            </div>
+            {manager &&
+              [
+                "classes",
+                "horses",
+                "medical",
+                "feeding",
+                "tasks",
+                "discounts",
+                "vouchers",
+                "inventory",
+                "pricing",
+              ].includes(page) && (
+                <button
+                  className="primary"
+                  onClick={() => openForm(page === "pricing" ? "plans" : page)}
+                >
+                  <Plus size={17} />
+                  {t.add}
+                </button>
+              )}
+            {page === "billing" && manager && (
+              <button
+                className="primary"
+                onClick={() => setModal({ kind: "manualBilling", form: {} })}
+              >
+                {t.createRequest}
+              </button>
+            )}
+            {page === "members" && manager && (
+              <button
+                className="primary"
+                onClick={() =>
+                  action(async () => {
+                    const d = await request("/invites", { method: "POST" });
+                    setModal({ kind: "invite", code: d.code });
+                  })
+                }
+              >
+                {t.inviteMember}
+              </button>
+            )}
+          </div>
+
+          {page === "overview" && !manager && (
+            <>
+              <section className="stats">
+                {[
+                  [BookOpen, data.creditBalance, t.sessionBalance],
+                  [
+                    CalendarDays,
+                    data.bookings.filter(
+                      (b) =>
+                        b.status === "confirmed" &&
+                        data.classes.find((c) => c.id === b.class_id)
+                          ?.startsAt > new Date().toISOString(),
+                    ).length,
+                    t.upcoming,
+                  ],
+                  [
+                    FileText,
+                    money(
+                      data.proformas
+                        .filter((p) => p.status === "open")
+                        .reduce((n, p) => n + p.due - p.paid, 0),
+                    ),
+                    t.outstanding,
+                  ],
+                  [Bell, unread, t.unread],
+                ].map(([Icon, n, l]) => (
+                  <div className="stat" key={l}>
+                    <span className="stat-icon sand">
+                      <Icon size={20} />
+                    </span>
+                    <div>
+                      <strong>{n}</strong>
+                      <span>{l}</span>
+                    </div>
+                  </div>
+                ))}
+              </section>
+              <div className="member-actions">
+                <button className="primary" onClick={() => go("classes")}>
+                  {t.book}
+                </button>
+                <button className="soft" onClick={() => go("accountBalance")}>
+                  {t.accountBalance}
+                </button>
+              </div>
+              <h2 className="subheading">{t.upcoming}</h2>
+              <div className="record-grid">
+                {data.bookings
+                  .filter(
+                    (b) =>
+                      b.status === "confirmed" &&
+                      data.classes.find((c) => c.id === b.class_id)?.startsAt >
+                        new Date().toISOString(),
+                  )
+                  .map((b) => {
+                    const c = data.classes.find((c) => c.id === b.class_id);
+                    return (
+                      <article className="panel record-card" key={b.id}>
+                        <h3>{c.title}</h3>
+                        <p>{when(c.startsAt)}</p>
+                        <p>
+                          {c.instructor} · {c.arena}
+                        </p>
+                        <p>{labelHorse(b.horse_id)}</p>
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() =>
+                            action(() =>
+                              request("/bookings/" + b.id + "/cancel", {
+                                method: "POST",
+                              }),
+                            )
+                          }
+                        >
+                          {t.cancelBooking}
+                        </button>
+                      </article>
+                    );
+                  })}
+              </div>
+              <p className="notice">{t.cancelPolicy}</p>
+            </>
+          )}
+          {page === "accountBalance" && !manager && (
+            <>
+              <div className="balance-hero panel">
+                <div>
+                  <p>{t.sessionBalance}</p>
+                  <div className="big-money">{data.creditBalance}</div>
+                </div>
+                <button className="primary" onClick={() => go("pricing")}>
+                  {t.requestPackage}
+                </button>
+              </div>
+              <p className="notice">{t.packageNotice}</p>
+              <div className="panel table-wrap">
+                <h2>{t.creditHistory}</h2>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t.date}</th>
+                      <th>{t.creditReason}</th>
+                      <th>{t.creditChange}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.creditLedger.map((l) => (
+                      <tr key={l.id}>
+                        <td>{when(l.created_at)}</td>
+                        <td>
+                          {{
+                            "package.paid": t.creditPaid,
+                            "package.refunded": t.creditRefunded,
+                            "booking.used": t.creditUsed,
+                            "booking.cancelled": t.creditRestored,
+                          }[l.reason] || l.reason}
+                        </td>
+                        <td dir="ltr">
+                          {l.delta > 0 ? "+" : ""}
+                          {l.delta}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!data.creditLedger.length && (
+                  <p className="empty">{t.empty}</p>
+                )}
+              </div>
+            </>
+          )}
+          {page === "overview" && manager && (
+            <>
+              <div className="stats">
+                {[
+                  [Activity, data.horses.length, t.horses],
+                  [
+                    CalendarDays,
+                    data.bookings.filter((b) => b.status === "confirmed")
+                      .length,
+                    t.bookings,
+                  ],
+                  [Check, data.tasks.filter((x) => !x.done).length, t.tasks],
+                  [Bell, unread, t.unread],
+                ].map(([Icon, n, l]) => (
+                  <div className="stat" key={l}>
+                    <span className="stat-icon sand">
+                      <Icon size={22} />
+                    </span>
+                    <div>
+                      <strong>{n}</strong>
+                      <span>{l}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="dashboard-grid">
+                <div className="panel">
+                  <h2>{t.classes}</h2>
+                  {data.classes
+                    .filter((c) => c.startsAt > new Date().toISOString())
+                    .slice(0, 4)
+                    .map((c) => (
+                      <button
+                        className="today-row"
+                        key={c.id}
+                        onClick={() => go("classes")}
+                      >
+                        <CalendarDays size={20} />
+                        <span>
+                          <strong>{c.title}</strong>
+                          <small>{when(c.startsAt)}</small>
+                        </span>
+                      </button>
+                    ))}
+                  {!data.classes.length && <p className="empty">{t.empty}</p>}
+                  <button className="primary" onClick={() => go("classes")}>
+                    {t.classes}
+                  </button>
+                </div>
+                <div className="panel">
+                  <h2>{t.tasks}</h2>
+                  {data.tasks
+                    .filter((x) => !x.done)
+                    .slice(0, 4)
+                    .map((r) => (
+                      <div className="task-row" key={r.id}>
+                        <Check size={18} />
+                        <span>
+                          {r.title}
+                          <small>{when(r.dueAt)}</small>
+                        </span>
+                      </div>
+                    ))}
+                  {!data.tasks.length && <p className="empty">{t.empty}</p>}
+                  <p className="notice">
+                    {data.emailConfigured ? t.emailOn : t.emailOff}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+          {page === "classes" && (
+            <>
+              <p className="notice">{t.cancelPolicy}</p>
+              <label className="instructor-filter">
+                {t.filterInstructor}
+                <select
+                  aria-label={t.filterInstructor}
+                  value={instructorFilter}
+                  onChange={(e) => setInstructorFilter(e.target.value)}
+                >
+                  <option value="">{t.allInstructors}</option>
+                  {[...new Set(data.classes.map((c) => c.instructor))].map(
+                    (i) => (
+                      <option key={i} value={i}>
+                        {i}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              {manager && (!data.plans.length || !data.horses.length) && (
+                <p className="notice">{t.noPrices}</p>
+              )}
+              <div className="session-grid">
+                {data.classes
+                  .filter(
+                    (c) =>
+                      c.endsAt > new Date().toISOString() &&
+                      (!instructorFilter || c.instructor === instructorFilter),
+                  )
+                  .map((c) => {
+                    const b = data.bookings.find(
+                      (b) =>
+                        b.class_id === c.id &&
+                        b.member_id === auth.user.id &&
+                        b.status === "confirmed",
+                    );
+                    const plan = data.plans.find((p) => p.id === c.planId);
+                    return (
+                      <article className="session" key={c.id}>
+                        <div className="session-top">
+                          <span className="eyebrow">{c.instructor}</span>
+                          <span className="pill">
+                            {c.places} {t.places}
+                          </span>
+                        </div>
+                        <h3>{c.title}</h3>
+                        <p>{when(c.startsAt)}</p>
+                        <p>
+                          {c.arena} · {money(plan?.amount)}
+                        </p>
+                        <div className="session-bottom">
+                          <button
+                            className="primary"
+                            disabled={busy || (!b && c.places <= 0)}
+                            onClick={() =>
+                              b
+                                ? action(() =>
+                                    request("/bookings/" + b.id + "/cancel", {
+                                      method: "POST",
+                                    }),
+                                  )
+                                : setModal({
+                                    kind: "booking",
+                                    classId: c.id,
+                                    title: c.title,
+                                    form: {},
+                                  })
+                            }
+                          >
+                            {b ? t.cancelBooking : t.book}
+                          </button>
+                          {manager && (
+                            <button
+                              className="text-button"
+                              onClick={() => openForm("classes", c)}
+                            >
+                              {t.edit}
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+              </div>
+              <h2 className="subheading">
+                {manager ? t.allBookings : t.myBookings}
+              </h2>
+              <div className="panel table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t.session}</th>
+                      {manager && <th>{t.member}</th>}
+                      <th>{t.horses}</th>
+                      <th>{t.status}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.bookings.map((b) => (
+                      <tr key={b.id}>
+                        <td>
+                          {data.classes.find((c) => c.id === b.class_id)?.title}
+                        </td>
+                        {manager && <td>{memberName(b.member_id)}</td>}
+                        <td>{labelHorse(b.horse_id)}</td>
+                        <td>{t[b.status]}</td>
+                        <td>
+                          {b.status === "confirmed" && (
+                            <button
+                              className="text-button"
+                              disabled={busy}
+                              onClick={() =>
+                                action(() =>
+                                  request("/bookings/" + b.id + "/cancel", {
+                                    method: "POST",
+                                  }),
+                                )
+                              }
+                            >
+                              {t.cancelBooking}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {[
+            "horses",
+            "medical",
+            "feeding",
+            "tasks",
+            "pricing",
+            "discounts",
+            "vouchers",
+            "inventory",
+          ].includes(page) && (
+            <>
+              {page === "medical" && (
+                <p className="notice">{t.restrictionNote}</p>
+              )}
+              <label className="search">
+                <Search size={17} />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder={t.search}
+                />
+              </label>
+              <div className="record-grid">
+                {data[page === "pricing" ? "plans" : page]
+                  .filter((r) =>
+                    JSON.stringify(r).toLowerCase().includes(q.toLowerCase()),
+                  )
+                  .map((r) => rowCard(page === "pricing" ? "plans" : page, r))}
+              </div>
+              {!data[page === "pricing" ? "plans" : page].length && (
+                <div className="empty">{t.empty}</div>
+              )}
+            </>
+          )}
+          {page === "billing" && (
+            <>
+              <p className="notice">
+                <FileText size={20} />
+                {t.proforma}
+              </p>
+              <div className="panel table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t.title}</th>
+                      {manager && <th>{t.member}</th>}
+                      <th>{t.due}</th>
+                      <th>{t.paid}</th>
+                      <th>{t.status}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.proformas.map((p) => (
+                      <tr key={p.id}>
+                        <td>
+                          {p.description}
+                          <small className="record-id">
+                            {p.id.slice(0, 8)}
+                          </small>
+                        </td>
+                        {manager && <td>{memberName(p.member_id)}</td>}
+                        <td>{money(p.due)}</td>
+                        <td>{money(p.paid)}</td>
+                        <td>{t[p.status]}</td>
+                        <td>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              setModal({ kind: "proforma", record: p })
+                            }
+                          >
+                            {t.view}
+                          </button>
+                          {manager && p.paid > 0 && (
+                            <button
+                              className="text-button"
+                              onClick={() =>
+                                setModal({
+                                  kind: "refund",
+                                  record: p,
+                                  form: {},
+                                })
+                              }
+                            >
+                              {t.refund}
+                            </button>
+                          )}
+                          {manager && p.status === "open" && (
+                            <button
+                              className="text-button"
+                              onClick={() =>
+                                setModal({
+                                  kind: "payment",
+                                  record: p,
+                                  form: {},
+                                })
+                              }
+                            >
+                              {t.payment}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!data.proformas.length && <p className="empty">{t.noBilling}</p>}
+            </>
+          )}
+          {page === "reports" && reports && (
+            <>
+              <p className="notice">{t.fiscal}</p>
+              <div className="record-grid">
+                {[
+                  "gross",
+                  "discounts",
+                  "voucherUsed",
+                  "recordedPayments",
+                  "outstanding",
+                ].map((k) => (
+                  <div className="panel" key={k}>
+                    <p>{k === "discounts" ? t.discountsTotal : t[k]}</p>
+                    <div className="big-money">{money(reports[k])}</div>
+                  </div>
+                ))}
+                {[
+                  "horses",
+                  "members",
+                  "bookings",
+                  "lowStock",
+                  "overdueTasks",
+                ].map((k) => (
+                  <div className="panel" key={k}>
+                    <p>{t[k]}</p>
+                    <div className="big-money">{reports[k]}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {page === "members" && (
+            <div className="panel table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t.name}</th>
+                    <th>{t.role}</th>
+                    <th>{t.sessionBalance}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.members.map((m) => (
+                    <tr key={m.id}>
+                      <td>{m.name}</td>
+                      <td>{t[m.role]}</td>
+                      <td>{m.creditBalance}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {page === "notifications" && (
+            <>
+              <p className="notice">
+                {data.emailConfigured ? t.emailOn : t.emailOff}
+              </p>
+              {data.notifications.map((n) => (
+                <article
+                  className={
+                    "panel notification " + (!n.read_at ? "unread" : "")
+                  }
+                  key={n.id}
+                >
+                  <h3>{n.title}</h3>
+                  <p>{n.message}</p>
+                  <small>{when(n.created_at)}</small>
+                  {!n.read_at && (
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        action(() =>
+                          request("/notifications/" + n.id + "/read", {
+                            method: "POST",
+                          }),
+                        )
+                      }
+                    >
+                      {t.markRead}
+                    </button>
+                  )}
+                </article>
+              ))}
+              {!data.notifications.length && <p className="empty">{t.empty}</p>}
+            </>
+          )}
+          <footer>
+            <span>
+              © {new Date().getFullYear()} {t.brand}
+            </span>
+            <span>{t.purpose}</span>
+          </footer>
+        </main>
+      </div>
+      {modal && (
+        <div className="modal-backdrop" onClick={() => !busy && setModal(null)}>
+          <section
+            className={
+              "modal " + (modal.kind === "proforma" ? "proforma-modal" : "")
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="modal-close icon-button"
+              aria-label={t.cancel}
+              disabled={busy}
+              onClick={() => setModal(null)}
+            >
+              <X />
+            </button>
+            <h2 id="dialog-title">
+              {modal.kind === "booking"
+                ? modal.title
+                : modal.kind === "invite"
+                  ? t.inviteMember
+                  : modal.kind === "proforma"
+                    ? t.proforma
+                    : modal.kind === "payment"
+                      ? t.payment
+                      : modal.kind === "refund"
+                        ? t.refund
+                        : modal.kind === "package"
+                          ? t.requestPackage
+                          : modal.kind === "manualBilling"
+                            ? t.createRequest
+                            : t[
+                                modal.kind === "plans" ? "pricing" : modal.kind
+                              ]}
+            </h2>
+            {modal.kind === "invite" ? (
+              <>
+                <p>{t.inviteInfo}</p>
+                <code className="invite-code" dir="ltr">
+                  {modal.code}
+                </code>
+                <button
+                  className="primary"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(modal.code);
+                      notify(t.copied);
+                    } catch {
+                      notify(modal.code);
+                    }
+                  }}
+                >
+                  {t.copy}
+                </button>
+              </>
+            ) : modal.kind === "booking" ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!modal.quote) {
+                    setBusy(true);
+                    try {
+                      const quote = await request("/quote", {
+                        method: "POST",
+                        body: { classId: modal.classId, ...modal.form },
+                      });
+                      setModal((m) => ({ ...m, quote }));
+                    } catch (e) {
+                      notify(e.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  } else if (
+                    await action(() =>
+                      request("/bookings", {
+                        method: "POST",
+                        body: {
+                          classId: modal.classId,
+                          ...modal.form,
+                          expectedDue: modal.quote.due,
+                          expectedGross: modal.quote.gross,
+                          expectedCredits: modal.quote.credits || 0,
+                        },
+                      }),
+                    )
+                  ) {
+                    setModal(null);
+                    notify(t.bookingSaved);
+                  }
+                }}
+              >
+                <p>
+                  {t.sessionBalance}: <strong>{data.creditBalance}</strong>
+                </p>
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    disabled={
+                      data.creditBalance <
+                      (data.classes.find((c) => c.id === modal.classId)
+                        ?.creditCost || 1)
+                    }
+                    checked={Boolean(modal.form.useCredits)}
+                    onChange={(e) =>
+                      setModal((m) => ({
+                        ...m,
+                        form: {
+                          useCredits: e.target.checked,
+                          discountCode: "",
+                          voucherCode: "",
+                        },
+                        quote: null,
+                      }))
+                    }
+                  />
+                  {t.useCredits}
+                </label>
+                <label>
+                  {t.discountCode}
+                  <input
+                    disabled={modal.form.useCredits}
+                    value={modal.form.discountCode || ""}
+                    onChange={(e) => change("discountCode", e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t.voucherCode}
+                  <input
+                    disabled={modal.form.useCredits}
+                    value={modal.form.voucherCode || ""}
+                    onChange={(e) => change("voucherCode", e.target.value)}
+                  />
+                </label>
+                {modal.quote && (
+                  <div className="quote">
+                    {modal.quote.credits > 0 && (
+                      <p>
+                        {t.lessonCredits}: {modal.quote.credits}
+                      </p>
+                    )}
+                    {["gross", "discount", "voucher", "due"].map((k) => (
+                      <p key={k}>
+                        <span>{t[k]}</span>
+                        <strong>{money(modal.quote[k])}</strong>
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <p>{t.fiscal}</p>
+                <button className="primary" disabled={busy}>
+                  {modal.quote ? t.confirm : t.quote}
+                </button>
+              </form>
+            ) : modal.kind === "package" ? (
+              <>
+                <h3>{modal.record.name}</h3>
+                <div className="big-money">{money(modal.record.amount)}</div>
+                <p>
+                  {modal.record.credits} {t.lessonCredits}
+                </p>
+                <p>{t.packagePayment}</p>
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() =>
+                    action(async () => {
+                      await request("/packages", {
+                        method: "POST",
+                        body: { planId: modal.record.id },
+                      });
+                      setModal(null);
+                      notify(t.packagePending);
+                      go("billing");
+                    })
+                  }
+                >
+                  {t.confirmRequest}
+                </button>
+              </>
+            ) : modal.kind === "manualBilling" ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (
+                    await action(() =>
+                      request("/proformas", {
+                        method: "POST",
+                        body: modal.form,
+                      }),
+                    )
+                  ) {
+                    setModal(null);
+                    notify(t.saved);
+                  }
+                }}
+              >
+                <label>
+                  {t.member}
+                  <select
+                    required
+                    aria-label={t.member}
+                    value={modal.form.memberId || ""}
+                    onChange={(e) => change("memberId", e.target.value)}
+                  >
+                    <option value="">{t.select}</option>
+                    {data.members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t.planId}
+                  <select
+                    required
+                    aria-label={t.planId}
+                    value={modal.form.planId || ""}
+                    onChange={(e) => change("planId", e.target.value)}
+                  >
+                    <option value="">{t.select}</option>
+                    {data.plans
+                      .filter((p) => p.active)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {money(p.amount)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <p>{t.fiscal}</p>
+                <button className="primary" disabled={busy}>
+                  {t.save}
+                </button>
+              </form>
+            ) : ["payment", "refund"].includes(modal.kind) ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (
+                    await action(() =>
+                      request(
+                        "/proformas/" + modal.record.id + "/" + modal.kind,
+                        {
+                          method: "POST",
+                          body: {
+                            ...modal.form,
+                            amount: Math.round(Number(modal.form.amount) * 100),
+                          },
+                        },
+                      ),
+                    )
+                  ) {
+                    setModal(null);
+                    notify(t.saved);
+                  }
+                }}
+              >
+                <p>
+                  {modal.kind === "refund" ? t.refundNotice : t.paymentNotice}
+                </p>
+                {["amount", "reference", "externalRef"].map((k) => (
+                  <label key={k}>
+                    {modal.kind === "refund" && k === "externalRef"
+                      ? t.creditRef
+                      : t[k]}
+                    <input
+                      required
+                      type={k === "amount" ? "number" : "text"}
+                      min={k === "amount" ? ".01" : undefined}
+                      step={k === "amount" ? ".01" : undefined}
+                      value={modal.form[k] || ""}
+                      onChange={(e) => change(k, e.target.value)}
+                    />
+                  </label>
+                ))}
+                <button className="primary" disabled={busy}>
+                  {t.save}
+                </button>
+              </form>
+            ) : modal.kind === "proforma" ? (
+              <>
+                <div className="print-brand">
+                  <img src="/logos/riyadh-polo-club-academy.png" alt="" />
+                  <h3>{t.brand}</h3>
+                </div>
+                <p>{modal.record.description}</p>
+                {modal.record.credit_quantity > 0 && (
+                  <p>
+                    {t.lessonCredits}: {modal.record.credit_quantity}
+                  </p>
+                )}
+                {modal.record.credit_used > 0 && (
+                  <p>
+                    {t.creditUsed}: {modal.record.credit_used}
+                  </p>
+                )}
+                <small>{modal.record.id}</small>
+                <p>
+                  {when(modal.record.created_at)} · {t[modal.record.status]}
+                </p>
+                <div className="quote">
+                  {["gross", "discount", "voucher", "due", "paid"].map((k) => (
+                    <p key={k}>
+                      <span>{t[k]}</span>
+                      <strong>{money(modal.record[k])}</strong>
+                    </p>
+                  ))}
+                </div>
+                <p>
+                  {t.externalRef}: {modal.record.external_ref || "—"}
+                </p>
+                <p className="fiscal-note">{t.fiscal}</p>
+                <button
+                  className="primary no-print"
+                  onClick={() => window.print()}
+                >
+                  {t.print}
+                </button>
+              </>
+            ) : (
+              <form onSubmit={saveRecord}>
+                {fields(modal.kind).map(([key, type, required, options]) => (
+                  <label
+                    key={key}
+                    className={type === "checkbox" ? "check-label" : ""}
+                  >
+                    {type === "checkbox" ? (
+                      <>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(modal.form[key])}
+                          onChange={(e) => change(key, e.target.checked)}
+                        />
+                        {t[key]}
+                      </>
+                    ) : (
+                      <>
+                        {key === "amount" ? t.price : t[key]}
+                        {type === "select" || type === "multi" ? (
+                          <select
+                            aria-label={t[key]}
+                            required={required}
+                            multiple={type === "multi"}
+                            value={
+                              modal.form[key] || (type === "multi" ? [] : "")
+                            }
+                            onChange={(e) =>
+                              change(
+                                key,
+                                type === "multi"
+                                  ? [...e.target.selectedOptions].map(
+                                      (x) => x.value,
+                                    )
+                                  : e.target.value,
+                              )
+                            }
+                          >
+                            {type !== "multi" && (
+                              <option value="">{t.select}</option>
+                            )}
+                            {options.map(([v, l]) => (
+                              <option key={v} value={v}>
+                                {l}
+                              </option>
+                            ))}
+                          </select>
+                        ) : type === "textarea" ? (
+                          <textarea
+                            required={required}
+                            maxLength={2000}
+                            value={modal.form[key] || ""}
+                            onChange={(e) => change(key, e.target.value)}
+                          />
+                        ) : (
+                          <input
+                            required={required}
+                            type={type === "money" ? "number" : type}
+                            min={
+                              ["number", "money"].includes(type)
+                                ? "0"
+                                : undefined
+                            }
+                            step={
+                              type === "money" || key === "value"
+                                ? ".01"
+                                : type === "number"
+                                  ? "1"
+                                  : undefined
+                            }
+                            value={editFormValue(key, type)}
+                            onChange={(e) => change(key, e.target.value)}
+                            maxLength={type === "text" ? 200 : undefined}
+                          />
+                        )}
+                      </>
+                    )}
+                  </label>
+                ))}
+                <button className="primary" disabled={busy}>
+                  {busy ? t.loading : t.save}
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
+    </>
+  );
+}
+function AuthForm({ t, onSuccess }) {
+  const [mode, setMode] = useState("login"),
+    [join, setJoin] = useState(false),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  return (
+    <>
+      <div className="tabs">
+        <button
+          className={mode === "login" ? "active" : ""}
+          onClick={() => {
+            setMode("login");
+            setError("");
+          }}
+        >
+          {t.login}
+        </button>
+        <button
+          className={mode === "register" ? "active" : ""}
+          onClick={() => {
+            setMode("register");
+            setError("");
+          }}
+        >
+          {t.register}
+        </button>
+      </div>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const values = Object.fromEntries(new FormData(e.currentTarget));
+          setBusy(true);
+          setError("");
+          try {
+            await api("/auth/" + mode, { method: "POST", body: values });
+            await onSuccess();
+          } catch (e) {
+            setError(e.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {mode === "register" && (
+          <label>
+            {t.name}
+            <input required name="name" autoComplete="name" maxLength={100} />
+          </label>
+        )}
+        <label>
+          {t.email}
+          <input
+            required
+            name="email"
+            type="email"
+            autoComplete="email"
+            maxLength={254}
+          />
+        </label>
+        <label>
+          {t.password}
+          <input
+            required
+            name="password"
+            type="password"
+            minLength={mode === "register" ? 12 : 1}
+            maxLength={128}
+            autoComplete={
+              mode === "register" ? "new-password" : "current-password"
+            }
+          />
+        </label>
+        {mode === "register" && (
+          <>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={join}
+                onChange={(e) => setJoin(e.target.checked)}
+              />
+              {t.join}
+            </label>
+            <label>
+              {join ? t.invite : t.stableName}
+              <input
+                key={join ? "invite" : "stable"}
+                required
+                name={join ? "invite" : "stableName"}
+                autoComplete="off"
+                maxLength={100}
+              />
+            </label>
+            <p className="auth-hint">{t.passwordHint}</p>
+            <p className="auth-hint">{t.registrationNote}</p>
+          </>
+        )}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <button disabled={busy} className="primary" type="submit">
+          {busy ? t.loading : t[mode]}
+        </button>
+      </form>
+    </>
+  );
+}
+createRoot(document.getElementById("root")).render(<App />);
