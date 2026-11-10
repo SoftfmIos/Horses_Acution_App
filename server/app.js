@@ -227,24 +227,34 @@ export function createApp(
     res.json({ status: "ok", database: get("SELECT 1 AS ok").ok === 1 }),
   );
   const authLimit = rateLimit({
-    handler: (req, res) =>
-      res.status(429).json({ error: "Too many attempts; try again later" }),
     windowMs: 15 * 60 * 1000,
     limit: 30,
     standardHeaders: "draft-8",
     legacyHeaders: false,
+    keyGenerator: (req) =>
+      hash(
+        typeof req.body?.email === "string"
+          ? req.body.email.trim().toLowerCase()
+          : "invalid-email",
+      ),
+    handler: (req, res) =>
+      res.status(429).json({ error: "Too many attempts; try again later" }),
   });
-  app.use("/api/auth", authLimit);
-  app.use(
-    "/api",
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: 1000,
-      handler: (req, res) =>
-        res.status(429).json({ error: "Too many requests" }),
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
-    }),
+  const authBurst = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 1000,
+    keyGenerator: () => "authentication-service",
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    handler: (req, res) =>
+      res
+        .status(429)
+        .json({ error: "Authentication is busy; try again later" }),
+  });
+  app.use("/api/auth", (req, res, next) =>
+    req.method === "POST" && ["/login", "/register"].includes(req.path)
+      ? authBurst(req, res, () => authLimit(req, res, next))
+      : next(),
   );
   function authenticate(req, res, next) {
     const raw = req.headers.cookie
@@ -386,7 +396,21 @@ export function createApp(
     });
     res.json({ ok: true });
   });
-  app.use("/api", authenticate, scoped);
+  // Key protected traffic by verified account, not the shared Vercel egress IP.
+  app.use(
+    "/api",
+    authenticate,
+    scoped,
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 1000,
+      keyGenerator: (req) => req.user.id,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      handler: (req, res) =>
+        res.status(429).json({ error: "Too many requests" }),
+    }),
+  );
   app.post("/api/invites", owner, (req, res) => {
     const code = randomBytes(18).toString("base64url");
     run(

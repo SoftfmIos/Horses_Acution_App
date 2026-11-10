@@ -1,0 +1,21 @@
+# Optional Render Blueprint. Persistent disks require a paid service plan.
+# Review the plan and cost in Render before creating this service.
+services:
+  - type: web
+    name: riyadh-polo-academy-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PUBLIC_ORIGIN
+        value: https://horsesacutionapp.vercel.app
+      - key: DATABASE_PATH
+        value: /var/lib/academy/academy.sqlite
+    disk:
+      name: academy-data
+      mountPath: /var/lib/academy
+      sizeGB: 1
