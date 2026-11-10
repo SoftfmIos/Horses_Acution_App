@@ -1,0 +1,26 @@
+[
+  {
+    "file": "Tajawal-Regular.woff2",
+    "weight": 400,
+    "family": "Tajawal",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Regular.ttf",
+    "license": "SIL Open Font License 1.1",
+    "sha256": "2652281751d1fb1ecf3b59612f140afa767c6f54609ac3c9df5839baddc36588"
+  },
+  {
+    "file": "Tajawal-Medium.woff2",
+    "weight": 500,
+    "family": "Tajawal",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Medium.ttf",
+    "license": "SIL Open Font License 1.1",
+    "sha256": "391f95f423ce6c057df4408ed735f8804ef16060aebb30190c843ea40b91cfd4"
+  },
+  {
+    "file": "Tajawal-Bold.woff2",
+    "weight": 700,
+    "family": "Tajawal",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Bold.ttf",
+    "license": "SIL Open Font License 1.1",
+    "sha256": "dce3c6249850aa86550bcf68175b243325eb3ee9def9c3b7fac6ee7611a68c86"
+  }
+]

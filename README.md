@@ -41,3 +41,8 @@ This is a local prototype, not a production service. Demo profiles are not authe
 7. Expo phone applications after the web workflow is validated.
 
 Reference archives remain outside this repository. Licensing must be checked before importing any reference code; Peter Care is marked UNLICENSED.
+
+## Visual theme
+
+Aligned with `SoftfmIos/Riyadh_PoloAcademy`, `website` branch at `37f387f`:
+navy `#0d2d45`, deep navy `#082237`, ivory `#f7f3eb`, stone `#eae4d8`, gold `#b88e50`, and gold text `#806233`. The same Tajawal Regular/Medium/Bold fonts are served locally for English and Arabic. Font license and source metadata are included in `public/fonts/`. Buttons and panels follow the reference's flat corners, thin borders and restrained heading weights, adapted to a denser dashboard layout.
