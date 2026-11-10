@@ -1,4 +1,4 @@
-# Rasan — Stable Management
+# Riyadh Polo Club Academy — Stable Management
 
 An original Arabic/English web foundation for stable teams and members. Built with React and Vite; no code was copied from the supplied reference projects.
 
@@ -46,3 +46,11 @@ Reference archives remain outside this repository. Licensing must be checked bef
 
 Aligned with `SoftfmIos/Riyadh_PoloAcademy`, `website` branch at `37f387f`:
 navy `#0d2d45`, deep navy `#082237`, ivory `#f7f3eb`, stone `#eae4d8`, gold `#b88e50`, and gold text `#806233`. The same Tajawal Regular/Medium/Bold fonts are served locally for English and Arabic. Font license and source metadata are included in `public/fonts/`. Buttons and panels follow the reference's flat corners, thin borders and restrained heading weights, adapted to a denser dashboard layout.
+
+## Academy identity
+
+The system uses the name **Riyadh Polo Club Academy** / **أكاديمية نادي الرياض للبولو**. The complete Polo Club of Riyadh 2025 crest is displayed without cropping or distortion. `public/logos/riyadh-polo-club-academy.png` is the original academy crest from the user's `Riyadh_PoloAcademy` website repository, matching the logo supplied in chat.
+
+## Functionality coverage
+
+The agreed full stable-management scope is not yet complete. Real authentication, stable/member onboarding, shared persistent data, server-side authorization, manager-created/recurring classes, attendance, waitlists, horse/instructor/arena conflict enforcement, editable medical records and medication administration, feeding plans, breeding, billing/payments, inventory, document uploads, notifications and production reports remain outstanding. Current screens are a local prototype; existing booking and horse creation functions operate only in the browser.
