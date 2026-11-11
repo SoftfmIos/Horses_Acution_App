@@ -39,12 +39,42 @@ export function localizeRecord(record, ar) {
     }
   return result;
 }
+export const collectionKeys = [
+  "horses",
+  "plans",
+  "classes",
+  "medical",
+  "feeding",
+  "tasks",
+  "discounts",
+  "vouchers",
+  "inventory",
+  "members",
+  "notifications",
+  "instructors",
+  "arenas",
+  "breeds",
+  "bookings",
+  "proformas",
+  "creditLedger",
+  "payments",
+  "waitlist",
+  "attendance",
+  "taskHistory",
+];
+export function missingCatalogues(data) {
+  return ["breeds", "instructors", "arenas"].filter(
+    (key) => !Array.isArray(data?.[key]),
+  );
+}
 export function localizeData(data, ar) {
-  const result = { ...data };
-  for (const [key, rows] of Object.entries(data))
-    if (Array.isArray(rows))
-      result[key] = rows.map((r) =>
-        typeof r === "object" && r !== null ? localizeRecord(r, ar) : r,
-      );
+  const input = data && typeof data === "object" ? data : {};
+  const result = { settings: null, creditBalance: 0, ...input };
+  for (const key of collectionKeys)
+    result[key] = Array.isArray(input[key])
+      ? input[key]
+          .filter((r) => r && typeof r === "object" && !Array.isArray(r))
+          .map((r) => localizeRecord(r, ar))
+      : [];
   return result;
 }

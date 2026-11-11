@@ -64,6 +64,91 @@ let browser;
       .getByRole("button", { name: "Add", exact: true })
       .click();
   };
+  // Reproduce the incomplete response from an older cPanel backend across every Add form.
+  await page.route("**/api/data", async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    for (const key of [
+      "breeds",
+      "instructors",
+      "arenas",
+      "taskHistory",
+      "settings",
+    ])
+      delete payload[key];
+    await route.fulfill({ response, json: payload });
+  });
+  await page.reload();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  for (const title of [
+    "Horses",
+    "Horse breeds",
+    "Instructors",
+    "Training locations & arenas",
+    "Classes & riding",
+    "Pricing",
+    "Medical care",
+    "Feeding plans",
+    "Tasks",
+    "Discount codes",
+    "Vouchers",
+    "Inventory",
+  ]) {
+    await settingsAdd(title);
+    await page.getByRole("dialog").waitFor();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
+  }
+  await page.route("**/api/records/instructors", (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Unknown module" }),
+    }),
+  );
+  await settingsAdd("Instructors");
+  await field("Name (English)").fill("Outdated backend test");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  await page
+    .getByText(/Backend update required:/)
+    .first()
+    .waitFor();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await page.unroute("**/api/records/instructors");
+  await nav("Members");
+  await page
+    .getByRole("button", { name: "Create member", exact: true })
+    .click();
+  await field("Name (English)").waitFor();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await nav("Settings");
+  await page.getByRole("button", { name: "Add stable", exact: true }).click();
+  await field("Stable name (English)").waitFor();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await nav("Payment requests");
+  await page
+    .getByRole("button", { name: "Create payment request", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await page.unroute("**/api/data");
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await settingsAdd("Horse breeds");
   await field("Name (English)").fill("Arabian");
   await field("Name (Arabic)").fill("عربي");
@@ -242,6 +327,15 @@ let browser;
   await field("Quantity").fill("2 kg");
   await field("Assigned to").selectOption({ index: 1 });
   await save();
+  await nav("Tasks");
+  await add();
+  await field("Title (English)").fill("Inspect tack");
+  await field("Due at").fill(
+    new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+  );
+  await field("Assigned to").selectOption({ index: 1 });
+  await save();
+  await page.getByText("Inspect tack", { exact: true }).waitFor();
   await nav("Inventory");
   await add();
   await field("Name (English)").fill("Hay bales");
@@ -534,7 +628,7 @@ let browser;
   });
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
-    "PASS real UI: registration, horse and pricing creation, discounts, class scheduling, booking, pro forma, medical restriction, reports, member packages/credits/bookings, Arabic mobile",
+    "PASS real UI: all Add forms with legacy data, outdated-backend save errors, registration, horse and pricing creation, discounts, class scheduling, booking, pro forma, medical restriction, reports, member packages/credits/bookings, Arabic mobile",
   );
   await browser.close();
 })()

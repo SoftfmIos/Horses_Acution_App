@@ -45,3 +45,18 @@ test("bilingual names switch immediately, preserve editable originals and always
   }).format(new Date("2026-11-11"));
   assert.doesNotMatch(display, /[٠-٩۰-۹]/);
 });
+
+test("older backend data is safe to render when newer catalogues are missing", () => {
+  const old = {
+    horses: [{ id: "horse", name: "Legacy horse" }],
+    plans: [],
+    members: [],
+  };
+  const data = localizeData(old, false);
+  assert.deepEqual(data.breeds, []);
+  assert.deepEqual(data.instructors, []);
+  assert.deepEqual(data.arenas, []);
+  assert.deepEqual(data.taskHistory, []);
+  assert.doesNotThrow(() => data.breeds.filter((r) => r.active));
+  assert.equal(data.horses[0].name, "Legacy horse");
+});

@@ -29,7 +29,7 @@ import {
   Home,
 } from "lucide-react";
 import { api } from "./api";
-import { localizeData, localizedName } from "./localization";
+import { localizeData, localizedName, missingCatalogues } from "./localization";
 import { HorseHead } from "./HorseHead";
 import { SettingsHub } from "./SettingsHub";
 import { ClientHome } from "./ClientHome";
@@ -527,6 +527,7 @@ function App() {
   stableRef.current = stable?.id;
   const data = localizeData(rawData, ar);
   const selectStable = (selected) => {
+    if (!selected || selected.id === stable?.id) return;
     refreshSequence.current++;
     setData(fresh);
     setStable(selected);
@@ -590,7 +591,13 @@ function App() {
       )
         return null;
       setData(d);
-      setFailure("");
+      setFailure(
+        missingCatalogues(d).length
+          ? ar
+            ? "نسخة الخادم قديمة أو استجابة البيانات غير مكتملة. حدّث مستودع cPanel إلى آخر إصدار ثم أعد تشغيل تطبيق Node.js. لن تظهر القوائم الجديدة حتى يتحدث الخادم."
+            : "The backend is outdated or returned incomplete data. Update the cPanel repository to the latest commit and restart the Node.js app. New catalogues require the updated backend."
+          : "",
+      );
       if (manager) {
         try {
           setReports(await request("/reports"));
@@ -889,8 +896,10 @@ function App() {
   async function saveRecord(e) {
     e.preventDefault();
     const b = { ...modal.form };
-    if (b.nameEn !== undefined || b.nameAr !== undefined) delete b.name;
-    if (b.titleEn !== undefined || b.titleAr !== undefined) delete b.title;
+    if (b.nameEn !== undefined || b.nameAr !== undefined)
+      b.name = b.nameEn || b.nameAr || "";
+    if (b.titleEn !== undefined || b.titleAr !== undefined)
+      b.title = b.titleEn || b.titleAr || "";
     if (modal.kind === "horses") {
       delete b.breedEn;
       delete b.breedAr;
@@ -935,6 +944,7 @@ function App() {
         notify(message);
       }
     } catch (e) {
+      if (e.code === "BACKEND_UPDATE_REQUIRED") setFailure(e.message);
       notify(e.message);
     } finally {
       setBusy(false);
