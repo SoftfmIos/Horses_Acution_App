@@ -160,6 +160,7 @@ let browser;
   await settingsAdd("Training locations & arenas");
   await field("Name (English)").fill("Main arena");
   await field("Name (Arabic)").fill("الميدان الرئيسي");
+  await field("Place type").selectOption("open_area");
   await field("Address").fill("Riyadh");
   await save();
   await nav("Horses");
@@ -223,7 +224,7 @@ let browser;
     label: "Browser Shams",
   });
   await field("Instructor").fill("Layla");
-  await field("Arena").fill("Main arena");
+  await field("Arena").selectOption({ label: "Main arena" });
   await field("Price plan").selectOption({ index: 1 });
   await save();
   await page.getByRole("heading", { name: "Browser private class" }).waitFor();
@@ -316,6 +317,13 @@ let browser;
     )
   )
     throw Error("Dose completion did not record actor");
+  if (
+    (await page
+      .locator(".care-progress progress")
+      .first()
+      .getAttribute("value")) !== "1"
+  )
+    throw Error("Completion progress did not update");
 
   await nav("Horses");
   await page.getByText("Medical rest", { exact: true }).waitFor();
@@ -588,6 +596,76 @@ let browser;
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "English", exact: true }).click();
+  // Generate a named offering on selected weekdays using saved location choices.
+  await nav("Classes & riding");
+  await add();
+  await field("Title (English)").fill("Morning ride");
+  let firstDay = new Date();
+  firstDay.setUTCDate(firstDay.getUTCDate() + 10);
+  firstDay.setUTCDate(firstDay.getUTCDate() + ((7 - firstDay.getUTCDay()) % 7));
+  const firstDate = firstDay.toISOString().slice(0, 10),
+    until = new Date(firstDay.getTime() + 14 * 86400000)
+      .toISOString()
+      .slice(0, 10);
+  await field("Start").fill(firstDate + "T06:00");
+  await field("End").fill(firstDate + "T06:45");
+  await field("Available horses (select multiple)").selectOption({
+    label: "Browser Shams",
+  });
+  await field("Instructor").fill("Layla");
+  await field("Arena").selectOption({ label: "Main arena" });
+  await field("Price plan").selectOption({ index: 1 });
+  await field("Repeat").selectOption("weekdays");
+  await page
+    .getByRole("dialog")
+    .getByRole("checkbox", { name: "Sun", exact: true })
+    .check();
+  await page
+    .getByRole("dialog")
+    .getByRole("checkbox", { name: "Tue", exact: true })
+    .check();
+  await field("Repeat until").fill(until);
+  await page
+    .getByRole("dialog")
+    .getByText("5 bookable sessions will be generated.", { exact: true })
+    .waitFor();
+  await save();
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll(".session h3")].filter(
+        (h) => h.textContent === "Morning ride",
+      ).length === 5,
+  );
+  // A repeated follow-up creates individual tasks and displays completed/total progress.
+  await nav("Medical care");
+  await add();
+  await field("Horse").selectOption({ label: "Browser Shams" });
+  await field("Care type").fill("Follow-up appointments");
+  await field("Notes").fill("Appointment schedule test");
+  await field("Recorded at").fill(firstDate + "T08:00");
+  await field("Repeat").selectOption("daily");
+  await field("Repeat until").fill(
+    new Date(firstDay.getTime() + 2 * 86400000).toISOString().slice(0, 10),
+  );
+  await save();
+  const course = page
+    .locator(".record-card")
+    .filter({ hasText: "Appointment schedule test" });
+  await course.locator(".care-ledger summary").first().click();
+  await course
+    .getByRole("checkbox", { name: /^Complete / })
+    .first()
+    .check();
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll(".record-card")]
+        .find((c) => c.textContent.includes("Appointment schedule test"))
+        ?.querySelector("progress")?.value === 1,
+  );
+  if ((await course.locator("progress").getAttribute("max")) !== "3")
+    throw Error("Medical course task total incorrect");
+  if (!(await course.locator(".care-progress").innerText()).includes("33%"))
+    throw Error("Medical completion percentage incorrect");
   await nav("Settings");
   await page.getByRole("button", { name: "Add stable", exact: true }).click();
   await field("Stable name (English)").fill("Second UI stable");

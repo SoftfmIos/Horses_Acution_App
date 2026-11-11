@@ -1339,3 +1339,121 @@ test("saved record read-back is scoped and permission checked", async (t) => {
   );
   assert.equal((await f.owner.call("/records/horses/missing")).httpStatus, 404);
 });
+
+test("daily and selected-weekday classes publish individual bookable openings atomically", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  const daily = await f.owner.call("/records/classes", "POST", {
+    ...cls,
+    startsAt: "2026-12-01T03:00:00Z",
+    endsAt: "2026-12-01T04:00:00Z",
+    repeatMode: "daily",
+    repeatEvery: 1,
+    repeatUntil: "2026-12-03",
+  });
+  assert.equal(daily.httpStatus, 201);
+  assert.equal(daily.created.length, 3);
+  assert.equal(
+    (await f.member.call("/data")).classes.filter(
+      (c) => c.seriesId === daily.seriesId,
+    ).length,
+    3,
+  );
+  assert.equal(
+    (await f.member.call("/bookings", "POST", { classId: daily.created[1].id }))
+      .httpStatus,
+    201,
+  );
+  const selected = await f.owner.call("/records/classes", "POST", {
+    ...cls,
+    startsAt: "2026-12-06T03:00:00Z",
+    endsAt: "2026-12-06T04:00:00Z",
+    repeatMode: "weekdays",
+    repeatEvery: 1,
+    repeatDays: [0, 2],
+    repeatUntil: "2026-12-20",
+  });
+  assert.equal(selected.httpStatus, 201);
+  assert.equal(selected.created.length, 5);
+  const before = (await f.owner.call("/data")).classes.length;
+  const conflict = await f.owner.call("/records/classes", "POST", {
+    ...cls,
+    startsAt: "2026-11-30T03:00:00Z",
+    endsAt: "2026-11-30T04:00:00Z",
+    repeatMode: "daily",
+    repeatEvery: 1,
+    repeatUntil: "2026-12-02",
+  });
+  assert.equal(conflict.httpStatus, 409);
+  assert.equal((await f.owner.call("/data")).classes.length, before);
+});
+test("recurring medical appointments create tasks without medication and retain completion on regeneration", async (t) => {
+  const f = await fixture(t);
+  const { horse } = await setup(f);
+  const member = (await f.member.call("/auth/me")).user.id;
+  const course = await f.create("medical", {
+    horseId: horse.id,
+    type: "Follow-up",
+    date: "2026-11-15T06:00:00+03:00",
+    notes: "Scheduled follow-up",
+    assigneeId: member,
+    repeatMode: "weekdays",
+    repeatEvery: 1,
+    repeatDays: [0, 2],
+    repeatUntil: "2026-11-29",
+  });
+  let data = await f.member.call("/data");
+  let tasks = data.tasks.filter((t) => t.medicalId === course.id);
+  assert.equal(tasks.length, 5);
+  assert.ok(tasks.every((t) => t.title.includes("Follow-up")));
+  await f.member.call("/tasks/" + tasks[0].id + "/toggle", "POST", {
+    done: true,
+  });
+  await f.owner.call("/records/medical/" + course.id, "PUT", {
+    ...course,
+    notes: "Updated notes",
+  });
+  data = await f.member.call("/data");
+  tasks = data.tasks.filter((t) => t.medicalId === course.id);
+  assert.equal(tasks.filter((t) => t.done).length, 1);
+  assert.equal(tasks.length, 5);
+  assert.equal(
+    (
+      await f.owner.call("/records/medical", "POST", {
+        ...course,
+        frequencyHours: 8,
+        durationDays: 2,
+        medication: "Prescribed",
+        dose: "Prescribed",
+      })
+    ).httpStatus,
+    400,
+  );
+});
+test("saved open areas and indoor arenas are retained as class locations", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  const place = await f.create("arenas", {
+    nameEn: "Open grounds",
+    nameAr: "الساحة المفتوحة",
+    placeType: "open_area",
+    active: true,
+  });
+  const session = await f.create("classes", {
+    ...cls,
+    startsAt: "2026-12-01T10:00:00Z",
+    endsAt: "2026-12-01T11:00:00Z",
+    arena: place.nameAr,
+  });
+  assert.equal(session.placeType, "open_area");
+  assert.equal(session.arena, "Open grounds");
+  assert.equal(
+    (
+      await f.owner.call("/records/arenas", "POST", {
+        nameEn: "Bad place",
+        placeType: "invalid",
+      })
+    ).httpStatus,
+    400,
+  );
+});

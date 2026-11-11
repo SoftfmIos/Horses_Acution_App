@@ -8,6 +8,7 @@ RUN --mount=type=secret,id=proxy_ca \
 COPY index.html vite.config.js ./
 COPY public ./public
 COPY src ./src
+COPY shared ./shared
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     npm run build && npm prune --omit=dev --no-audit --no-fund
@@ -19,6 +20,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node server ./server
+COPY --chown=node:node shared ./shared
 RUN mkdir -p /var/lib/academy && chown node:node /var/lib/academy
 USER node
 EXPOSE 3001

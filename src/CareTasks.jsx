@@ -17,8 +17,23 @@ export function CareTasks({
   const shown = tasks
     .filter((t) => filter === "all" || (filter === "done" ? t.done : !t.done))
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  const completed = tasks.filter((task) => task.done).length;
+  const percent = tasks.length
+    ? Math.round((completed / tasks.length) * 100)
+    : 0;
   const table = (
     <>
+      <div className="care-progress">
+        <strong>
+          {label("Completion", "نسبة الإنجاز")}: {completed}/{tasks.length} (
+          {percent}%)
+        </strong>
+        <progress
+          aria-label={label("Completion rate", "نسبة الإنجاز")}
+          value={completed}
+          max={tasks.length || 1}
+        />
+      </div>
       <div className="care-toolbar">
         <strong>
           {tasks.length} {label("scheduled tasks", "مهام مجدولة")}
@@ -118,7 +133,7 @@ export function CareTasks({
   return compact ? (
     <details className="care-ledger">
       <summary>
-        {label("Dose / feeding schedule", "جدول الجرعات / التغذية")} (
+        {label("Treatment / feeding schedule", "جدول العلاج / التغذية")} (
         {tasks.length})
       </summary>
       {table}

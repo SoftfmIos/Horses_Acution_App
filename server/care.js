@@ -1,3 +1,4 @@
+import { treatmentSlots } from "../shared/recurrence.js";
 const DAY = 86400000;
 export const riyadhDate = (value) =>
   new Date(new Date(value).getTime() + 3 * 3600000).toISOString().slice(0, 10);
@@ -21,7 +22,10 @@ export function feedingConflict(plan, startsAt, endsAt) {
   return false;
 }
 export function medicationSchedule(plan) {
-  if (!plan.frequencyHours || !plan.durationDays || plan.completed) return [];
+  if (plan.completed) return [];
+  if (plan.repeatMode && plan.repeatMode !== "none")
+    return treatmentSlots(plan);
+  if (!plan.frequencyHours || !plan.durationDays) return [];
   const count = Math.ceil((plan.durationDays * 24) / plan.frequencyHours);
   if (count > 1000) throw new Error("Treatment schedule exceeds 1000 doses");
   return Array.from({ length: count }, (_, i) =>

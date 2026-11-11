@@ -1,3 +1,4 @@
+import { recurrenceSlots, treatmentSlots } from "../shared/recurrence.js";
 import {
   feedingConflict,
   feedingSchedule,
@@ -232,7 +233,9 @@ export function createApp(
       if (existing && JSON.parse(existing.data).done) continue;
       const detail =
         kind === "medical"
-          ? plan.medication + " · " + plan.dose
+          ? plan.medication
+            ? plan.medication + " · " + plan.dose
+            : plan.type
           : plan.feed + " · " + plan.quantity;
       put(org, "tasks", tid, {
         title: horse.name + " · " + detail,
@@ -611,6 +614,7 @@ export function createApp(
         instructorAr: instructor?.nameAr || b.instructorAr || "",
         arenaEn: arena?.nameEn || arena?.name || b.arenaEn || result.arena,
         arenaAr: arena?.nameAr || b.arenaAr || "",
+        placeType: arena?.placeType || "arena",
       });
     return result;
   }
@@ -623,7 +627,20 @@ export function createApp(
         name: text(b.name, "name", 100),
         notes: optional(b.notes),
         active: b.active !== false,
-        ...(kind === "arenas" ? { address: optional(b.address) } : {}),
+        ...(kind === "arenas"
+          ? {
+              address: optional(b.address),
+              placeType: [
+                "arena",
+                "open_area",
+                "indoor_arena",
+                "trail",
+                "other",
+              ].includes(b.placeType || "arena")
+                ? b.placeType || "arena"
+                : fail("Invalid place type"),
+            }
+          : {}),
         ...(kind === "instructors"
           ? { email: optional(b.email), phone: optional(b.phone) }
           : {}),
@@ -788,6 +805,12 @@ export function createApp(
         Math.ceil((durationDays * 24) / frequencyHours) > 1000
       )
         fail("Treatment schedule exceeds 1000 doses");
+      const repeatMode = b.repeatMode || "none";
+      if (frequencyHours && repeatMode !== "none")
+        fail(
+          "Choose either appointment repetition or medication dose intervals, not both",
+        );
+      treatmentSlots({ ...b, repeatMode, date: iso(b.date), completed: false });
       const assigneeId = b.assigneeId || req.user.id;
       if (
         !get(
@@ -803,6 +826,10 @@ export function createApp(
         frequencyHours,
         durationDays,
         assigneeId,
+        repeatMode,
+        repeatEvery: b.repeatEvery ?? 1,
+        repeatDays: b.repeatDays || [],
+        repeatUntil: b.repeatUntil || "",
         horseId: horse.id,
         type: text(b.type, "care type", 100),
         date: iso(b.date),
@@ -1143,22 +1170,22 @@ export function createApp(
     const { kind } = req.params;
     if (!kinds.includes(kind)) fail("Unknown module", 404);
     const created = transaction(() => {
-      const weeks =
-        kind === "classes"
-          ? integer(req.body.repeatWeeks || 1, "weeks", 1, 52)
-          : 1;
-      const seriesId = weeks > 1 ? id() : null;
-      return Array.from({ length: weeks }, (_, week) => {
+      const slots = kind === "classes" ? recurrenceSlots(req.body) : [null];
+      const seriesId = slots.length > 1 ? id() : null;
+      return slots.map((slot) => {
         const rid = id();
-        const body = { ...req.body };
-        if (kind === "classes")
-          for (const key of ["startsAt", "endsAt"])
-            body[key] = new Date(
-              Date.parse(iso(body[key])) + week * 7 * 86400000,
-            ).toISOString();
+        const body = { ...req.body, ...(slot || {}) };
         const data = {
           ...validate(req, kind, body),
-          ...(seriesId ? { seriesId } : {}),
+          ...(seriesId
+            ? {
+                seriesId,
+                repeatMode: req.body.repeatMode || "weekly",
+                repeatEvery: req.body.repeatEvery || 1,
+                repeatDays: req.body.repeatDays || [],
+                repeatUntil: req.body.repeatUntil || "",
+              }
+            : {}),
         };
         if (
           ["discounts", "vouchers"].includes(kind) &&

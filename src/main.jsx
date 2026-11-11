@@ -34,6 +34,7 @@ import { HorseHead } from "./HorseHead";
 import { SettingsHub } from "./SettingsHub";
 import { ClientHome } from "./ClientHome";
 import { CareTasks } from "./CareTasks";
+import { RecurrenceFields } from "./RecurrenceFields";
 import { StablesManager } from "./StablesManager";
 import { Schedule, MemberTools } from "./Scheduling";
 import "./style.css";
@@ -51,6 +52,10 @@ const dict = {
     breeds: "Horse breeds",
     address: "Address",
     phone: "Phone",
+    placeType: "Place type",
+    open_area: "Open area",
+    indoor_arena: "Indoor arena",
+    trail: "Trail",
     academyPortal: "Academy portal",
     memberPortal: "Member portal",
     myAccount: "My account",
@@ -271,6 +276,10 @@ const dict = {
     breeds: "سلالات الخيول",
     address: "العنوان",
     phone: "الهاتف",
+    placeType: "نوع الموقع",
+    open_area: "منطقة مفتوحة",
+    indoor_arena: "ميدان مغلق",
+    trail: "مسار خارجي",
     academyPortal: "بوابة الأكاديمية",
     memberPortal: "بوابة العضو",
     myAccount: "حسابي",
@@ -747,6 +756,14 @@ function App() {
         arenas: [
           ["nameEn", "text", true],
           ["nameAr", "text"],
+          [
+            "placeType",
+            "select",
+            true,
+            ["arena", "open_area", "indoor_arena", "trail", "other"].map(
+              (v) => [v, t[v]],
+            ),
+          ],
           ["address", "text"],
           ["active", "checkbox"],
           ["notes", "textarea"],
@@ -781,7 +798,6 @@ function App() {
           ["active", "checkbox"],
         ],
         classes: [
-          ["repeatWeeks", "number", false],
           ["titleEn", "text", true],
           ["titleAr", "text"],
           ["startsAt", "datetime-local", true],
@@ -790,7 +806,23 @@ function App() {
           ["creditCost", "number", true],
           ["horseIds", "multi", true, horses],
           ["instructor", "text", true],
-          ["arena", "text", true],
+          [
+            "arena",
+            "select",
+            true,
+            [
+              ...new Map(
+                [
+                  ...data.arenas
+                    .filter((a) => a.active)
+                    .map((a) => [a.nameEn || a.name, a.name]),
+                  ...(modal?.record?.arena
+                    ? [[modal.record.arena, modal.record.arena]]
+                    : []),
+                ].map((entry) => [entry[0], entry]),
+              ).values(),
+            ],
+          ],
           [
             "planId",
             "select",
@@ -869,6 +901,11 @@ function App() {
         : {}),
       active: true,
       repeatWeeks: 1,
+      repeatMode: "none",
+      repeatEvery: 1,
+      repeatDays: [],
+      repeatUntil: "",
+      placeType: "arena",
       capacity: data.settings?.defaultCapacity || 1,
       creditCost: data.settings?.defaultCreditCost || 1,
       credits: 0,
@@ -2587,8 +2624,8 @@ function App() {
                 {modal.kind === "medical" && (
                   <p className="notice">
                     {ar
-                      ? "لجدولة الجرعات، أدخل وقت أول جرعة، اسم الدواء والجرعة الموصوفة، والتكرار بالساعات، والمدة بالأيام، ثم اختر المسؤول. اترك التكرار والمدة 0 للسجل الطبي فقط."
-                      : "To schedule doses, enter the first dose time, prescribed medication and dose, interval in hours, duration in days and assignee. Leave interval and duration at 0 for a medical record only."}
+                      ? "لجلسات المتابعة، اختر التكرار والأيام أسفل النموذج. لجرعات الدواء، أدخل الدواء والجرعة والتكرار بالساعات والمدة بالأيام بدلاً من تكرار الجلسات."
+                      : "Use session repetition below for follow-up appointments, or medication dose interval/duration for prescribed doses. Choose one schedule type."}
                   </p>
                 )}
                 {modal.kind === "feeding" && (
@@ -2694,6 +2731,21 @@ function App() {
                     )}
                   </label>
                 ))}
+                {modal.kind === "classes" && !modal.record && (
+                  <RecurrenceFields
+                    form={modal.form}
+                    onChange={change}
+                    ar={ar}
+                  />
+                )}
+                {modal.kind === "medical" && (
+                  <RecurrenceFields
+                    form={modal.form}
+                    onChange={change}
+                    ar={ar}
+                    medical
+                  />
+                )}
                 {modal.kind === "horses" && (
                   <datalist id="catalogue-breed">
                     {data.breeds
