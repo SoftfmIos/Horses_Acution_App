@@ -74,3 +74,11 @@ This is a backend health/startup check. Login mutations must originate from the 
 The supplied subdomain is `riyadhpolo.softfm.com`. Enable a valid HTTPS certificate and reverse proxy that hostname to the persistent Node service (default port 3001). Preserve the `/api/*` path. The supplied HTTP address alone is insufficient for the production proxy, which requires HTTPS for authentication and payment data. Set `HOST=0.0.0.0`, mount the persistent database disk, and retain `PUBLIC_ORIGIN=https://horsesacutionapp.vercel.app` when browsers use that frontend. `PUBLIC_ORIGIN` is the browser website origin, not the backend hostname. No DNS, hosting, TLS or Vercel environment settings are changed by a Git push.
 
 Verify `https://riyadhpolo.softfm.com/api/health` returns API JSON, then redeploy the frontend and backend from the same commit. An existing `ACADEMY_BACKEND_URL` overrides the repository default and must be updated if it still points at an old host.
+
+## cPanel / Phusion Passenger
+
+Use Node.js 24 or newer, application root `repositories/Horses_Acution_App`, production mode and **startup file `passenger.cjs`**. The CommonJS entry point uses dynamic `import()` to load the asynchronous ES module backend. It disables Passenger's automatic server installation and explicitly listens on Passenger's socket; do not use `server/index.js` as the Passenger startup file. Direct Node/Docker startup still uses `server/index.js` and the configured TCP port.
+
+Set `PUBLIC_ORIGIN=https://horsesacutionapp.vercel.app` (or the actual frontend HTTPS origin) and `DATABASE_PATH=/home/softfm5/academy-data/academy.sqlite`. Run NPM Install, save and restart. Check `https://riyadhpolo.softfm.com/api/health`. For a backend-only installation, building the Vite frontend is unnecessary; the frontend remains on Vercel. Use `passenger.log` outside the domain's public document root for startup diagnostics. Keep the database directory outside the public document root as well.
+
+After pulling future updates, rerun NPM Install when dependencies change and restart the application. Ensure Passenger keeps the process running if continuous reminders and SMTP jobs are required; an idle-stopped application cannot run background jobs.

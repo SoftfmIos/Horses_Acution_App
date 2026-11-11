@@ -40,10 +40,13 @@ app.use(express.static(resolve(root, "dist")));
 app.get("/{*path}", (req, res) =>
   res.sendFile(resolve(root, "dist/index.html")),
 );
-const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
-  console.log(
-    `Academy server listening on ${process.env.HOST || "127.0.0.1"}:${port}; email ${emailEnabled ? "enabled" : "not configured"}`,
-  ),
+const server = app.listen(
+  globalThis.PhusionPassenger ? "passenger" : port,
+  ...(globalThis.PhusionPassenger ? [] : [process.env.HOST || "127.0.0.1"]),
+  () =>
+    console.log(
+      `Academy server listening on ${globalThis.PhusionPassenger ? "Passenger" : `${process.env.HOST || "127.0.0.1"}:${port}`}; email ${emailEnabled ? "enabled" : "not configured"}`,
+    ),
 );
 let working = false;
 const mail = emailEnabled
