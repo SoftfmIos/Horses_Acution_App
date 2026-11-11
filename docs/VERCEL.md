@@ -84,3 +84,11 @@ Set `PUBLIC_ORIGIN=https://horsesacutionapp.vercel.app` (or the actual frontend 
 After pulling future updates, rerun NPM Install when dependencies change and restart the application. Ensure Passenger keeps the process running if continuous reminders and SMTP jobs are required; an idle-stopped application cannot run background jobs.
 
 All `/api/:path*` requests are explicitly rewritten to the single `api/backend.js` function. The rewrite forwards the full nested path (including `auth/register`, `auth/me`, record IDs and payment actions) through a reserved query parameter. This avoids relying on filesystem catch-all matching for nested URLs. Redeploy Vercel after pulling this routing update; changing backend environment variables alone does not apply routing configuration.
+
+## Create the first admin from cPanel
+
+Pull the latest `main`. In Setup Node.js App, keep `DATABASE_PATH` set to the same absolute persistent path the running backend uses. Add `ADMIN_EMAIL` and `ADMIN_PASSWORD` (at least 6 characters) in the application's environment settings, then Save. Optionally set `ADMIN_NAME` and `ADMIN_STABLE_NAME`. Never commit the password to Git.
+
+Choose **Run JS Script → admin:create**. The script creates a manager account in the existing academy, or creates the academy if the database is empty. If multiple academies exist, set `ADMIN_STABLE_ID` explicitly. It does not reset existing passwords, overwrite accounts or promote an existing member. Repeated runs for an existing owner are safe and leave the password unchanged. This is a manual server-only command; startup and public requests never invoke it.
+
+After success, remove `ADMIN_PASSWORD` and other `ADMIN_*` environment settings, Save and Restart (startup file remains `passenger.cjs`). Sign in normally using the email/password supplied; no invitation is required. If cPanel does not offer the script picker, activate the application's Node environment using cPanel's displayed command and run `npm run admin:create` from the application root with the same environment settings.
