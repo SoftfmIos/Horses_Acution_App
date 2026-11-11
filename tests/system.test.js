@@ -293,11 +293,11 @@ test("medical rest, edit permissions, reminders and feeding task generation", as
     assigneeId: me.user.id,
   });
   let data = await f.owner.call("/data");
-  assert.equal(data.tasks.length, 1);
+  assert.equal(data.tasks.length, 28);
   assert.equal(data.tasks[0].dueAt, "2026-11-11T04:00:00.000Z");
   f.app.locals.remind();
   data = await f.owner.call("/data");
-  assert.equal(data.tasks.length, 1);
+  assert.equal(data.tasks.length, 28);
   const ids = data.notifications.map((n) => n.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(data.notifications.some((n) => n.title.includes("Task due")));
@@ -1075,12 +1075,10 @@ test("simple six-to-eight character passwords work for registration and direct m
   assert.equal((await f.owner.call("/members", "POST", short)).httpStatus, 201);
   assert.equal(
     (
-      await f
-        .client()
-        .call("/auth/login", "POST", {
-          email: short.email,
-          password: short.password,
-        })
+      await f.client().call("/auth/login", "POST", {
+        email: short.email,
+        password: short.password,
+      })
     ).httpStatus,
     200,
   );
@@ -1094,4 +1092,232 @@ test("simple six-to-eight character passwords work for registration and direct m
     ).httpStatus,
     201,
   );
+});
+
+test("settings and bilingual catalogues persist and remain manager-only", async (t) => {
+  const f = await fixture(t);
+  const settings = {
+    academyNameEn: "Riyadh Academy",
+    academyNameAr: "أكاديمية الرياض",
+    contactEmail: "contact@test.com",
+    phone: "123456",
+    address: "Riyadh",
+    calendarView: "quarter",
+    lessonDuration: 90,
+    defaultCapacity: 2,
+    defaultCreditCost: 2,
+  };
+  assert.equal(
+    (await f.member.call("/settings", "PUT", settings)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.owner.call("/settings", "PUT", settings)).httpStatus,
+    200,
+  );
+  assert.equal((await f.owner.call("/data")).settings.lessonDuration, 90);
+  assert.equal(
+    (await f.owner.call("/auth/me")).stables[0].nameAr,
+    "أكاديمية الرياض",
+  );
+  const horse = await f.create("horses", { nameEn: "Shams", nameAr: "شمس" });
+  assert.equal(horse.name, "Shams");
+  assert.equal(horse.nameAr, "شمس");
+  const instructor = await f.create("instructors", {
+    nameEn: "Layla",
+    nameAr: "ليلى",
+    active: true,
+  });
+  const arena = await f.create("arenas", {
+    nameEn: "Main arena",
+    nameAr: "الميدان الرئيسي",
+    active: true,
+  });
+  const plan = await f.create("plans", {
+    nameEn: "Private lesson",
+    nameAr: "حصة خاصة",
+    amount: 10000,
+    active: true,
+  });
+  const cls = await f.create("classes", {
+    titleEn: "Morning riding",
+    titleAr: "ركوب صباحي",
+    startsAt: "2026-11-13T10:00:00Z",
+    endsAt: "2026-11-13T11:00:00Z",
+    capacity: 1,
+    horseIds: [horse.id],
+    instructor: instructor.nameAr,
+    arena: arena.nameAr,
+    planId: plan.id,
+  });
+  assert.equal(cls.instructor, "Layla");
+  assert.equal(cls.instructorAr, "ليلى");
+  assert.equal(cls.arenaAr, "الميدان الرئيسي");
+  const booking = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(booking.httpStatus, 201);
+  assert.equal(
+    (await f.member.call("/data")).proformas[0].descriptionAr,
+    "ركوب صباحي",
+  );
+  assert.equal(
+    (
+      await f.member.call("/settings", "PUT", {
+        ...settings,
+        calendarView: "year",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/settings", "PUT", {
+        ...settings,
+        defaultCapacity: 0,
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal((await f.owner.call("/data")).settings.defaultCapacity, 2);
+  const person = await f.owner.call("/members", "POST", {
+    nameEn: "Ahmed",
+    nameAr: "أحمد",
+    email: "ahmed@test.com",
+    password: "123456",
+  });
+  assert.equal(person.httpStatus, 201);
+  assert.equal(
+    (await f.owner.call("/data")).members.find((m) => m.id === person.id)
+      .nameAr,
+    "أحمد",
+  );
+});
+
+test("medication doses are scheduled and completed once by assigned trainers with audit timestamps", async (t) => {
+  const f = await fixture(t);
+  const { horse } = await setup(f);
+  const member = (await f.member.call("/auth/me")).user.id;
+  await f.owner.call("/members/" + member + "/role", "PUT", {
+    role: "instructor",
+  });
+  const treatment = await f.create("medical", {
+    horseId: horse.id,
+    type: "Treatment",
+    date: "2026-11-11T07:00:00Z",
+    notes: "Veterinary instructions",
+    medication: "Prescribed medication",
+    dose: "Prescribed dose",
+    frequencyHours: 8,
+    durationDays: 2,
+    assigneeId: member,
+  });
+  let d = await f.member.call("/data");
+  const doses = d.tasks.filter((task) => task.medicalId === treatment.id);
+  assert.equal(doses.length, 6);
+  assert.equal(doses[1].dueAt, "2026-11-11T15:00:00.000Z");
+  const task = doses[0];
+  assert.equal(
+    (
+      await f.member.call("/tasks/" + task.id + "/toggle", "POST", {
+        done: true,
+      })
+    ).httpStatus,
+    200,
+  );
+  await f.member.call("/tasks/" + task.id + "/toggle", "POST", { done: true });
+  d = await f.owner.call("/data");
+  const completed = d.tasks.find((x) => x.id === task.id);
+  assert.equal(completed.completedBy, member);
+  assert.equal(completed.completedAt, "2026-11-11T07:00:00.000Z");
+  assert.equal(d.taskHistory.filter((e) => e.task_id === task.id).length, 1);
+  f.app.locals.remind();
+  assert.equal(
+    (await f.owner.call("/data")).tasks.find((x) => x.id === task.id).done,
+    true,
+  );
+  await f.owner.call("/records/medical/" + treatment.id, "PUT", {
+    ...treatment,
+    completed: true,
+  });
+  d = await f.owner.call("/data");
+  assert.equal(d.tasks.filter((x) => x.medicalId === treatment.id).length, 1);
+  assert.equal(d.tasks.find((x) => x.id === task.id).done, true);
+});
+test("feeding tasks reserve horse time and reject conflicting bookings and plans", async (t) => {
+  const f = await fixture(t);
+  const { horse, cls } = await setup(f);
+  const owner = (await f.owner.call("/auth/me")).user.id;
+  const plan = await f.create("feeding", {
+    horseId: horse.id,
+    feed: "Hay",
+    quantity: "2 kg",
+    time: "13:00",
+    durationMinutes: 30,
+    assigneeId: owner,
+  });
+  let d = await f.member.call("/data");
+  assert.equal(d.classes.find((c) => c.id === cls.id).places, 0);
+  assert.equal(
+    (await f.member.call("/bookings", "POST", { classId: cls.id })).httpStatus,
+    409,
+  );
+  d = await f.owner.call("/data");
+  assert.equal(
+    d.tasks.filter((task) => task.feedingPlanId === plan.id).length,
+    28,
+  );
+  await f.owner.call("/records/feeding/" + plan.id, "PUT", {
+    ...plan,
+    time: "15:00",
+  });
+  assert.equal(
+    (await f.member.call("/bookings", "POST", { classId: cls.id })).httpStatus,
+    201,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/records/feeding/" + plan.id, "PUT", {
+        ...plan,
+        time: "13:00",
+      })
+    ).httpStatus,
+    409,
+  );
+});
+test("multiple stables isolate horses and members while managers can link existing accounts", async (t) => {
+  const f = await fixture(t);
+  await setup(f);
+  const first = f.owner.stable;
+  assert.equal(
+    (await f.member.call("/stables", "POST", { nameEn: "Denied" })).httpStatus,
+    403,
+  );
+  const second = await f.owner.call("/stables", "POST", {
+    nameEn: "Second stable",
+    nameAr: "الإسطبل الثاني",
+  });
+  assert.equal(second.httpStatus, 201);
+  const me = await f.owner.call("/auth/me");
+  assert.equal(me.stables.length, 2);
+  assert.equal(
+    me.stables.find((s) => s.id === second.id).nameAr,
+    "الإسطبل الثاني",
+  );
+  f.owner.stable = second.id;
+  assert.equal((await f.owner.call("/data")).horses.length, 0);
+  assert.equal((await f.owner.call("/data")).members.length, 1);
+  assert.equal(
+    (await f.owner.call("/members/link", "POST", { email: "member@test.com" }))
+      .httpStatus,
+    201,
+  );
+  assert.equal((await f.owner.call("/data")).members.length, 2);
+  assert.equal(
+    (await f.owner.call("/members/link", "POST", { email: "member@test.com" }))
+      .httpStatus,
+    409,
+  );
+  f.member.stable = second.id;
+  assert.equal((await f.member.call("/data")).horses.length, 0);
+  f.owner.stable = first;
+  assert.equal((await f.owner.call("/data")).horses.length, 1);
 });

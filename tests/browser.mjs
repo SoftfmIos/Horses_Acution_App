@@ -48,18 +48,72 @@ let browser;
       .click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
   };
+  await nav("Settings");
+  await page
+    .getByLabel("Academy name (English)", { exact: true })
+    .fill("Riyadh Browser Stable");
+  await page
+    .getByLabel("Academy name (Arabic)", { exact: true })
+    .fill("أكاديمية الاختبار");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const settingsAdd = async (title) => {
+    await nav("Settings");
+    await page
+      .locator(".settings-card")
+      .filter({ has: page.getByRole("heading", { name: title, exact: true }) })
+      .getByRole("button", { name: "Add", exact: true })
+      .click();
+  };
+  await settingsAdd("Horse breeds");
+  await field("Name (English)").fill("Arabian");
+  await field("Name (Arabic)").fill("عربي");
+  await save();
+  await settingsAdd("Instructors");
+  await field("Name (English)").fill("Layla");
+  await field("Name (Arabic)").fill("ليلى");
+  await save();
+  await settingsAdd("Training locations & arenas");
+  await field("Name (English)").fill("Main arena");
+  await field("Name (Arabic)").fill("الميدان الرئيسي");
+  await field("Address").fill("Riyadh");
+  await save();
   await nav("Horses");
+  await page.locator(".search input").fill("A filter that hides the new horse");
   await add();
-  await field("Name").fill("Browser Shams");
+  await field("Name (English)").fill("Browser Shams");
+  await field("Name (Arabic)").fill("شمس");
   await field("Breed").fill("Arabian");
   await save();
   await page.getByRole("heading", { name: "Browser Shams" }).waitFor();
+  if (await page.locator(".search input").inputValue())
+    throw Error("Horse save did not clear search");
+  await page.reload();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await nav("Horses");
+  await page
+    .getByRole("heading", { name: "Browser Shams", exact: true })
+    .waitFor();
+  await page.getByRole("button", { name: "العربية", exact: true }).click();
+  await page.getByRole("heading", { name: "شمس", exact: true }).waitFor();
+  await page.getByRole("button", { name: "English", exact: true }).click();
+
   await nav("Pricing");
+  await page.locator(".search input").fill("A filter that hides prices");
   await add();
-  await field("Name").fill("Private ride");
+  await field("Name (English)").fill("Private ride");
   await field("Price (SAR)").fill("200");
   await save();
   await page.getByText("SAR", { exact: false }).first().waitFor();
+  await page
+    .getByRole("heading", { name: "Private ride", exact: true })
+    .waitFor();
+  await page.reload();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await nav("Pricing");
+  await page
+    .getByRole("heading", { name: "Private ride", exact: true })
+    .waitFor();
+
   await nav("Discount codes");
   await add();
   await field("Code").fill("HELLO10");
@@ -73,7 +127,7 @@ let browser;
   await save();
   await nav("Classes & riding");
   await add();
-  await field("Title").fill("Browser private class");
+  await field("Title (English)").fill("Browser private class");
   const start = new Date(Date.now() + 2 * 86400000);
   start.setMinutes(0, 0, 0);
   await field("Start").fill(start.toISOString().slice(0, 16));
@@ -89,6 +143,25 @@ let browser;
   await save();
   await page.getByRole("heading", { name: "Browser private class" }).waitFor();
   const calendar = page.getByRole("region", { name: "Booking calendar" });
+  if (
+    (await calendar.getByLabel("View", { exact: true }).inputValue()) !==
+    "month"
+  )
+    throw Error("Calendar does not open in month view");
+  await calendar.getByLabel("View", { exact: true }).selectOption("quarter");
+  if ((await calendar.locator(".calendar-month").count()) !== 3)
+    throw Error("Quarter must contain three months");
+  const quarterTitle = await calendar.locator(".calendar-period").innerText();
+  await calendar
+    .getByRole("button", { name: "Next period", exact: true })
+    .click();
+  if ((await calendar.locator(".calendar-period").innerText()) === quarterTitle)
+    throw Error("Quarter navigation failed");
+  await calendar
+    .getByRole("button", { name: "Previous period", exact: true })
+    .click();
+  await calendar.getByLabel("View", { exact: true }).selectOption("month");
+
   await calendar
     .getByLabel("Date", { exact: true })
     .fill(start.toISOString().slice(0, 10));
@@ -141,7 +214,24 @@ let browser;
   await field("Notes").fill("No riding until vet clearance");
   await field("Restrict horse from riding").check();
   await field("Medication").fill("Vet prescription");
+  await field("Dose / route").fill("As prescribed");
+  await field("Dose interval (hours)").fill("8");
+  await field("Treatment duration (days)").fill("2");
   await save();
+  await page.locator(".care-ledger").first().locator("summary").first().click();
+  await page
+    .getByRole("checkbox", { name: /^Complete / })
+    .first()
+    .check();
+  await page.getByLabel("Task status", { exact: true }).selectOption("done");
+  await page.locator(".care-table tbody tr").first().waitFor();
+  if (
+    !(await page.locator(".care-table tbody tr").first().innerText()).includes(
+      "Browser Manager",
+    )
+  )
+    throw Error("Dose completion did not record actor");
+
   await nav("Horses");
   await page.getByText("Medical rest", { exact: true }).waitFor();
 
@@ -154,7 +244,7 @@ let browser;
   await save();
   await nav("Inventory");
   await add();
-  await field("Name").fill("Hay bales");
+  await field("Name (English)").fill("Hay bales");
   await field("Unit").fill("bale");
   await field("Quantity").fill("10");
   await field("Reorder level").fill("15");
@@ -361,6 +451,15 @@ let browser;
     await mp.evaluate(() => document.documentElement.scrollWidth > innerWidth)
   )
     throw Error("Member mobile overflow");
+  if ((await mp.locator(".client-layout").count()) !== 1)
+    throw Error("Member did not receive the client portal");
+  if (/[٠-٩۰-۹]/.test(await mp.locator("body").innerText()))
+    throw Error("Arabic digits displayed in client portal");
+  const fonts = await mp
+    .locator("h1,button,input,select,textarea")
+    .evaluateAll((nodes) => nodes.map((n) => getComputedStyle(n).fontFamily));
+  if (fonts.some((font) => !font.includes("Tajawal")))
+    throw Error("Inconsistent font");
   await memberContext.close();
   await nav("Reports");
   await page.getByRole("heading", { name: "Reports", exact: true }).waitFor();
@@ -390,6 +489,49 @@ let browser;
     await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
   )
     throw Error("Calendar mobile overflow");
+  if (/[٠-٩۰-۹]/.test(await page.locator("body").innerText()))
+    throw Error("Arabic digits displayed in calendar");
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await nav("Settings");
+  await page.getByRole("button", { name: "Add stable", exact: true }).click();
+  await field("Stable name (English)").fill("Second UI stable");
+  await field("Stable name (Arabic)").fill("الإسطبل الثاني");
+  await save();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await nav("Members");
+  await page
+    .getByRole("button", { name: "Create member", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("heading", { name: "Create member", exact: true })
+    .waitFor();
+  await field("Name (English)").fill("Six character member");
+  await field("Name (Arabic)").fill("عضو جديد");
+  await field("Email").fill("six-member@test.com");
+  await field("Password (6+ characters)").fill("123456");
+  await save();
+  await page
+    .locator(".member-row")
+    .filter({ hasText: "Six character member" })
+    .waitFor();
+  await page.reload();
+  await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+  await page
+    .getByLabel("Active stable", { exact: true })
+    .selectOption({ label: "Second UI stable" });
+  await nav("Members");
+  await page
+    .locator(".member-row")
+    .filter({ hasText: "Six character member" })
+    .waitFor();
+  await nav("Settings");
+  await page.screenshot({
+    path: "test-results/settings-desktop.png",
+    fullPage: true,
+  });
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
     "PASS real UI: registration, horse and pricing creation, discounts, class scheduling, booking, pro forma, medical restriction, reports, member packages/credits/bookings, Arabic mobile",

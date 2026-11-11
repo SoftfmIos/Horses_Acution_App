@@ -98,6 +98,32 @@ test("Vercel proxy: configuration errors, backend failure, login cookies, CSRF a
   });
   assert.equal(r.status, 200);
   assert.equal((await r.json()).name, "Updated through nested route");
+  r = await fetch(base + "/api/records/medical", {
+    method: "POST",
+    headers: scopedHeaders,
+    body: JSON.stringify({
+      horseId: horse.id,
+      type: "Medication",
+      date: new Date().toISOString(),
+      medication: "Prescribed",
+      dose: "Prescribed dose",
+      notes: "Vet instructions",
+      frequencyHours: 8,
+      durationDays: 1,
+    }),
+  });
+  assert.equal(r.status, 201);
+  const medical = await r.json();
+  r = await fetch(base + "/api/data", { headers: scopedHeaders });
+  const scheduled = await r.json();
+  const dose = scheduled.tasks.find((t) => t.medicalId === medical.id);
+  assert.ok(dose.id.includes("."));
+  r = await fetch(base + "/api/tasks/" + dose.id + "/toggle", {
+    method: "POST",
+    headers: scopedHeaders,
+    body: JSON.stringify({ done: true }),
+  });
+  assert.equal(r.status, 200);
 
   r = await fetch(base + "/api/auth/logout", {
     method: "POST",

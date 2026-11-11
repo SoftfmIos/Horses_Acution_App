@@ -45,9 +45,12 @@ export default async function handler(req, res) {
   if (routedPath !== null) {
     if (
       typeof routedPath !== "string" ||
-      !/^[a-zA-Z0-9_:/-]+$/.test(routedPath) ||
+      !/^[a-zA-Z0-9_.:/-]+$/.test(routedPath) ||
       routedPath.startsWith("/") ||
-      routedPath.includes("//")
+      routedPath.includes("//") ||
+      routedPath
+        .split("/")
+        .some((segment) => segment === "." || segment === "..")
     )
       return res.status(400).json({ error: "Invalid API path" });
     incoming.pathname = "/api/" + routedPath;

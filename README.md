@@ -35,8 +35,8 @@ The Node server serves both the built website and API. Running `dist` on a stati
 | Member portal | Personal upcoming sessions, lesson-credit balance/history, outstanding payment requests, own bookings and instructor filtering |
 | Bookings | Members book/cancel their own sessions; managers see all; server checks duplicates, rider overlap, capacity and horse availability; concurrent reservations cannot oversell |
 | Horses | Profiles, breed, birth date, microchip/passport, notes and riding status |
-| Medical | Editable visits/care, medication instructions, due dates, vet, completion record and riding restrictions; affected booking members receive review notifications |
-| Feeding | Editable daily horse/feed/quantity plans with assigned member; daily tasks generated in Riyadh time while the service runs |
+| Medical | Medical records and dose schedules from first dose time, interval and duration; assignees record each completion with actor/time; riding restrictions and reminders |
+| Feeding | Daily feeding plans, date ranges, duration and assignee; tasks generated 28 days ahead; feeding windows block horse bookings |
 | Tasks | Due dates, assignments, completion and reminders; members can complete only their assigned tasks |
 | Pricing | Configurable SAR prices for group classes, private lessons, rides, boarding, other services and prepaid lesson packages |
 | Discounts | Percentage or fixed SAR codes, minimum spend, expiry, total redemption limit, active/inactive state |
@@ -46,7 +46,7 @@ The Node server serves both the built website and API. Running `dist` on a stati
 | Reports | Operational totals for gross requests, discounts, vouchers, recorded payments, outstanding amounts, bookings, members, low stock and overdue tasks |
 | Notifications | Persistent, per-user in-app inbox and read state; booking/payment events, upcoming class, task, medical and stock reminders; optional durable SMTP email outbox |
 
-UI data refreshes every 30 seconds. Reminder jobs run every minute and deduplicate repeated reminders. Feeding tasks are created for the current Riyadh day, not retroactively for days when the server was stopped. A medically restricted horse cannot receive new bookings. Existing affected bookings are flagged through notifications rather than silently cancelled or reassigned. Completing a medical record does not automatically clear rest; a manager must explicitly return the horse to ready after clearance.
+UI data refreshes every 30 seconds. Reminder jobs run every minute and deduplicate repeated reminders. Feeding tasks are generated 28 days ahead in Riyadh time while the service runs. Pending overdue tasks are retained; completed tasks are never regenerated. A medically restricted horse cannot receive new bookings. Existing affected bookings are flagged through notifications rather than silently cancelled or reassigned. Completing a medical record does not automatically clear rest; a manager must explicitly return the horse to ready after clearance.
 
 ## Pricing and ZATCA boundary
 
@@ -95,7 +95,7 @@ API integration tests use temporary databases and cover authentication, stable i
 
 ## Scheduling and member administration
 
-The booking screen has day, week and month calendars in Riyadh time, date navigation, and instructor, horse and arena filters. The calendar complements the session cards. New classes have a **Repeat weekly** field (1–52); creating a series validates every occurrence and rolls back the whole series on a conflict. Each occurrence can be edited independently. Series-wide editing and recurrence exceptions are not implemented.
+The booking screen defaults to a full month and has day, week, month and quarter calendars in Riyadh time, date navigation, and instructor, horse and arena filters. The calendar complements the session cards. New classes have a **Repeat weekly** field (1–52); creating a series validates every occurrence and rolls back the whole series on a conflict. Each occurrence can be edited independently. Series-wide editing and recurrence exceptions are not implemented.
 
 Managers can create members, edit their names, assign staff roles and remove academy access. Temporary passwords require 6 characters. Names of accounts shared across academies cannot be changed by one academy. Removal preserves financial history and is blocked until bookings, open payment requests and credit balances are reconciled. Instructors manage classes and attendance; vets manage horses and medical records; caregivers manage feeding and tasks. Staff cannot see other members' payment or credit records or manage billing/roles.
 
@@ -116,3 +116,21 @@ This is a functional first server-backed release, not the entire long-term speci
 ## Brand and source
 
 Theme aligned with `SoftfmIos/Riyadh_PoloAcademy` (`website`, `37f387f`): navy `#0d2d45`, deep navy `#082237`, ivory `#f7f3eb`, stone `#eae4d8`, gold `#b88e50` and gold text `#806233`. Tajawal is hosted locally with its license/source metadata in `public/fonts/`. The academy crest is the original from the user's reference repository, matching the supplied logo; its geometry is preserved. The four uploaded projects were used as functional references, not copied as application source.
+
+## Settings, stables and client portal
+
+Managers have a Settings hub for academy details, Arabic/English names, horse breeds, instructors, training locations/arenas, horses, members, scheduling defaults, pricing and care. Instructors, breeds and arenas are reusable catalogues. Arena addresses are stored alongside names. Existing free-text instructor/arena/breed entries remain supported. New member and stable forms open as dialogs. Passwords require 6 characters with no composition rules.
+
+Settings → Stable management creates independent stable workspaces. The same manager can switch between them; horses, bookings, prices, care and members remain scoped to the selected stable. Members can be invited, created, or linked by an existing account email. Linking never changes their existing password. Do not create another stable as a substitute for adding a physical training arena.
+
+Clients receive a mobile portal with upcoming lessons, pending/active status, booking/cancellation, balance, packages and payments. Calendar browsing is optional in the client booking view. Administration tools remain restricted by role. All interface controls use Tajawal, and Arabic/English displays use Western digits (0–9). Bilingual names use the selected language with a legacy-name fallback; stored names are not machine-translated.
+
+Generic record saves clear search filters, invalidate older refresh responses and verify the saved record ID in a fresh server list before displaying success. Refresh failures are reported distinctly; a completed save is not silently treated as a failed write or automatically retried.
+
+## Medication and feeding tasks
+
+For medication scheduling, enter the veterinarian's prescribed medication/dose, first-dose date/time, interval in hours, duration in days and assignee. All doses are generated at save time (maximum 1000 per course). Leaving interval/duration at 0 creates a medical record without dose tasks. Mark each dose complete from its schedule or the Tasks screen; completion stores actor ID and timestamp, with an append-only completed/reopened event history. Repeated completion requests are idempotent. Assigned trainers and caregivers can complete tasks. Changing a course cancels obsolete pending doses while preserving completed doses/history. Completing the medical record cancels the remaining pending dose tasks.
+
+Each feeding plan defines one daily feeding time, duration (default 30 minutes), assignee and optional start/end dates. Use multiple plans for multiple daily meals. Tasks are generated on a rolling 28-day horizon; generation extends while the Node process runs. Feeding windows reserve the horse even if the task is checked early, including windows crossing midnight. Booking assignment and payment activation exclude feeding overlaps. Creating/editing a plan that overlaps an existing confirmed or pending horse booking is rejected; reconcile those bookings first. Future unbooked classes remain visible but their available places reflect feeding restrictions. Stopping a plan cancels pending tasks without deleting completed records.
+
+Passenger must keep the Node process running to extend schedules and deliver reminders; an idle-stopped process does not execute background work. Existing generated tasks remain stored in SQLite. These operational schedules record prescribed care; the application does not prescribe medication or dose.

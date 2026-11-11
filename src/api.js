@@ -2,6 +2,7 @@ export async function api(path, { method = "GET", body, stableId } = {}) {
   const response = await fetch("/api" + path, {
     method,
     credentials: "same-origin",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       "X-Requested-With": "RiyadhAcademy",

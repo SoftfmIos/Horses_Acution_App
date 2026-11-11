@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CalendarDays,
@@ -19,13 +19,38 @@ import {
   Search,
   Activity,
   BookOpen,
+  Settings as SettingsIcon,
+  GraduationCap,
+  MapPin,
+  ClipboardList,
+  Ticket,
+  BarChart3,
+  Wallet,
+  Home,
 } from "lucide-react";
 import { api } from "./api";
+import { localizeData, localizedName } from "./localization";
+import { HorseHead } from "./HorseHead";
+import { SettingsHub } from "./SettingsHub";
+import { ClientHome } from "./ClientHome";
+import { CareTasks } from "./CareTasks";
+import { StablesManager } from "./StablesManager";
 import { Schedule, MemberTools } from "./Scheduling";
 import "./style.css";
 import "./system.css";
 const dict = {
   en: {
+    settings: "Settings",
+    frequencyHours: "Dose interval (hours)",
+    durationDays: "Treatment duration (days)",
+    durationMinutes: "Feeding duration (minutes)",
+    startDate: "Schedule start date",
+    endDate: "Schedule end date",
+    instructors: "Instructors",
+    arenas: "Training locations & arenas",
+    breeds: "Horse breeds",
+    address: "Address",
+    phone: "Phone",
     academyPortal: "Academy portal",
     memberPortal: "Member portal",
     myAccount: "My account",
@@ -76,6 +101,10 @@ const dict = {
     email: "Email",
     password: "Password (6+ characters)",
     name: "Name",
+    nameEn: "Name (English)",
+    nameAr: "Name (Arabic)",
+    titleEn: "Title (English)",
+    titleAr: "Title (Arabic)",
     stableName: "Stable name",
     invite: "Member invitation code",
     join: "Join an existing stable",
@@ -231,6 +260,17 @@ const dict = {
     medicalFor: "Medical history",
   },
   ar: {
+    settings: "الإعدادات",
+    frequencyHours: "تكرار الجرعة كل (ساعة)",
+    durationDays: "مدة العلاج (أيام)",
+    durationMinutes: "مدة التغذية (دقائق)",
+    startDate: "تاريخ بداية الجدول",
+    endDate: "تاريخ نهاية الجدول",
+    instructors: "المدربون",
+    arenas: "مواقع التدريب والميادين",
+    breeds: "سلالات الخيول",
+    address: "العنوان",
+    phone: "الهاتف",
     academyPortal: "بوابة الأكاديمية",
     memberPortal: "بوابة العضو",
     myAccount: "حسابي",
@@ -278,8 +318,12 @@ const dict = {
     register: "إنشاء حساب",
     logout: "تسجيل الخروج",
     email: "البريد الإلكتروني",
-    password: "كلمة المرور (٦ أحرف على الأقل)",
+    password: "كلمة المرور (6 أحرف على الأقل)",
     name: "الاسم",
+    nameEn: "الاسم بالإنجليزية",
+    nameAr: "الاسم بالعربية",
+    titleEn: "العنوان بالإنجليزية",
+    titleAr: "العنوان بالعربية",
     stableName: "اسم الإسطبل",
     invite: "رمز دعوة العضو",
     join: "الانضمام إلى إسطبل",
@@ -363,7 +407,7 @@ const dict = {
     voucherUsed: "القسائم المستخدمة",
     inviteMember: "دعوة عضو",
     inviteInfo:
-      "دعوة للاستخدام مرة واحدة صالحة لمدة ٧ أيام. شاركها مع العضو المعني فقط.",
+      "دعوة للاستخدام مرة واحدة صالحة لمدة 7 أيام. شاركها مع العضو المعني فقط.",
     markRead: "تحديد كمقروء",
     refresh: "تحديث",
     ready: "جاهز للركوب",
@@ -396,7 +440,7 @@ const dict = {
     emailOn: "إشعارات التطبيق وإرسال البريد الإلكتروني مفعّلان.",
     dataNotice: "بيانات مشتركة على الخادم · العملة ريال · توقيت الرياض",
     passwordHint:
-      "استخدم كلمة مرور فريدة من ٦ أحرف على الأقل. إنشاء إسطبل يمنح دور المدير، والدعوة تمنح دور العضو.",
+      "استخدم كلمة مرور فريدة من 6 أحرف على الأقل. إنشاء إسطبل يمنح دور المدير، والدعوة تمنح دور العضو.",
     search: "بحث…",
     saved: "تم الحفظ بنجاح.",
     bookingSaved: "تم حفظ الحجز. يبقى بانتظار الدفع حتى تسجيل سند الدفع.",
@@ -432,8 +476,16 @@ const dict = {
   },
 };
 const fresh = {
+  instructors: [],
+  arenas: [],
+  breeds: [],
+  settings: null,
   creditBalance: 0,
   creditLedger: [],
+  payments: [],
+  waitlist: [],
+  attendance: [],
+  taskHistory: [],
   horses: [],
   plans: [],
   classes: [],
@@ -454,7 +506,7 @@ function App() {
     ),
     [auth, setAuth] = useState(null),
     [stable, setStable] = useState(null),
-    [data, setData] = useState(fresh),
+    [rawData, setData] = useState(fresh),
     [page, setPage] = useState("overview"),
     [loading, setLoading] = useState(true),
     [failure, setFailure] = useState(""),
@@ -468,7 +520,31 @@ function App() {
   const t = dict[lang],
     ar = lang === "ar",
     manager = stable?.role === "owner",
-    staff = ["instructor", "vet", "caregiver"].includes(stable?.role);
+    staff = ["instructor", "vet", "caregiver"].includes(stable?.role),
+    client = stable?.role === "member";
+  const refreshSequence = useRef(0),
+    stableRef = useRef(stable?.id);
+  stableRef.current = stable?.id;
+  const data = localizeData(rawData, ar);
+  const selectStable = (selected) => {
+    refreshSequence.current++;
+    setData(fresh);
+    setStable(selected);
+    setPage("overview");
+    setQ("");
+    setMenu(false);
+  };
+  const toggleCareTask = (task, done) =>
+    action(() =>
+      request("/tasks/" + task.id + "/toggle", {
+        method: "POST",
+        body: { done },
+      }),
+    );
+  const canComplete = (task) =>
+    manager ||
+    stable?.role === "caregiver" ||
+    task.assigneeId === auth?.user.id;
   const canManage = (kind) =>
     manager ||
     (
@@ -504,16 +580,31 @@ function App() {
   const request = (path, opts = {}) =>
     api(path, { stableId: stable?.id, ...opts });
   async function refresh(silent = false) {
+    const sequence = ++refreshSequence.current,
+      stableId = stable?.id;
     try {
       const d = await request("/data");
+      if (
+        sequence !== refreshSequence.current ||
+        stableId !== stableRef.current
+      )
+        return null;
       setData(d);
       setFailure("");
-      if (manager) setReports(await request("/reports"));
+      if (manager) {
+        try {
+          setReports(await request("/reports"));
+        } catch (e) {
+          setFailure(e.message);
+        }
+      }
+      return d;
     } catch (e) {
       if (e.status === 401) {
         setAuth(null);
         setStable(null);
       } else setFailure(e.message);
+      return null;
     }
   }
   useEffect(() => {
@@ -541,17 +632,20 @@ function App() {
     }
   }
   const money = (v) =>
-    new Intl.NumberFormat(ar ? "ar-SA" : "en-SA", {
+    new Intl.NumberFormat(ar ? "ar-SA-u-nu-latn" : "en-SA-u-nu-latn", {
       style: "currency",
       currency: "SAR",
     }).format((v || 0) / 100);
   const when = (v) =>
     v
-      ? new Date(v).toLocaleString(ar ? "ar-SA" : "en-GB", {
-          timeZone: "Asia/Riyadh",
-          dateStyle: "medium",
-          timeStyle: "short",
-        })
+      ? new Date(v).toLocaleString(
+          ar ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB-u-nu-latn",
+          {
+            timeZone: "Asia/Riyadh",
+            dateStyle: "medium",
+            timeStyle: "short",
+          },
+        )
       : "—";
   const labelHorse = (id) => data.horses.find((h) => h.id === id)?.name || "—";
   const memberName = (id) => data.members.find((m) => m.id === id)?.name || "—";
@@ -564,43 +658,57 @@ function App() {
     ["overview", LayoutDashboard],
     ["classes", CalendarDays],
     ...(!manager ? [["accountBalance", BookOpen]] : []),
-    ["horses", Activity],
+    ["horses", HorseHead],
     ...(manager
       ? [
           ["medical", HeartPulse],
           ["feeding", Sprout],
         ]
       : []),
-    ["tasks", Check],
+    ["tasks", ClipboardList],
     ["pricing", Tags],
     ...(manager
       ? [
-          ["discounts", Tags],
-          ["vouchers", BookOpen],
+          ["discounts", Ticket],
+          ["vouchers", Ticket],
         ]
       : []),
     ["billing", FileText],
     ...(manager
       ? [
           ["inventory", Package],
-          ["reports", LayoutDashboard],
+          ["reports", BarChart3],
           ["members", Users],
+          ["settings", SettingsIcon],
         ]
       : []),
     ["notifications", Bell],
-  ].filter(
-    ([key]) =>
-      !staff ||
-      [
-        "overview",
-        "notifications",
-        ...({
-          instructor: ["classes", "horses", "pricing"],
-          vet: ["horses", "medical"],
-          caregiver: ["horses", "feeding", "tasks"],
-        }[stable?.role] || []),
-      ].includes(key),
-  );
+  ]
+    .filter(
+      ([key]) =>
+        !client ||
+        [
+          "overview",
+          "classes",
+          "accountBalance",
+          "pricing",
+          "billing",
+          "notifications",
+        ].includes(key),
+    )
+    .filter(
+      ([key]) =>
+        !staff ||
+        [
+          "overview",
+          "notifications",
+          ...({
+            instructor: ["classes", "horses", "pricing", "tasks"],
+            vet: ["horses", "medical", "tasks"],
+            caregiver: ["horses", "feeding", "tasks"],
+          }[stable?.role] || []),
+        ].includes(key),
+    );
   if (staff)
     for (const [key, icon] of [
       ["medical", HeartPulse],
@@ -609,15 +717,37 @@ function App() {
       if (canManage(key) && !nav.some(([k]) => k === key))
         nav.push([key, icon]);
   t.repeatWeeks = ar
-    ? "تكرار أسبوعي (١–٥٢ أسبوعاً، للحصص الجديدة)"
+    ? "تكرار أسبوعي (1–52 أسبوعاً، للحصص الجديدة)"
     : "Repeat weekly (1–52 weeks; new classes only)";
   function fields(kind) {
     const horses = data.horses.map((h) => [h.id, h.name]),
       members = data.members.map((m) => [m.id, m.name]);
     return (
       {
+        breeds: [
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
+          ["active", "checkbox"],
+          ["notes", "textarea"],
+        ],
+        instructors: [
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
+          ["email", "email"],
+          ["phone", "tel"],
+          ["active", "checkbox"],
+          ["notes", "textarea"],
+        ],
+        arenas: [
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
+          ["address", "text"],
+          ["active", "checkbox"],
+          ["notes", "textarea"],
+        ],
         horses: [
-          ["name", "text", true],
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
           ["breed", "text"],
           ["birthDate", "date"],
           ["microchip", "text"],
@@ -630,7 +760,8 @@ function App() {
           ["notes", "textarea"],
         ],
         plans: [
-          ["name", "text", true],
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
           ["amount", "money", true],
           [
             "kind",
@@ -645,7 +776,8 @@ function App() {
         ],
         classes: [
           ["repeatWeeks", "number", false],
-          ["title", "text", true],
+          ["titleEn", "text", true],
+          ["titleAr", "text"],
           ["startsAt", "datetime-local", true],
           ["endsAt", "datetime-local", true],
           ["capacity", "number", true],
@@ -671,6 +803,9 @@ function App() {
           ["medication", "text"],
           ["dose", "text"],
           ["frequency", "text"],
+          ["frequencyHours", "number"],
+          ["durationDays", "number"],
+          ["assigneeId", "select", true, members],
           ["notes", "textarea", true],
           ["restriction", "checkbox"],
           ["completed", "checkbox"],
@@ -680,11 +815,16 @@ function App() {
           ["feed", "text", true],
           ["quantity", "text", true],
           ["time", "time", true],
+          ["durationMinutes", "number", true],
+          ["startDate", "date"],
+          ["endDate", "date"],
+          ["active", "checkbox"],
           ["assigneeId", "select", true, members],
           ["notes", "textarea"],
         ],
         tasks: [
-          ["title", "text", true],
+          ["titleEn", "text", true],
+          ["titleAr", "text"],
           ["dueAt", "datetime-local", true],
           ["assigneeId", "select", true, members],
           ["notes", "textarea"],
@@ -704,7 +844,8 @@ function App() {
           ["expiresAt", "datetime-local", true],
         ],
         inventory: [
-          ["name", "text", true],
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
           ["unit", "text", true],
           ["quantity", "number", true],
           ["reorderAt", "number"],
@@ -722,16 +863,19 @@ function App() {
         : {}),
       active: true,
       repeatWeeks: 1,
-      capacity: 1,
-      creditCost: 1,
+      capacity: data.settings?.defaultCapacity || 1,
+      creditCost: data.settings?.defaultCreditCost || 1,
       credits: 0,
       status: "ready",
       mode: "percent",
       maxUses: 1,
       kind: "class",
       date: new Date().toISOString(),
+      ...(kind === "medical"
+        ? { frequencyHours: 0, durationDays: 0, assigneeId: auth.user.id }
+        : {}),
       ...(kind === "feeding"
-        ? { time: "07:00", assigneeId: auth.user.id }
+        ? { time: "07:00", durationMinutes: 30, assigneeId: auth.user.id }
         : {}),
     };
   }
@@ -745,6 +889,18 @@ function App() {
   async function saveRecord(e) {
     e.preventDefault();
     const b = { ...modal.form };
+    if (b.nameEn !== undefined || b.nameAr !== undefined) delete b.name;
+    if (b.titleEn !== undefined || b.titleAr !== undefined) delete b.title;
+    if (modal.kind === "horses") {
+      delete b.breedEn;
+      delete b.breedAr;
+    }
+    if (modal.kind === "classes") {
+      delete b.instructorEn;
+      delete b.instructorAr;
+      delete b.arenaEn;
+      delete b.arenaAr;
+    }
     for (const [key, type] of fields(modal.kind)) {
       if (type === "number") b[key] = Number(b[key] || 0);
       if (type === "money") b[key] = Math.round(Number(b[key] || 0) * 100);
@@ -759,20 +915,32 @@ function App() {
     }
     if (modal.kind === "discounts" && b.mode === "fixed")
       b.value = Math.round(b.value * 100);
-    if (
-      await action(() =>
-        request(
-          "/records/" +
-            modal.kind +
-            (modal.record ? "/" + modal.record.id : ""),
-          { method: modal.record ? "PUT" : "POST", body: b },
-        ),
-      )
-    ) {
+    setBusy(true);
+    try {
+      const kind = modal.kind;
+      const saved = await request(
+        "/records/" + kind + (modal.record ? "/" + modal.record.id : ""),
+        { method: modal.record ? "PUT" : "POST", body: b },
+      );
+      // A successful write must not be hidden by an old search filter.
       setModal(null);
-      notify(t.saved);
+      go(kind === "plans" ? "pricing" : kind);
+      const loaded = await refresh();
+      if (loaded?.[kind]?.some((r) => r.id === saved.id)) notify(t.saved);
+      else {
+        const message = ar
+          ? "تم إرسال الحفظ، لكن تعذر تأكيد ظهور السجل. حدّث الصفحة للتحقق قبل الإضافة مرة أخرى."
+          : "The save was submitted, but the record could not be verified in the list. Refresh before adding it again.";
+        setFailure(message);
+        notify(message);
+      }
+    } catch (e) {
+      notify(e.message);
+    } finally {
+      setBusy(false);
     }
   }
+
   function editFormValue(key, type) {
     const value = modal.form[key];
     if (type === "money")
@@ -800,7 +968,18 @@ function App() {
   function change(key, value) {
     setModal((m) => ({
       ...m,
-      form: { ...m.form, [key]: value },
+      form: {
+        ...m.form,
+        [key]: value,
+        ...(m.kind === "classes" && key === "startsAt" && !m.record && value
+          ? {
+              endsAt: new Date(
+                new Date(value + ":00+03:00").getTime() +
+                  (data.settings?.lessonDuration || 60) * 60000,
+              ).toISOString(),
+            }
+          : {}),
+      },
       touched: [...(m.touched || []), key],
       quote: null,
     }));
@@ -810,28 +989,40 @@ function App() {
       <article className="panel record-card" key={r.id}>
         <div className="section-heading">
           <h3>{r.name || r.title || r.code || labelHorse(r.horseId)}</h3>
-          {canManage(kind) && kind !== "vouchers" && (
-            <button
-              className="text-button"
-              onClick={() => {
-                const form = { ...r };
-                for (const [k, type] of fields(kind))
-                  if (type === "money") form[k] = (r[k] || 0) / 100;
-                if (kind === "discounts" && r.mode === "fixed")
-                  form.value = r.value / 100;
-                setModal({
-                  kind,
-                  record: r,
-                  form,
-                  touched: fields(kind).map((f) => f[0]),
-                });
-              }}
-            >
-              {t.edit}
-            </button>
-          )}
+          {canManage(kind) &&
+            kind !== "vouchers" &&
+            !(kind === "tasks" && (r.medicalId || r.feedingPlanId)) && (
+              <button
+                className="text-button"
+                onClick={() => {
+                  const form = { ...r };
+                  for (const [k, type] of fields(kind))
+                    if (type === "money") form[k] = (r[k] || 0) / 100;
+                  if (kind === "discounts" && r.mode === "fixed")
+                    form.value = r.value / 100;
+                  setModal({
+                    kind,
+                    record: r,
+                    form,
+                    touched: fields(kind).map((f) => f[0]),
+                  });
+                }}
+              >
+                {t.edit}
+              </button>
+            )}
         </div>
-        {kind === "horses" ? (
+        {["instructors", "arenas", "breeds"].includes(kind) ? (
+          <>
+            <p>
+              {r.email} {r.phone}
+            </p>
+            <p>{r.notes}</p>
+            <span className="pill">
+              {r.active ? t.active : ar ? "غير نشط" : "Inactive"}
+            </span>
+          </>
+        ) : kind === "horses" ? (
           <>
             <p>{r.breed}</p>
             <span className={"pill " + (r.status === "rest" ? "warning" : "")}>
@@ -891,6 +1082,24 @@ function App() {
             <p>
               {t.dueAt}: {when(r.dueAt)}
             </p>
+            {r.frequencyHours > 0 && (
+              <p>
+                {ar ? "كل" : "Every"} {r.frequencyHours}{" "}
+                {ar ? "ساعة لمدة" : "hours for"} {r.durationDays}{" "}
+                {ar ? "أيام" : "days"}
+              </p>
+            )}
+            <CareTasks
+              compact
+              tasks={data.tasks.filter((task) => task.medicalId === r.id)}
+              history={data.taskHistory}
+              members={data.members}
+              ar={ar}
+              when={when}
+              toggle={toggleCareTask}
+              busy={busy}
+              canComplete={canComplete}
+            />
             <span className="pill">
               {r.completed ? t.completed : r.restriction ? t.rest : t.open}
             </span>
@@ -906,8 +1115,25 @@ function App() {
               <strong>{r.feed}</strong> · {r.quantity}
             </p>
             <p>
-              {r.time} · {memberName(r.assigneeId)}
+              {r.time} · {r.durationMinutes || 30} {ar ? "دقيقة" : "minutes"} ·{" "}
+              {memberName(r.assigneeId)}
             </p>
+            <p className="notice">
+              {ar
+                ? "الحصان غير متاح للحجز خلال فترة التغذية."
+                : "This horse is unavailable for booking during feeding."}
+            </p>
+            <CareTasks
+              compact
+              tasks={data.tasks.filter((task) => task.feedingPlanId === r.id)}
+              history={data.taskHistory}
+              members={data.members}
+              ar={ar}
+              when={when}
+              toggle={toggleCareTask}
+              busy={busy}
+              canComplete={canComplete}
+            />
             <p>{r.notes}</p>
           </>
         ) : kind === "tasks" ? (
@@ -978,8 +1204,16 @@ function App() {
       </div>
     );
   const unread = data.notifications.filter((n) => !n.read_at).length;
+  const PageIcon =
+    page === "breeds"
+      ? HorseHead
+      : page === "instructors"
+        ? GraduationCap
+        : page === "arenas"
+          ? MapPin
+          : nav.find(([key]) => key === page)?.[1] || Home;
   return (
-    <>
+    <div className={client ? "client-layout" : "academy-layout"}>
       <aside className={"sidebar " + (menu ? "open" : "")}>
         <a
           href="#"
@@ -1000,7 +1234,22 @@ function App() {
           </span>
         </a>
         <div className="stable-selector">
-          <strong>{stable.name}</strong>
+          <label>
+            {ar ? "الإسطبل الحالي" : "Active stable"}
+            <select
+              aria-label={ar ? "الإسطبل الحالي" : "Active stable"}
+              value={stable.id}
+              onChange={(e) =>
+                selectStable(auth.stables.find((s) => s.id === e.target.value))
+              }
+            >
+              {auth.stables.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {localizedName(s, ar)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <nav>
           {nav.map(([key, Icon]) => (
@@ -1028,9 +1277,11 @@ function App() {
             })
           }
         >
-          <span className="avatar">{auth.user.name.slice(0, 1)}</span>
+          <span className="avatar">
+            {localizedName(auth.user, ar).slice(0, 1)}
+          </span>
           <span>
-            <strong>{auth.user.name}</strong>
+            <strong>{localizedName(auth.user, ar)}</strong>
             <small>{manager ? t.manager : t.member}</small>
           </span>
           <LogOut size={17} />
@@ -1054,6 +1305,22 @@ function App() {
             {t.brand}
           </div>
           <div className="header-actions">
+            {client && (
+              <button
+                className="icon-button"
+                aria-label={ar ? "تسجيل الخروج" : "Log out"}
+                onClick={() =>
+                  action(async () => {
+                    await api("/auth/logout", { method: "POST" });
+                    setAuth(null);
+                    setStable(null);
+                    setData(fresh);
+                  })
+                }
+              >
+                <LogOut size={17} />
+              </button>
+            )}
             <button
               className="language"
               onClick={() => setLang(ar ? "en" : "ar")}
@@ -1089,10 +1356,43 @@ function App() {
               {t.connection} {failure}
             </p>
           )}
+          {client && auth.stables.length > 1 && (
+            <label className="client-stable-switch">
+              {ar ? "الإسطبل" : "Stable"}
+              <select
+                value={stable.id}
+                onChange={(e) =>
+                  selectStable(
+                    auth.stables.find((s) => s.id === e.target.value),
+                  )
+                }
+              >
+                {auth.stables.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {localizedName(s, ar)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="page-title">
             <div>
-              <div className="eyebrow">{stable.name}</div>
-              <h1>{page === "overview" && !manager ? t.myAccount : t[page]}</h1>
+              <div className="eyebrow">
+                {localizedName(
+                  {
+                    name: stable.name,
+                    nameEn: rawData.settings?.academyNameEn ?? stable.nameEn,
+                    nameAr: rawData.settings?.academyNameAr ?? stable.nameAr,
+                  },
+                  ar,
+                )}
+              </div>
+              <div className="heading-with-icon">
+                <PageIcon size={30} />
+                <h1>
+                  {page === "overview" && !manager ? t.myAccount : t[page]}
+                </h1>
+              </div>
               <p>
                 {page === "overview"
                   ? t.intro
@@ -1110,6 +1410,9 @@ function App() {
             {canManage(page === "pricing" ? "plans" : page) &&
               [
                 "classes",
+                "instructors",
+                "arenas",
+                "breeds",
                 "horses",
                 "medical",
                 "feeding",
@@ -1150,7 +1453,97 @@ function App() {
             )}
           </div>
 
-          {page === "overview" && !manager && (
+          {page === "overview" && client && (
+            <ClientHome
+              data={data}
+              user={{ ...auth.user, name: localizedName(auth.user, ar) }}
+              ar={ar}
+              t={t}
+              go={go}
+              when={when}
+              money={money}
+              busy={busy}
+              cancel={(id) =>
+                action(() =>
+                  request("/bookings/" + id + "/cancel", { method: "POST" }),
+                )
+              }
+            />
+          )}
+          {page === "settings" && manager && (
+            <StablesManager
+              stables={auth.stables}
+              current={stable.id}
+              ar={ar}
+              onSelect={selectStable}
+              busy={busy}
+              onCreate={async (form) => {
+                setBusy(true);
+                try {
+                  const created = await request("/stables", {
+                    method: "POST",
+                    body: form,
+                  });
+                  const refreshed = await api("/auth/me");
+                  setAuth(refreshed);
+                  selectStable(
+                    refreshed.stables.find((s) => s.id === created.id),
+                  );
+                  notify(t.saved);
+                  return true;
+                } catch (e) {
+                  notify(e.message);
+                  return false;
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          )}
+          {page === "settings" && manager && (
+            <SettingsHub
+              settings={data.settings}
+              stableName={localizedName(
+                {
+                  name: stable.name,
+                  nameEn: rawData.settings?.academyNameEn ?? stable.nameEn,
+                  nameAr: rawData.settings?.academyNameAr ?? stable.nameAr,
+                },
+                ar,
+              )}
+              data={data}
+              ar={ar}
+              request={request}
+              action={action}
+              onSaved={(name, form) => {
+                setStable((s) => ({
+                  ...s,
+                  name,
+                  nameEn: form.academyNameEn || name,
+                  nameAr: form.academyNameAr || "",
+                }));
+                setAuth((a) => ({
+                  ...a,
+                  stables: a.stables.map((s) =>
+                    s.id === stable.id
+                      ? {
+                          ...s,
+                          name,
+                          nameEn: form.academyNameEn || name,
+                          nameAr: form.academyNameAr || "",
+                        }
+                      : s,
+                  ),
+                }));
+                notify(t.saved);
+              }}
+              go={go}
+              openForm={openForm}
+              busy={busy}
+              t={t}
+            />
+          )}
+          {page === "overview" && !manager && !client && (
             <>
               <section className="stats">
                 {[
@@ -1286,7 +1679,7 @@ function App() {
             <>
               <div className="stats">
                 {[
-                  [Activity, data.horses.length, t.horses],
+                  [HorseHead, data.horses.length, t.horses],
                   [
                     CalendarDays,
                     data.bookings.filter((b) =>
@@ -1361,23 +1754,32 @@ function App() {
                   ? "الحجز بانتظار الدفع حتى تسجيل سند الدفع بالكامل. الحصص المسددة برصيد مدفوع مسبقاً تتفعل فوراً."
                   : "Bookings remain pending until the academy records payment voucher details and full payment. Bookings using prepaid credits activate immediately."}
               </p>
-              <Schedule
-                classes={data.classes.filter(
-                  (c) => !instructorFilter || c.instructor === instructorFilter,
-                )}
-                horses={data.horses}
-                ar={ar}
-                onSelect={(c) =>
-                  canManage("classes")
-                    ? openForm("classes", c)
-                    : setModal({
-                        kind: "booking",
-                        classId: c.id,
-                        title: c.title,
-                        form: {},
-                      })
-                }
-              />
+              <details
+                className={client ? "client-calendar" : "admin-calendar"}
+                open={!client}
+              >
+                <summary>{ar ? "عرض التقويم" : "Show calendar"}</summary>
+                <Schedule
+                  defaultView={data.settings?.calendarView || "month"}
+                  key={data.settings?.calendarView || "month"}
+                  classes={data.classes.filter(
+                    (c) =>
+                      !instructorFilter || c.instructor === instructorFilter,
+                  )}
+                  horses={data.horses}
+                  ar={ar}
+                  onSelect={(c) =>
+                    canManage("classes")
+                      ? openForm("classes", c)
+                      : setModal({
+                          kind: "booking",
+                          classId: c.id,
+                          title: c.title,
+                          form: {},
+                        })
+                  }
+                />
+              </details>
 
               <p className="notice">{t.cancelPolicy}</p>
               <label className="instructor-filter">
@@ -1495,10 +1897,10 @@ function App() {
                   </div>
                 ))}
               </section>
-              <h2 className="subheading">
+              <h2 className="subheading booking-table-heading">
                 {canManage("classes") ? t.allBookings : t.myBookings}
               </h2>
-              <div className="panel table-wrap">
+              <div className="panel table-wrap classes-booking-table">
                 <table>
                   <thead>
                     <tr>
@@ -1583,11 +1985,25 @@ function App() {
               </div>
             </>
           )}
+          {page === "tasks" && (
+            <CareTasks
+              tasks={data.tasks}
+              history={data.taskHistory}
+              members={data.members}
+              ar={ar}
+              when={when}
+              toggle={toggleCareTask}
+              busy={busy}
+              canComplete={canComplete}
+            />
+          )}
           {[
+            "instructors",
+            "arenas",
+            "breeds",
             "horses",
             "medical",
             "feeding",
-            "tasks",
             "pricing",
             "discounts",
             "vouchers",
@@ -1605,6 +2021,10 @@ function App() {
                   placeholder={t.search}
                 />
               </label>
+              <p className="record-count" role="status">
+                {data[page === "pricing" ? "plans" : page].length}{" "}
+                {ar ? "سجلات" : "records"}
+              </p>
               <div className="record-grid">
                 {data[page === "pricing" ? "plans" : page]
                   .filter((r) =>
@@ -1730,32 +2150,11 @@ function App() {
           {page === "members" && manager && (
             <MemberTools
               members={data.members}
+              busy={busy}
               request={request}
               action={action}
               ar={ar}
             />
-          )}
-          {page === "members" && (
-            <div className="panel table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t.name}</th>
-                    <th>{t.role}</th>
-                    <th>{t.sessionBalance}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.members.map((m) => (
-                    <tr key={m.id}>
-                      <td>{m.name}</td>
-                      <td>{t[m.role]}</td>
-                      <td>{m.creditBalance}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           )}
           {page === "notifications" && (
             <>
@@ -2142,6 +2541,20 @@ function App() {
               </>
             ) : (
               <form onSubmit={saveRecord}>
+                {modal.kind === "medical" && (
+                  <p className="notice">
+                    {ar
+                      ? "لجدولة الجرعات، أدخل وقت أول جرعة، اسم الدواء والجرعة الموصوفة، والتكرار بالساعات، والمدة بالأيام، ثم اختر المسؤول. اترك التكرار والمدة 0 للسجل الطبي فقط."
+                      : "To schedule doses, enter the first dose time, prescribed medication and dose, interval in hours, duration in days and assignee. Leave interval and duration at 0 for a medical record only."}
+                  </p>
+                )}
+                {modal.kind === "feeding" && (
+                  <p className="notice">
+                    {ar
+                      ? "ستُجدول المهام تلقائياً لمدة 28 يوماً مقدماً، ويُحجز وقت الحصان طوال مدة التغذية. أضف خطة منفصلة لكل موعد يومي."
+                      : "Tasks are scheduled 28 days ahead and the horse is blocked for the feeding duration. Add a separate plan for each daily feeding time."}
+                  </p>
+                )}
                 {fields(modal.kind).map(([key, type, required, options]) => (
                   <label
                     key={key}
@@ -2197,6 +2610,25 @@ function App() {
                         ) : (
                           <input
                             required={required}
+                            list={
+                              modal.kind === "classes" &&
+                              ["instructor", "arena"].includes(key)
+                                ? "catalogue-" + key
+                                : modal.kind === "horses" && key === "breed"
+                                  ? "catalogue-breed"
+                                  : undefined
+                            }
+                            lang={
+                              [
+                                "number",
+                                "money",
+                                "date",
+                                "datetime-local",
+                                "time",
+                              ].includes(type)
+                                ? "en"
+                                : undefined
+                            }
                             type={type === "money" ? "number" : type}
                             min={
                               ["number", "money"].includes(type)
@@ -2219,6 +2651,33 @@ function App() {
                     )}
                   </label>
                 ))}
+                {modal.kind === "horses" && (
+                  <datalist id="catalogue-breed">
+                    {data.breeds
+                      .filter((r) => r.active)
+                      .map((r) => (
+                        <option key={r.id} value={r.name} />
+                      ))}
+                  </datalist>
+                )}
+                {modal.kind === "classes" && (
+                  <>
+                    <datalist id="catalogue-instructor">
+                      {data.instructors
+                        .filter((r) => r.active)
+                        .map((r) => (
+                          <option key={r.id} value={r.name} />
+                        ))}
+                    </datalist>
+                    <datalist id="catalogue-arena">
+                      {data.arenas
+                        .filter((r) => r.active)
+                        .map((r) => (
+                          <option key={r.id} value={r.name} />
+                        ))}
+                    </datalist>
+                  </>
+                )}
                 <button className="primary" disabled={busy}>
                   {busy ? t.loading : t.save}
                 </button>
@@ -2232,7 +2691,7 @@ function App() {
           {toast}
         </div>
       )}
-    </>
+    </div>
   );
 }
 function AuthForm({ t, onSuccess }) {
@@ -2280,8 +2739,10 @@ function AuthForm({ t, onSuccess }) {
       >
         {mode === "register" && (
           <label>
-            {t.name}
+            {t.nameEn}
             <input required name="name" autoComplete="name" maxLength={100} />
+            <span>{t.nameAr}</span>
+            <input name="nameAr" maxLength={100} dir="rtl" />
           </label>
         )}
         <label>
@@ -2327,6 +2788,12 @@ function AuthForm({ t, onSuccess }) {
                 maxLength={100}
               />
             </label>
+            {!join && (
+              <label>
+                {t.nameAr} · {t.stableName}
+                <input name="stableNameAr" maxLength={100} dir="rtl" />
+              </label>
+            )}
             <p className="auth-hint">{t.passwordHint}</p>
             <p className="auth-hint">{t.registrationNote}</p>
           </>

@@ -149,7 +149,7 @@ small {
   color: var(--gold-text);
   border-radius: 0;
   padding: 9px 12px;
-  font-family: Georgia;
+  font-family: Tajawal, Tahoma, Arial, sans-serif;
 }
 .stable-selector strong {
   font-size: 12px;

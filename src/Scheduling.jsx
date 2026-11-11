@@ -1,43 +1,39 @@
 import React, { useState } from "react";
-const dayKey = (value) =>
-  new Date(new Date(value).getTime() + 3 * 3600000).toISOString().slice(0, 10);
-export function Schedule({ classes, horses, onSelect, ar }) {
-  const [view, setView] = useState("week"),
+import {
+  calendarDays,
+  periodMonths,
+  movePeriod,
+  riyadhDay as dayKey,
+} from "./calendar";
+export function Schedule({
+  classes,
+  horses,
+  onSelect,
+  ar,
+  defaultView = "month",
+}) {
+  const [view, setView] = useState(defaultView),
     [anchor, setAnchor] = useState(dayKey(new Date())),
     [horse, setHorse] = useState(""),
     [arena, setArena] = useState("");
-  const date = new Date(anchor + "T00:00:00+03:00");
-  const start = new Date(date);
-  if (view === "week")
-    start.setUTCDate(
-      start.getUTCDate() - new Date(anchor + "T12:00:00Z").getUTCDay(),
-    );
-  if (view === "month") {
-    start.setUTCDate(start.getUTCDate() - (Number(anchor.slice(8)) - 1));
-    start.setUTCDate(
-      start.getUTCDate() - new Date(dayKey(start) + "T12:00:00Z").getUTCDay(),
-    );
-  }
-  const count = view === "day" ? 1 : view === "week" ? 7 : 42;
-  const days = Array.from(
-    { length: count },
-    (_, i) => new Date(start.getTime() + i * 86400000),
-  );
   const filtered = classes.filter(
     (c) =>
       (!horse || c.horseIds.includes(horse)) && (!arena || c.arena === arena),
   );
-  function move(direction) {
-    const next = new Date(date);
-    if (view === "month") {
-      next.setUTCDate(next.getUTCDate() - (Number(anchor.slice(8)) - 1));
-      next.setUTCMonth(next.getUTCMonth() + direction);
-    } else
-      next.setUTCDate(
-        next.getUTCDate() + direction * (view === "week" ? 7 : 1),
-      );
-    setAnchor(dayKey(next));
-  }
+  const months = periodMonths(anchor, view);
+  const locale = ar ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
+  const monthLabel = (value) =>
+    new Date(value + "T12:00:00Z").toLocaleDateString(locale, {
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Riyadh",
+    });
+  const monthTitle =
+    view === "quarter"
+      ? `${monthLabel(months[0])} – ${monthLabel(months[2])}`
+      : view === "month"
+        ? monthLabel(anchor)
+        : anchor;
   return (
     <section
       className="panel schedule"
@@ -55,6 +51,7 @@ export function Schedule({ classes, horses, onSelect, ar }) {
               ["day", "Day", "يوم"],
               ["week", "Week", "أسبوع"],
               ["month", "Month", "شهر"],
+              ["quarter", "Quarter", "ربع سنة"],
             ].map(([v, en, arabic]) => (
               <option key={v} value={v}>
                 {ar ? arabic : en}
@@ -63,7 +60,7 @@ export function Schedule({ classes, horses, onSelect, ar }) {
           </select>
         </label>
         <button
-          onClick={() => move(-1)}
+          onClick={() => setAnchor(movePeriod(anchor, view, -1))}
           aria-label={ar ? "السابق" : "Previous period"}
         >
           ‹
@@ -72,12 +69,13 @@ export function Schedule({ classes, horses, onSelect, ar }) {
           {ar ? "التاريخ" : "Date"}
           <input
             type="date"
+            lang="en"
             value={anchor}
             onChange={(e) => e.target.value && setAnchor(e.target.value)}
           />
         </label>
         <button
-          onClick={() => move(1)}
+          onClick={() => setAnchor(movePeriod(anchor, view, 1))}
           aria-label={ar ? "التالي" : "Next period"}
         >
           ›
@@ -119,122 +117,231 @@ export function Schedule({ classes, horses, onSelect, ar }) {
           ? "الأوقات بتوقيت الرياض. اختر الحصة للحجز أو الإدارة."
           : "Times are in Riyadh. Select a class to book or manage it."}
       </p>
-      <div className={"calendar-grid calendar-" + view}>
-        {days.map((d) => (
-          <div className="calendar-day" key={dayKey(d)}>
-            <strong>
-              {d.toLocaleDateString(ar ? "ar-SA" : "en-GB", {
-                timeZone: "Asia/Riyadh",
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
-            </strong>
-            {filtered
-              .filter((c) => dayKey(c.startsAt) === dayKey(d))
-              .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-              .map((c) => (
-                <button
-                  className="calendar-event"
-                  key={c.id}
-                  onClick={() => onSelect(c)}
-                >
-                  <b>{c.title}</b>
-                  <span>
-                    {new Date(c.startsAt).toLocaleTimeString(
-                      ar ? "ar-SA" : "en-GB",
-                      {
+      <h2 className="calendar-period" aria-live="polite">
+        {monthTitle}
+      </h2>
+      <div className={view === "quarter" ? "quarter-grid" : ""}>
+        {(view === "quarter" ? months : [anchor]).map((month) => (
+          <section key={month} className="calendar-month">
+            {view === "quarter" && <h3>{monthLabel(month)}</h3>}
+            <div className={"calendar-grid calendar-" + view}>
+              {calendarDays(month, view).map((day) => {
+                const sessions = filtered
+                  .filter((c) => dayKey(c.startsAt) === day)
+                  .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+                return (
+                  <div
+                    className={
+                      "calendar-day" +
+                      (view !== "day" &&
+                      view !== "week" &&
+                      day.slice(0, 7) !== month.slice(0, 7)
+                        ? " outside-month"
+                        : "") +
+                      (day === dayKey(new Date()) ? " is-today" : "")
+                    }
+                    key={day}
+                  >
+                    <strong>
+                      {new Date(day + "T12:00:00Z").toLocaleDateString(locale, {
                         timeZone: "Asia/Riyadh",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      },
-                    )}{" "}
-                    · {c.instructor}
-                  </span>
-                  <span>
-                    {c.arena} · {c.places} {ar ? "مقاعد" : "places"}
-                  </span>
-                </button>
-              ))}
-          </div>
+                        weekday: "short",
+                        day: "numeric",
+                      })}
+                    </strong>
+                    {sessions.map((c) => (
+                      <button
+                        className="calendar-event"
+                        key={c.id}
+                        onClick={() => onSelect(c)}
+                      >
+                        <b>{c.title}</b>
+                        <span>
+                          {new Date(c.startsAt).toLocaleTimeString(locale, {
+                            timeZone: "Asia/Riyadh",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}{" "}
+                          · {c.instructor}
+                        </span>
+                        <span>
+                          {c.arena} · {c.places} {ar ? "مقاعد" : "places"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         ))}
       </div>
     </section>
   );
 }
-export function MemberTools({ members, request, action, ar }) {
+export function MemberTools({ members, request, action, ar, busy = false }) {
   const [form, setForm] = useState(null);
   const label = (en, arabic) => (ar ? arabic : en);
   return (
     <section className="panel">
-      <button
-        className="primary"
-        onClick={() => setForm({ name: "", email: "", password: "" })}
-      >
-        {label("Create member", "إنشاء عضو")}
-      </button>
-      {form && (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (
-              await action(() =>
-                request("/members" + (form.id ? "/" + form.id : ""), {
-                  method: form.id ? "PUT" : "POST",
-                  body: form,
-                }),
-              )
-            )
-              setForm(null);
-          }}
+      <div className="member-toolbar">
+        <button
+          className="primary"
+          onClick={() =>
+            setForm({
+              mode: "create",
+              nameEn: "",
+              nameAr: "",
+              email: "",
+              password: "",
+            })
+          }
         >
-          <label>
-            {label("Name", "الاسم")}
-            <input
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </label>
-          {!form.id && (
-            <>
-              <label>
-                {label("Email", "البريد الإلكتروني")}
-                <input
-                  required
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
-              </label>
-              <label>
+          {label("Create member", "إنشاء عضو")}
+        </button>
+        <button
+          className="soft"
+          onClick={() => setForm({ mode: "link", email: "" })}
+        >
+          {label("Add existing member", "إضافة عضو مسجل")}
+        </button>
+      </div>
+      {form && (
+        <div className="modal-backdrop" onClick={() => !busy && setForm(null)}>
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="member-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="section-heading">
+              <h2 id="member-dialog-title">
+                {form.mode === "edit"
+                  ? label("Edit member", "تعديل العضو")
+                  : form.mode === "link"
+                    ? label("Add existing member", "إضافة عضو مسجل")
+                    : label("Create member", "إنشاء عضو")}
+              </h2>
+              <button
+                className="icon-button"
+                aria-label={label("Close", "إغلاق")}
+                disabled={busy}
+                onClick={() => setForm(null)}
+              >
+                ×
+              </button>
+            </div>
+            <form
+              className="member-modal-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const path =
+                  form.mode === "link"
+                    ? "/members/link"
+                    : "/members" + (form.id ? "/" + form.id : "");
+                if (
+                  await action(() =>
+                    request(path, {
+                      method: form.id ? "PUT" : "POST",
+                      body: form,
+                    }),
+                  )
+                )
+                  setForm(null);
+              }}
+            >
+              {form.mode !== "link" && (
+                <>
+                  <label>
+                    {label("Name (English)", "الاسم بالإنجليزية")}
+                    <input
+                      required
+                      value={form.nameEn}
+                      maxLength={100}
+                      onChange={(e) =>
+                        setForm({ ...form, nameEn: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    {label("Name (Arabic)", "الاسم بالعربية")}
+                    <input
+                      dir="rtl"
+                      value={form.nameAr}
+                      maxLength={100}
+                      onChange={(e) =>
+                        setForm({ ...form, nameAr: e.target.value })
+                      }
+                    />
+                  </label>
+                </>
+              )}
+              {form.mode !== "edit" && (
+                <label>
+                  {label("Email", "البريد الإلكتروني")}
+                  <input
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(e) =>
+                      setForm({ ...form, email: e.target.value })
+                    }
+                  />
+                </label>
+              )}
+              {form.mode === "create" && (
+                <label>
+                  {label(
+                    "Password (6+ characters)",
+                    "كلمة المرور (6 أحرف على الأقل)",
+                  )}
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm({ ...form, password: e.target.value })
+                    }
+                  />
+                </label>
+              )}
+              <p className="notice">
                 {label(
-                  "Temporary password (6+ characters)",
-                  "كلمة مرور مؤقتة (6 أحرف على الأقل)",
+                  "This member will belong to the currently selected stable.",
+                  "سيتم ربط العضو بالإسطبل المحدد حالياً.",
                 )}
-                <input
-                  required
-                  type="password"
-                  minLength={6}
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                />
-              </label>
-            </>
-          )}
-          <button className="primary">{label("Save", "حفظ")}</button>
-          <button type="button" onClick={() => setForm(null)}>
-            {label("Cancel", "إلغاء")}
-          </button>
-        </form>
+              </p>
+              <div className="modal-actions">
+                <button className="primary" disabled={busy}>
+                  {label("Save", "حفظ")}
+                </button>
+                <button
+                  className="soft"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setForm(null)}
+                >
+                  {label("Cancel", "إلغاء")}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       )}
       {members
         .filter((m) => m.role !== "owner")
         .map((m) => (
-          <div className="task-row" key={m.id}>
-            <span>{m.name}</span>
+          <div className="task-row member-row" key={m.id}>
+            <strong>
+              {m.name}
+              <small className="record-id">
+                {m.creditBalance || 0} {label("lesson credits", "رصيد حصص")}
+              </small>
+            </strong>
             <label>
               {label("Role", "الدور")}
               <select
@@ -253,7 +360,7 @@ export function MemberTools({ members, request, action, ar }) {
                   ["member", "Member", "عضو"],
                   ["instructor", "Instructor", "مدرب"],
                   ["vet", "Vet", "طبيب بيطري"],
-                  ["caregiver", "Caregiver", "مسؤول رعاية"],
+                  ["caregiver", "Caregiver", "سائس"],
                 ].map(([v, en, arabic]) => (
                   <option key={v} value={v}>
                     {ar ? arabic : en}
@@ -261,16 +368,27 @@ export function MemberTools({ members, request, action, ar }) {
                 ))}
               </select>
             </label>
-            <button onClick={() => setForm({ id: m.id, name: m.name })}>
+            <button
+              className="soft"
+              onClick={() =>
+                setForm({
+                  mode: "edit",
+                  id: m.id,
+                  nameEn: m.nameEn ?? m.name,
+                  nameAr: m.nameAr || "",
+                })
+              }
+            >
               {label("Edit name", "تعديل الاسم")}
             </button>
             <button
+              className="text-button"
               onClick={() => {
                 if (
                   window.confirm(
                     label(
-                      "Remove this member’s academy access? Financial history is retained.",
-                      "إزالة وصول العضو إلى الأكاديمية مع حفظ السجل المالي؟",
+                      "Remove this member’s stable access? Financial history is retained.",
+                      "إزالة وصول العضو للإسطبل مع الاحتفاظ بالسجل المالي؟",
                     ),
                   )
                 )

@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS email_outbox(id TEXT PRIMARY KEY,user_id TEXT REFEREN
 UPDATE reservations SET status='pending_payment' WHERE status='confirmed' AND id IN (SELECT reservation_id FROM proformas WHERE status='open' AND due>paid);
 DROP INDEX IF EXISTS reservation_active;
 CREATE UNIQUE INDEX reservation_active ON reservations(org_id,member_id,class_id) WHERE status IN ('confirmed','pending_payment');
+CREATE TABLE IF NOT EXISTS task_events(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,task_id TEXT NOT NULL,actor_id TEXT REFERENCES users(id),action TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS profile_names(user_id TEXT PRIMARY KEY REFERENCES users(id),name_en TEXT NOT NULL DEFAULT '',name_ar TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS staff_roles(org_id TEXT NOT NULL,user_id TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('instructor','vet','caregiver')),PRIMARY KEY(org_id,user_id));
 CREATE TABLE IF NOT EXISTS waitlist(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,member_id TEXT NOT NULL,class_id TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(org_id,member_id,class_id));
 CREATE TABLE IF NOT EXISTS attendance(reservation_id TEXT PRIMARY KEY,org_id TEXT NOT NULL,status TEXT NOT NULL,actor_id TEXT NOT NULL,updated_at TEXT NOT NULL);

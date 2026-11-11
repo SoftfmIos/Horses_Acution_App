@@ -1,3 +1,8 @@
+import {
+  feedingConflict,
+  feedingSchedule,
+  medicationSchedule,
+} from "./care.js";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -166,6 +171,87 @@ export function createApp(
       kind,
       JSON.stringify(data),
     );
+  const profileName = (uid, fallback) => {
+    const p = get(
+      "SELECT name_en,name_ar FROM profile_names WHERE user_id=?",
+      uid,
+    );
+    return { nameEn: p?.name_en ?? fallback, nameAr: p?.name_ar || "" };
+  };
+  const saveProfileName = (uid, b, fallback) => {
+    const en = typeof b.nameEn === "string" ? b.nameEn.trim() : fallback;
+    const ar = typeof b.nameAr === "string" ? b.nameAr.trim() : "";
+    if (en.length > 100 || ar.length > 100)
+      fail("Names must be at most 100 characters");
+    run(
+      "INSERT INTO profile_names VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET name_en=excluded.name_en,name_ar=excluded.name_ar",
+      uid,
+      en,
+      ar,
+    );
+  };
+  const feedingBlocked = (org, horse, start, end) =>
+    records(org, "feeding").some(
+      (p) => p.horseId === horse && feedingConflict(p, start, end),
+    );
+  function syncCareTasks(org, kind, plan, reschedule = false) {
+    const dueDates =
+      kind === "medical"
+        ? medicationSchedule(plan)
+        : feedingSchedule(plan, clock());
+    const marker = kind === "medical" ? "medicalId" : "feedingPlanId";
+    const prefix = kind === "medical" ? "medication" : "feeding";
+    const desired = new Set(
+      dueDates.map(
+        (date) =>
+          prefix +
+          ":" +
+          plan.id +
+          ":" +
+          (kind === "feeding" ? date.slice(0, 10) : date),
+      ),
+    );
+    for (const old of records(org, "tasks").filter(
+      (t) => t[marker] === plan.id && !t.done,
+    ))
+      if (!desired.has(old.id) && (reschedule || old.dueAt >= now()))
+        put(org, "tasks", old.id, { ...old, cancelled: true });
+    const horse = record(org, "horses", plan.horseId);
+    for (const dueAt of dueDates) {
+      const tid =
+        prefix +
+        ":" +
+        plan.id +
+        ":" +
+        (kind === "feeding" ? dueAt.slice(0, 10) : dueAt);
+      const existing = get(
+        "SELECT data FROM records WHERE id=? AND org_id=?",
+        tid,
+        org,
+      );
+      if (existing && JSON.parse(existing.data).done) continue;
+      const detail =
+        kind === "medical"
+          ? plan.medication + " · " + plan.dose
+          : plan.feed + " · " + plan.quantity;
+      put(org, "tasks", tid, {
+        title: horse.name + " · " + detail,
+        titleEn: (horse.nameEn || horse.name) + " · " + detail,
+        titleAr: (horse.nameAr || horse.name) + " · " + detail,
+        dueAt,
+        assigneeId: plan.assigneeId,
+        done: false,
+        cancelled: false,
+        notes: plan.notes,
+        [marker]: plan.id,
+        horseId: horse.id,
+        medication: kind === "medical" ? plan.medication : "",
+        dose: kind === "medical" ? plan.dose : "",
+        completedAt: "",
+        completedBy: "",
+      });
+    }
+  }
   const audit = (req, action, rid) =>
     run(
       "INSERT INTO audit(org_id,actor_id,action,record_id,created_at) VALUES(?,?,?,?,?)",
@@ -270,7 +356,7 @@ export function createApp(
         now(),
       );
     if (!user) return res.status(401).json({ error: "Please sign in" });
-    req.user = user;
+    req.user = { ...user, ...profileName(user.id, user.name) };
     next();
   }
   function scoped(req, res, next) {
@@ -306,7 +392,11 @@ export function createApp(
     next();
   }
   app.post("/api/auth/register", async (req, res) => {
-    const name = text(req.body.name, "name", 100),
+    const name = text(
+        req.body.nameEn || req.body.nameAr || req.body.name,
+        "name",
+        100,
+      ),
       email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "password", 128);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Invalid email");
@@ -314,7 +404,11 @@ export function createApp(
     const invite = req.body.invite?.trim();
     const stableName = invite
       ? null
-      : text(req.body.stableName, "stable name", 100);
+      : text(
+          req.body.stableNameEn || req.body.stableNameAr || req.body.stableName,
+          "stable name",
+          100,
+        );
     const encrypted = await passwordHash(password);
     const uid = id();
     try {
@@ -336,9 +430,19 @@ export function createApp(
           encrypted,
           now(),
         );
+        saveProfileName(uid, req.body, name);
         const oid = org?.org_id || id();
-        if (!invite)
+        if (!invite) {
           run("INSERT INTO organizations VALUES(?,?)", oid, stableName);
+          put(oid, "academySettings", oid + ":settings", {
+            academyName: stableName,
+            academyNameEn: req.body.stableNameEn ?? stableName,
+            academyNameAr:
+              typeof req.body.stableNameAr === "string"
+                ? req.body.stableNameAr.trim().slice(0, 100)
+                : "",
+          });
+        }
         run(
           "INSERT INTO memberships VALUES(?,?,?)",
           uid,
@@ -394,7 +498,14 @@ export function createApp(
       stables: all(
         "SELECT o.id,o.name,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM organizations o JOIN memberships m ON m.org_id=o.id LEFT JOIN staff_roles s ON s.org_id=o.id AND s.user_id=m.user_id WHERE m.user_id=?",
         req.user.id,
-      ),
+      ).map((o) => {
+        const settings = records(o.id, "academySettings")[0];
+        return {
+          ...o,
+          nameEn: settings?.academyNameEn ?? o.name,
+          nameAr: settings?.academyNameAr || "",
+        };
+      }),
     }),
   );
   app.post("/api/auth/logout", authenticate, (req, res) => {
@@ -439,9 +550,84 @@ export function createApp(
     res.status(201).json({ code, expiresInDays: 7 });
   });
   function validate(req, kind, b, rid) {
+    const names = [
+        "horses",
+        "plans",
+        "inventory",
+        "instructors",
+        "arenas",
+        "breeds",
+      ].includes(kind),
+      titles = ["classes", "tasks"].includes(kind);
+    const body = { ...b };
+    if (names) body.name = b.name || b.nameEn || b.nameAr;
+    if (titles) body.title = b.title || b.titleEn || b.titleAr;
+    let instructor, arena;
+    if (kind === "classes") {
+      instructor = records(req.org.id, "instructors").find((r) =>
+        [r.name, r.nameEn, r.nameAr].filter(Boolean).includes(b.instructor),
+      );
+      arena = records(req.org.id, "arenas").find((r) =>
+        [r.name, r.nameEn, r.nameAr].filter(Boolean).includes(b.arena),
+      );
+      if (instructor) body.instructor = instructor.name;
+      if (arena) body.arena = arena.name;
+    }
+    const breed =
+      kind === "horses"
+        ? records(req.org.id, "breeds").find((r) =>
+            [r.name, r.nameEn, r.nameAr].filter(Boolean).includes(b.breed),
+          )
+        : null;
+    if (breed) body.breed = breed.name;
+    const result = validateBase(req, kind, body, rid);
+    if (kind === "horses")
+      Object.assign(result, {
+        breedEn: breed?.nameEn || breed?.name || b.breedEn || result.breed,
+        breedAr: breed?.nameAr || b.breedAr || "",
+      });
+    for (const key of names ? ["name"] : titles ? ["title"] : []) {
+      for (const suffix of ["En", "Ar"]) {
+        const value =
+          typeof b[key + suffix] === "string"
+            ? b[key + suffix].trim()
+            : suffix === "En"
+              ? result[key]
+              : "";
+        if (value.length > 100) fail("Names must be at most 100 characters");
+        result[key + suffix] =
+          suffix === "En" && b[key] && b[key] !== b[key + "En"]
+            ? result[key]
+            : value;
+      }
+    }
+    if (kind === "classes")
+      Object.assign(result, {
+        instructorEn:
+          instructor?.nameEn ||
+          instructor?.name ||
+          b.instructorEn ||
+          result.instructor,
+        instructorAr: instructor?.nameAr || b.instructorAr || "",
+        arenaEn: arena?.nameEn || arena?.name || b.arenaEn || result.arena,
+        arenaAr: arena?.nameAr || b.arenaAr || "",
+      });
+    return result;
+  }
+  function validateBase(req, kind, b, rid) {
     const org = req.org.id;
     const optional = (v) =>
       typeof v === "string" ? v.trim().slice(0, 2000) : "";
+    if (["instructors", "arenas", "breeds"].includes(kind))
+      return {
+        name: text(b.name, "name", 100),
+        notes: optional(b.notes),
+        active: b.active !== false,
+        ...(kind === "arenas" ? { address: optional(b.address) } : {}),
+        ...(kind === "instructors"
+          ? { email: optional(b.email), phone: optional(b.phone) }
+          : {}),
+      };
     if (kind === "horses") {
       const status = ["ready", "rest", "retired"].includes(b.status)
         ? b.status
@@ -507,6 +693,8 @@ export function createApp(
         endsAt = iso(b.endsAt);
       if (startsAt >= endsAt || startsAt <= now())
         fail("Class must be scheduled in the future with a valid duration");
+      if (Date.parse(endsAt) - Date.parse(startsAt) > 86400000)
+        fail("A class cannot exceed 24 hours");
       const capacity = integer(b.capacity, "capacity", 1, 100);
       const horseIds = [
         ...new Set(Array.isArray(b.horseIds) ? b.horseIds : []),
@@ -517,6 +705,11 @@ export function createApp(
         if (record(org, "horses", h).status !== "ready")
           fail("Horse is not ready to ride");
       });
+      if (
+        horseIds.filter((h) => !feedingBlocked(org, h, startsAt, endsAt))
+          .length < capacity
+      )
+        fail("Not enough horses available outside their feeding times", 409);
       const plan = record(org, "plans", b.planId);
       if (!plan.active) fail("Price is inactive");
       if (plan.credits > 0)
@@ -582,7 +775,34 @@ export function createApp(
     }
     if (kind === "medical") {
       const horse = record(org, "horses", b.horseId);
+      const frequencyHours = b.frequencyHours
+        ? integer(b.frequencyHours, "dose interval hours", 1, 168)
+        : 0;
+      const durationDays = b.durationDays
+        ? integer(b.durationDays, "treatment days", 1, 90)
+        : 0;
+      if (Boolean(frequencyHours) !== Boolean(durationDays))
+        fail("Set both dose interval and treatment duration");
+      if (
+        frequencyHours &&
+        Math.ceil((durationDays * 24) / frequencyHours) > 1000
+      )
+        fail("Treatment schedule exceeds 1000 doses");
+      const assigneeId = b.assigneeId || req.user.id;
+      if (
+        !get(
+          "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+          org,
+          assigneeId,
+        )
+      )
+        fail("Assignee must belong to academy");
+      if (frequencyHours && (!b.medication?.trim() || !b.dose?.trim()))
+        fail("Medication and prescribed dose required for scheduled treatment");
       return {
+        frequencyHours,
+        durationDays,
+        assigneeId,
         horseId: horse.id,
         type: text(b.type, "care type", 100),
         date: iso(b.date),
@@ -616,7 +836,37 @@ export function createApp(
         )
       )
         fail("Assignee must belong to stable");
+      const durationMinutes = integer(
+        b.durationMinutes || 30,
+        "feeding duration",
+        5,
+        240,
+      );
+      const startDate = b.startDate ? iso(b.startDate).slice(0, 10) : "";
+      const endDate = b.endDate ? iso(b.endDate).slice(0, 10) : "";
+      if (startDate && endDate && startDate > endDate)
+        fail("Feeding end date precedes start date");
+      const candidate = {
+        time: b.time,
+        durationMinutes,
+        startDate,
+        endDate,
+        active: b.active !== false,
+      };
+      for (const booking of all(
+        "SELECT * FROM reservations WHERE org_id=? AND horse_id=? AND status IN ('confirmed','pending_payment')",
+        org,
+        b.horseId,
+      )) {
+        const session = record(org, "classes", booking.class_id);
+        if (
+          session.endsAt > now() &&
+          feedingConflict(candidate, session.startsAt, session.endsAt)
+        )
+          fail("Feeding time conflicts with an existing horse booking", 409);
+      }
       return {
+        ...candidate,
         horseId: b.horseId,
         feed: text(b.feed, "feed", 100),
         quantity: text(b.quantity, "quantity", 100),
@@ -635,11 +885,19 @@ export function createApp(
         )
       )
         fail("Assignee must belong to stable");
+      const previous = rid ? record(org, "tasks", rid) : {};
+      if (previous.medicalId || previous.feedingPlanId)
+        fail(
+          "Edit the care plan to change generated tasks; use the completion checkbox for each dose",
+          409,
+        );
       return {
         title: text(b.title, "task", 100),
         dueAt: iso(b.dueAt),
         assigneeId: b.assigneeId || req.user.id,
-        done: b.done === true,
+        done: rid ? previous.done === true : b.done === true,
+        completedBy: previous.completedBy || "",
+        completedAt: previous.completedAt || "",
         notes: optional(b.notes),
       };
     }
@@ -654,6 +912,9 @@ export function createApp(
     fail("Unknown module", 404);
   }
   const kinds = [
+    "instructors",
+    "arenas",
+    "breeds",
     "horses",
     "plans",
     "discounts",
@@ -670,7 +931,15 @@ export function createApp(
       req.org.id,
       c.id,
     ).n;
-    return { ...c, places: c.capacity - total };
+    const usable = c.horseIds.filter(
+      (h) =>
+        record(req.org.id, "horses", h).status === "ready" &&
+        !feedingBlocked(req.org.id, h, c.startsAt, c.endsAt),
+    ).length;
+    return {
+      ...c,
+      places: Math.max(0, Math.min(c.capacity - total, usable - total)),
+    };
   }
   app.get("/api/data", (req, res) => {
     const org = req.org.id,
@@ -678,7 +947,7 @@ export function createApp(
     const members = all(
       "SELECT u.id,u.name,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
       org,
-    );
+    ).map((m) => ({ ...m, ...profileName(m.id, m.name) }));
     const result = {};
     for (const k of kinds) {
       result[k] =
@@ -687,6 +956,20 @@ export function createApp(
           ? []
           : records(org, k);
     }
+    const savedSettings = records(org, "academySettings")[0] || {};
+    result.settings = {
+      academyName: req.org.name,
+      contactEmail: "",
+      phone: "",
+      address: "",
+      calendarView: "month",
+      lessonDuration: 60,
+      defaultCapacity: 1,
+      defaultCreditCost: 1,
+      ...savedSettings,
+      currency: "SAR",
+      timeZone: "Asia/Riyadh",
+    };
     result.classes = result.classes.map((c) => safeClass(req, c));
     result.tasks = manager
       ? result.tasks
@@ -722,6 +1005,22 @@ export function createApp(
     );
     result.proformas = result.proformas.map((p) => ({
       ...p,
+      ...(() => {
+        const booking = p.reservation_id
+          ? get(
+              "SELECT class_id FROM reservations WHERE id=? AND org_id=?",
+              p.reservation_id,
+              org,
+            )
+          : null;
+        const source = booking
+          ? records(org, "classes").find((c) => c.id === booking.class_id)
+          : records(org, "plans").find((plan) => plan.name === p.description);
+        return {
+          descriptionEn: source?.titleEn || source?.nameEn || p.description,
+          descriptionAr: source?.titleAr || source?.nameAr || "",
+        };
+      })(),
       activation:
         p.status === "settled"
           ? "active"
@@ -750,8 +1049,15 @@ export function createApp(
       ...(manager ? [org] : [org, req.user.id]),
     );
     const staffModules = {
-      instructor: ["classes", "plans", "horses"],
-      vet: ["horses", "medical"],
+      instructor: [
+        "classes",
+        "plans",
+        "horses",
+        "instructors",
+        "arenas",
+        "tasks",
+      ],
+      vet: ["horses", "medical", "tasks"],
       caregiver: ["horses", "feeding", "tasks"],
     }[req.org.role];
     if (staffModules) {
@@ -762,7 +1068,15 @@ export function createApp(
           k === "classes"
             ? records(org, k).map((c) => safeClass(req, c))
             : records(org, k);
-      result.members = members.map(({ id, name, role }) => ({
+      if (req.org.role === "instructor")
+        result.tasks = result.tasks.filter((t) => t.assigneeId === req.user.id);
+      if (req.org.role === "vet")
+        result.tasks = result.tasks.filter(
+          (t) => t.medicalId || t.assigneeId === req.user.id,
+        );
+      result.members = members.map(({ id, name, role, nameEn, nameAr }) => ({
+        nameEn,
+        nameAr,
         id,
         name,
         role,
@@ -776,6 +1090,19 @@ export function createApp(
         );
       }
     }
+    result.tasks = result.tasks
+      .filter((t) => !t.cancelled)
+      .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+    result.taskHistory = all(
+      "SELECT e.*,u.name AS actor_name FROM task_events e JOIN users u ON u.id=e.actor_id WHERE e.org_id=?" +
+        (manager || ["vet", "caregiver"].includes(req.org.role)
+          ? ""
+          : " AND e.task_id IN (SELECT id FROM records WHERE org_id=? AND kind='tasks' AND json_extract(data,'$.assigneeId')=?)") +
+        " ORDER BY e.created_at DESC",
+      ...(manager || ["vet", "caregiver"].includes(req.org.role)
+        ? [org]
+        : [org, org, req.user.id]),
+    );
     result.emailConfigured = emailEnabled;
     res.json(result);
   });
@@ -836,6 +1163,8 @@ export function createApp(
           fail("Code already exists", 409);
         put(req.org.id, kind, rid, data);
         if (kind === "medical") restrictHorse(req, data, rid);
+        if (["medical", "feeding"].includes(kind))
+          syncCareTasks(req.org.id, kind, { id: rid, ...data }, true);
         audit(req, kind + ".create", rid);
         return { id: rid, ...data };
       });
@@ -867,6 +1196,8 @@ export function createApp(
         fail("Complete medical restrictions before returning horse to riding");
       put(req.org.id, kind, rid, data);
       if (kind === "medical") restrictHorse(req, data, rid);
+      if (["medical", "feeding"].includes(kind))
+        syncCareTasks(req.org.id, kind, { id: rid, ...data }, true);
       if (kind === "classes")
         for (const b of all(
           "SELECT member_id FROM reservations WHERE org_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
@@ -885,16 +1216,37 @@ export function createApp(
     res.json({ id: rid, ...data });
   });
   app.post("/api/tasks/:id/toggle", (req, res) => {
-    const task = record(req.org.id, "tasks", req.params.id);
-    if (
-      !["owner", "caregiver"].includes(req.org.role) &&
-      task.assigneeId !== req.user.id
-    )
-      fail("Not assigned to you", 403);
-    put(req.org.id, "tasks", task.id, { ...task, done: !task.done });
-    audit(req, "task.complete", task.id);
+    transaction(() => {
+      const task = record(req.org.id, "tasks", req.params.id);
+      if (
+        !["owner", "caregiver"].includes(req.org.role) &&
+        task.assigneeId !== req.user.id
+      )
+        fail("Not assigned to you", 403);
+      if (task.cancelled) fail("Task was cancelled", 409);
+      const done = req.body.done === undefined ? !task.done : req.body.done;
+      if (typeof done !== "boolean") fail("Invalid completion state");
+      if (done === task.done) return;
+      put(req.org.id, "tasks", task.id, {
+        ...task,
+        done,
+        completedBy: done ? req.user.id : "",
+        completedAt: done ? now() : "",
+      });
+      run(
+        "INSERT INTO task_events VALUES(?,?,?,?,?,?)",
+        id(),
+        req.org.id,
+        task.id,
+        req.user.id,
+        done ? "completed" : "reopened",
+        now(),
+      );
+      audit(req, done ? "task.complete" : "task.reopen", task.id);
+    });
     res.json({ ok: true });
   });
+
   function quote(req) {
     const org = req.org.id,
       c = record(org, "classes", req.body.classId),
@@ -1012,6 +1364,7 @@ export function createApp(
       const horseId = c.horseIds.find(
         (h) =>
           record(org, "horses", h).status === "ready" &&
+          !feedingBlocked(org, h, c.startsAt, c.endsAt) &&
           !active.some(
             (b) =>
               b.horse_id === h &&
@@ -1346,6 +1699,16 @@ export function createApp(
           fail("Booking cannot be activated", 409);
         if (record(req.org.id, "classes", booking.class_id).startsAt <= now())
           fail("Class has already started", 409);
+        const session = record(req.org.id, "classes", booking.class_id);
+        if (
+          feedingBlocked(
+            req.org.id,
+            booking.horse_id,
+            session.startsAt,
+            session.endsAt,
+          )
+        )
+          fail("Horse is reserved for feeding", 409);
         if (record(req.org.id, "horses", booking.horse_id).status !== "ready")
           fail("Horse is not ready; reconcile assignment before payment", 409);
         run(
@@ -1392,12 +1755,106 @@ export function createApp(
         (x) => x.quantity <= x.reorderAt,
       ).length,
       overdueTasks: records(org, "tasks").filter(
-        (x) => !x.done && x.dueAt < now(),
+        (x) => !x.done && !x.cancelled && x.dueAt < now(),
       ).length,
       currency: "SAR",
       notice:
         "Operational report only; official tax invoices are managed in your external ZATCA system.",
     });
+  });
+  app.post("/api/stables", owner, (req, res) => {
+    const nameEn =
+      typeof req.body.nameEn === "string" ? req.body.nameEn.trim() : "";
+    const nameAr =
+      typeof req.body.nameAr === "string" ? req.body.nameAr.trim() : "";
+    const name = text(nameEn || nameAr, "stable name", 100);
+    if (nameEn.length > 100 || nameAr.length > 100)
+      fail("Names must be at most 100 characters");
+    const oid = id();
+    transaction(() => {
+      run("INSERT INTO organizations VALUES(?,?)", oid, name);
+      run("INSERT INTO memberships VALUES(?,?,?)", req.user.id, oid, "owner");
+      put(oid, "academySettings", oid + ":settings", {
+        academyName: name,
+        academyNameEn: nameEn,
+        academyNameAr: nameAr,
+      });
+      audit({ ...req, org: { id: oid } }, "stable.create", oid);
+    });
+    res.status(201).json({ id: oid, name, nameEn, nameAr, role: "owner" });
+  });
+  app.post("/api/members/link", owner, (req, res) => {
+    const email = text(req.body.email, "email", 254).toLowerCase();
+    const user = get("SELECT id FROM users WHERE email=?", email);
+    if (!user) fail("No registered account matches this email", 404);
+    transaction(() => {
+      if (
+        get(
+          "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+          req.org.id,
+          user.id,
+        )
+      )
+        fail("Member already belongs to this stable", 409);
+      run(
+        "INSERT INTO memberships VALUES(?,?,?)",
+        user.id,
+        req.org.id,
+        "member",
+      );
+      audit(req, "member.link", user.id);
+    });
+    res.status(201).json({ id: user.id });
+  });
+  app.put("/api/settings", owner, (req, res) => {
+    const b = req.body;
+    if (!["day", "week", "month", "quarter"].includes(b.calendarView))
+      fail("Invalid calendar view");
+    const settings = {
+      academyName: text(
+        b.academyNameEn || b.academyNameAr || b.academyName,
+        "academy name",
+        100,
+      ),
+      academyNameEn:
+        typeof b.academyNameEn === "string"
+          ? b.academyNameEn.trim().slice(0, 100)
+          : b.academyName,
+      academyNameAr:
+        typeof b.academyNameAr === "string"
+          ? b.academyNameAr.trim().slice(0, 100)
+          : "",
+      contactEmail:
+        typeof b.contactEmail === "string" ? b.contactEmail.trim() : "",
+      phone: typeof b.phone === "string" ? b.phone.trim().slice(0, 100) : "",
+      address:
+        typeof b.address === "string" ? b.address.trim().slice(0, 500) : "",
+      calendarView: b.calendarView,
+      lessonDuration: integer(b.lessonDuration, "lesson duration", 15, 480),
+      defaultCapacity: integer(b.defaultCapacity, "default capacity", 1, 100),
+      defaultCreditCost: integer(
+        b.defaultCreditCost,
+        "default credit cost",
+        1,
+        100,
+      ),
+    };
+    if (
+      settings.contactEmail &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.contactEmail) ||
+        settings.contactEmail.length > 254)
+    )
+      fail("Invalid contact email");
+    transaction(() => {
+      put(req.org.id, "academySettings", req.org.id + ":settings", settings);
+      run(
+        "UPDATE organizations SET name=? WHERE id=?",
+        settings.academyName,
+        req.org.id,
+      );
+      audit(req, "settings.update", req.org.id);
+    });
+    res.json(settings);
   });
   app.post("/api/waitlist", (req, res) => {
     const c = record(req.org.id, "classes", req.body.classId);
@@ -1455,7 +1912,11 @@ export function createApp(
     res.json({ ok: true });
   });
   app.post("/api/members", owner, async (req, res) => {
-    const name = text(req.body.name, "name", 100),
+    const name = text(
+        req.body.nameEn || req.body.nameAr || req.body.name,
+        "name",
+        100,
+      ),
       email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "temporary password", 128);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 6)
@@ -1473,6 +1934,7 @@ export function createApp(
         encrypted,
         now(),
       );
+      saveProfileName(uid, req.body, name);
       run("INSERT INTO memberships VALUES(?,?,?)", uid, req.org.id, "member");
       audit(req, "member.create", uid);
     });
@@ -1519,10 +1981,16 @@ export function createApp(
       )
     )
       fail("Member not found", 404);
-    const name = text(req.body.name, "name", 100);
+    const name = text(
+      req.body.nameEn || req.body.nameAr || req.body.name,
+      "name",
+      100,
+    );
     // Names belong to the global account; do not modify another academy's account.
     if (get("SELECT count(*) AS n FROM memberships WHERE user_id=?", uid).n > 1)
       fail("Shared accounts must update their own profile", 409);
+    const previous = profileName(uid, name);
+    saveProfileName(uid, { ...previous, ...req.body }, name);
     run("UPDATE users SET name=? WHERE id=?", name, uid);
     audit(req, "member.update", uid);
     res.json({ ok: true });
@@ -1602,29 +2070,12 @@ export function createApp(
           month: "2-digit",
           day: "2-digit",
         }).format(clock());
-        for (const plan of records(org.id, "feeding")) {
-          const tid = "feeding:" + plan.id + ":" + day;
-          if (!get("SELECT id FROM records WHERE id=?", tid)) {
-            put(org.id, "tasks", tid, {
-              title:
-                record(org.id, "horses", plan.horseId).name +
-                " · " +
-                plan.feed +
-                " · " +
-                plan.quantity,
-              dueAt: new Date(
-                day + "T" + plan.time + ":00+03:00",
-              ).toISOString(),
-              assigneeId: plan.assigneeId,
-              done: false,
-              notes: plan.notes,
-              feedingPlanId: plan.id,
-            });
-          }
-        }
+        for (const plan of records(org.id, "feeding"))
+          syncCareTasks(org.id, "feeding", plan);
         for (const task of records(org.id, "tasks").filter(
           (t) =>
             !t.done &&
+            !t.cancelled &&
             t.dueAt <= new Date(clock().getTime() + 86400000).toISOString(),
         ))
           notify(
