@@ -585,11 +585,10 @@ function App() {
       stableId = stable?.id;
     try {
       const d = await request("/data");
-      if (
-        sequence !== refreshSequence.current ||
-        stableId !== stableRef.current
-      )
-        return null;
+      if (stableId !== stableRef.current) return null;
+      // A newer refresh owns the display, but this valid snapshot still verifies
+      // the save that requested it. Superseded is not the same as failed.
+      if (sequence !== refreshSequence.current) return d;
       setData(d);
       setFailure(
         missingCatalogues(d).length
@@ -1363,7 +1362,7 @@ function App() {
           </p>
           {failure && (
             <p className="error" role="alert">
-              {t.connection} {failure}
+              {failure}
             </p>
           )}
           {client && auth.stables.length > 1 && (
