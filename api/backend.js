@@ -38,6 +38,21 @@ export default async function handler(req, res) {
     });
   }
   const incoming = new URL(req.url, "https://frontend.invalid");
+  const routedPath =
+    incoming.searchParams.get("__academy_path") ??
+    req.query?.__academy_path ??
+    null;
+  if (routedPath !== null) {
+    if (
+      typeof routedPath !== "string" ||
+      !/^[a-zA-Z0-9_:/-]+$/.test(routedPath) ||
+      routedPath.startsWith("/") ||
+      routedPath.includes("//")
+    )
+      return res.status(400).json({ error: "Invalid API path" });
+    incoming.pathname = "/api/" + routedPath;
+    incoming.searchParams.delete("__academy_path");
+  }
   if (!incoming.pathname.startsWith("/api/"))
     return res.status(404).json({ error: "API route not found" });
   const target = new URL(incoming.pathname + incoming.search, backend.origin);

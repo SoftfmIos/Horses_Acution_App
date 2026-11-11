@@ -209,13 +209,13 @@ export function MemberTools({ members, request, action, ar }) {
               </label>
               <label>
                 {label(
-                  "Temporary password (12+ characters)",
-                  "كلمة مرور مؤقتة (12 حرفاً على الأقل)",
+                  "Temporary password (6+ characters)",
+                  "كلمة مرور مؤقتة (6 أحرف على الأقل)",
                 )}
                 <input
                   required
                   type="password"
-                  minLength={12}
+                  minLength={6}
                   value={form.password}
                   onChange={(e) =>
                     setForm({ ...form, password: e.target.value })

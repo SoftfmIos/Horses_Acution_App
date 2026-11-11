@@ -74,7 +74,7 @@ const dict = {
     register: "Create account",
     logout: "Sign out",
     email: "Email",
-    password: "Password (12+ characters)",
+    password: "Password (6+ characters)",
     name: "Name",
     stableName: "Stable name",
     invite: "Member invitation code",
@@ -193,7 +193,7 @@ const dict = {
     emailOn: "In-app and queued SMTP email notifications are enabled.",
     dataNotice: "Shared server data · amounts in SAR · Riyadh time",
     passwordHint:
-      "Use a unique password of at least 12 characters. New stable accounts are managers; invitations create member accounts.",
+      "Use a unique password of at least 6 characters. New stable accounts are managers; invitations create member accounts.",
     search: "Search…",
     saved: "Saved successfully.",
     bookingSaved:
@@ -278,7 +278,7 @@ const dict = {
     register: "إنشاء حساب",
     logout: "تسجيل الخروج",
     email: "البريد الإلكتروني",
-    password: "كلمة المرور (١٢ حرفاً على الأقل)",
+    password: "كلمة المرور (٦ أحرف على الأقل)",
     name: "الاسم",
     stableName: "اسم الإسطبل",
     invite: "رمز دعوة العضو",
@@ -396,7 +396,7 @@ const dict = {
     emailOn: "إشعارات التطبيق وإرسال البريد الإلكتروني مفعّلان.",
     dataNotice: "بيانات مشتركة على الخادم · العملة ريال · توقيت الرياض",
     passwordHint:
-      "استخدم كلمة مرور فريدة من ١٢ حرفاً على الأقل. إنشاء إسطبل يمنح دور المدير، والدعوة تمنح دور العضو.",
+      "استخدم كلمة مرور فريدة من ٦ أحرف على الأقل. إنشاء إسطبل يمنح دور المدير، والدعوة تمنح دور العضو.",
     search: "بحث…",
     saved: "تم الحفظ بنجاح.",
     bookingSaved: "تم حفظ الحجز. يبقى بانتظار الدفع حتى تسجيل سند الدفع.",
@@ -2300,7 +2300,7 @@ function AuthForm({ t, onSuccess }) {
             required
             name="password"
             type="password"
-            minLength={mode === "register" ? 12 : 1}
+            minLength={mode === "register" ? 6 : 1}
             maxLength={128}
             autoComplete={
               mode === "register" ? "new-password" : "current-password"

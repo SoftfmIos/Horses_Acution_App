@@ -310,7 +310,7 @@ export function createApp(
       email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "password", 128);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Invalid email");
-    if (password.length < 12) fail("Password must have at least 12 characters");
+    if (password.length < 6) fail("Password must have at least 6 characters");
     const invite = req.body.invite?.trim();
     const stableName = invite
       ? null
@@ -1458,8 +1458,8 @@ export function createApp(
     const name = text(req.body.name, "name", 100),
       email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "temporary password", 128);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12)
-      fail("Valid email and a password of at least 12 characters required");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 6)
+      fail("Valid email and a password of at least 6 characters required");
     const encrypted = await passwordHash(password),
       uid = id();
     transaction(() => {

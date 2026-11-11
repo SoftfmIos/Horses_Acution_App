@@ -16,7 +16,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Development starts the API on port 3001 and Vite on 5173. Vite proxies `/api` to the API with the same browser origin. `PORT` and `WEB_PORT` can override these. There are no seeded accounts, sample financial records, or default passwords. Create a stable account, add horses and prices, then schedule classes. Invite members from the Members screen; invitations are single-use and expire after seven days. Managers can also create members directly with a temporary password of at least 12 characters. Public registration requires an invitation to join an existing stable. Public registration without an invitation creates a **separate** stable.
+Development starts the API on port 3001 and Vite on 5173. Vite proxies `/api` to the API with the same browser origin. `PORT` and `WEB_PORT` can override these. There are no seeded accounts, sample financial records, or default passwords. Create a stable account, add horses and prices, then schedule classes. Invite members from the Members screen; invitations are single-use and expire after seven days. Managers can also create members directly with a temporary password of at least 6 characters. Public registration requires an invitation to join an existing stable. Public registration without an invitation creates a **separate** stable.
 
 ```sh
 npm run build
@@ -97,7 +97,7 @@ API integration tests use temporary databases and cover authentication, stable i
 
 The booking screen has day, week and month calendars in Riyadh time, date navigation, and instructor, horse and arena filters. The calendar complements the session cards. New classes have a **Repeat weekly** field (1–52); creating a series validates every occurrence and rolls back the whole series on a conflict. Each occurrence can be edited independently. Series-wide editing and recurrence exceptions are not implemented.
 
-Managers can create members, edit their names, assign staff roles and remove academy access. Temporary passwords require 12 characters. Names of accounts shared across academies cannot be changed by one academy. Removal preserves financial history and is blocked until bookings, open payment requests and credit balances are reconciled. Instructors manage classes and attendance; vets manage horses and medical records; caregivers manage feeding and tasks. Staff cannot see other members' payment or credit records or manage billing/roles.
+Managers can create members, edit their names, assign staff roles and remove academy access. Temporary passwords require 6 characters. Names of accounts shared across academies cannot be changed by one academy. Removal preserves financial history and is blocked until bookings, open payment requests and credit balances are reconciled. Instructors manage classes and attendance; vets manage horses and medical records; caregivers manage feeding and tasks. Staff cannot see other members' payment or credit records or manage billing/roles.
 
 Attendance (present, absent, excused) is available on activated bookings. Full classes offer a waitlist. Cancellation notifies waiting members when a place opens; joining the waitlist does not reserve a place or bypass payment, and members must explicitly book the available place.
 

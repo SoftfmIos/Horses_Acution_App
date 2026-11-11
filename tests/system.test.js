@@ -1034,3 +1034,64 @@ test("booked classes can move safely but cannot lose horses, seats or create mem
   });
   assert.equal(changed.httpStatus, 400);
 });
+
+test("simple six-to-eight character passwords work for registration and direct members", async (t) => {
+  const f = await fixture(t);
+  const client = f.client();
+  const body = {
+    name: "Simple",
+    email: "simple@test.com",
+    password: "123456",
+    stableName: "Simple academy",
+  };
+  assert.equal(
+    (
+      await client.call("/auth/register", "POST", {
+        ...body,
+        password: "12345",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (await client.call("/auth/register", "POST", body)).httpStatus,
+    201,
+  );
+  assert.equal(
+    (
+      await client.call("/auth/login", "POST", {
+        email: body.email,
+        password: "123456",
+      })
+    ).httpStatus,
+    200,
+  );
+  const short = { name: "Member", email: "six@test.com", password: "abcdef" };
+  assert.equal(
+    (await f.owner.call("/members", "POST", { ...short, password: "abcde" }))
+      .httpStatus,
+    400,
+  );
+  assert.equal((await f.owner.call("/members", "POST", short)).httpStatus, 201);
+  assert.equal(
+    (
+      await f
+        .client()
+        .call("/auth/login", "POST", {
+          email: short.email,
+          password: short.password,
+        })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/members", "POST", {
+        name: "Eight",
+        email: "eight@test.com",
+        password: "12345678",
+      })
+    ).httpStatus,
+    201,
+  );
+});

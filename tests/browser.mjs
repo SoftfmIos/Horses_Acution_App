@@ -31,9 +31,7 @@ let browser;
   await page
     .locator("input[name=email]")
     .fill("browser" + Date.now() + "@test.com");
-  await page
-    .locator("input[name=password]")
-    .fill("Browser secure password 123");
+  await page.locator("input[name=password]").fill("123456");
   await page.locator("input[name=stableName]").fill("Riyadh Browser Stable");
   await page.locator("button[type=submit]").click();
   await page.getByRole("heading", { name: "Overview", exact: true }).waitFor();

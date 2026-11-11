@@ -5,7 +5,7 @@ The frontend currently lives at **https://horsesacutionapp.vercel.app**. The app
 The architecture in this repository is:
 
 ```
-Browser → Vercel website → /api/[...path] proxy → persistent Node service → SQLite disk
+Browser → Vercel website → /api/* → api/backend.js proxy → persistent Node service → SQLite disk
 ```
 
 The browser continues using `/api` on the Vercel hostname. The proxy preserves login cookies, request origin and stable identity. You do **not** set a browser `VITE_API_URL`, enable cross-origin credentials, or store the SQLite file under `/tmp` on Vercel.
@@ -82,3 +82,5 @@ Use Node.js 24 or newer, application root `repositories/Horses_Acution_App`, pro
 Set `PUBLIC_ORIGIN=https://horsesacutionapp.vercel.app` (or the actual frontend HTTPS origin) and `DATABASE_PATH=/home/softfm5/academy-data/academy.sqlite`. Run NPM Install, save and restart. Check `https://riyadhpolo.softfm.com/api/health`. For a backend-only installation, building the Vite frontend is unnecessary; the frontend remains on Vercel. Use `passenger.log` outside the domain's public document root for startup diagnostics. Keep the database directory outside the public document root as well.
 
 After pulling future updates, rerun NPM Install when dependencies change and restart the application. Ensure Passenger keeps the process running if continuous reminders and SMTP jobs are required; an idle-stopped application cannot run background jobs.
+
+All `/api/:path*` requests are explicitly rewritten to the single `api/backend.js` function. The rewrite forwards the full nested path (including `auth/register`, `auth/me`, record IDs and payment actions) through a reserved query parameter. This avoids relying on filesystem catch-all matching for nested URLs. Redeploy Vercel after pulling this routing update; changing backend environment variables alone does not apply routing configuration.

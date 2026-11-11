@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import proxy from "../api/[...path].js";
+import proxy from "../api/backend.js";
 import { openDatabase } from "../server/db.js";
 import { createApp } from "../server/app.js";
 
@@ -10,6 +10,18 @@ test("Vercel proxy: configuration errors, backend failure, login cookies, CSRF a
   const db = openDatabase(":memory:");
   const frontend = express();
   frontend.use(express.json());
+  // Emulate the explicit Vercel rewrite, including nested authentication URLs.
+  frontend.use((req, res, next) => {
+    const original = new URL(req.url, "https://frontend.invalid");
+    const rewritten = new URL("/api/backend", original.origin);
+    rewritten.search = original.search;
+    rewritten.searchParams.set(
+      "__academy_path",
+      original.pathname.slice("/api/".length),
+    );
+    req.url = rewritten.pathname + rewritten.search;
+    next();
+  });
   frontend.use(proxy);
   const f = frontend.listen(0, "127.0.0.1");
   await new Promise((r) => f.once("listening", r));
@@ -67,6 +79,26 @@ test("Vercel proxy: configuration errors, backend failure, login cookies, CSRF a
   });
   assert.equal(r.status, 200);
   assert.equal((await r.json()).members[0].name, "Proxy user");
+  const scopedHeaders = {
+    ...headers,
+    Cookie: cookie,
+    "X-Stable-Id": me.stables[0].id,
+  };
+  r = await fetch(base + "/api/records/horses", {
+    method: "POST",
+    headers: scopedHeaders,
+    body: JSON.stringify({ name: "Proxy horse" }),
+  });
+  assert.equal(r.status, 201);
+  const horse = await r.json();
+  r = await fetch(base + "/api/records/horses/" + horse.id, {
+    method: "PUT",
+    headers: scopedHeaders,
+    body: JSON.stringify({ name: "Updated through nested route" }),
+  });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).name, "Updated through nested route");
+
   r = await fetch(base + "/api/auth/logout", {
     method: "POST",
     headers: {
