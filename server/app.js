@@ -281,11 +281,27 @@ export function createApp(
       orgId || "",
     );
     if (!org) return res.status(403).json({ error: "Stable access denied" });
+    const staff = get(
+      "SELECT role FROM staff_roles WHERE org_id=? AND user_id=?",
+      org.id,
+      req.user.id,
+    );
+    if (org.role !== "owner" && staff) org.role = staff.role;
     req.org = org;
     next();
   }
   function owner(req, res, next) {
-    if (req.org.role !== "owner")
+    const modules = {
+      instructor: ["classes", "attendance"],
+      vet: ["medical", "horses"],
+      caregiver: ["feeding", "tasks"],
+    };
+    const module = req.path.startsWith("/api/records/")
+      ? req.params.kind
+      : req.path.startsWith("/api/attendance/")
+        ? "attendance"
+        : null;
+    if (req.org.role !== "owner" && !modules[req.org.role]?.includes(module))
       return res.status(403).json({ error: "Manager permission required" });
     next();
   }
@@ -376,7 +392,7 @@ export function createApp(
     res.json({
       user: req.user,
       stables: all(
-        "SELECT o.id,o.name,m.role FROM organizations o JOIN memberships m ON m.org_id=o.id WHERE m.user_id=?",
+        "SELECT o.id,o.name,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM organizations o JOIN memberships m ON m.org_id=o.id LEFT JOIN staff_roles s ON s.org_id=o.id AND s.user_id=m.user_id WHERE m.user_id=?",
         req.user.id,
       ),
     }),
@@ -527,15 +543,41 @@ export function createApp(
         )
       )
         fail("Horse, instructor or arena already scheduled", 409);
-      if (
-        rid &&
-        get(
-          "SELECT id FROM reservations WHERE class_id=? AND org_id=? AND status='confirmed'",
+      if (rid) {
+        const booked = all(
+          "SELECT * FROM reservations WHERE class_id=? AND org_id=? AND status IN ('confirmed','pending_payment')",
           rid,
           org,
-        )
-      )
-        fail("Cannot edit a class with active reservations", 409);
+        );
+        const previous = record(org, "classes", rid);
+        if (booked.length) {
+          if (
+            capacity < booked.length ||
+            booked.some((b) => !horseIds.includes(b.horse_id))
+          )
+            fail("Keep booked capacity and assigned horses", 409);
+          if (
+            previous.planId !== data.planId ||
+            (previous.creditCost || 1) !== data.creditCost
+          )
+            fail("Pricing cannot change while bookings exist", 409);
+          for (const booking of booked) {
+            const other = all(
+              "SELECT * FROM reservations WHERE org_id=? AND member_id=? AND class_id!=? AND status IN ('confirmed','pending_payment')",
+              org,
+              booking.member_id,
+              rid,
+            );
+            if (
+              other.some((b) =>
+                overlap(record(org, "classes", b.class_id), data),
+              )
+            )
+              fail("A member has an overlapping booking", 409);
+          }
+        }
+        if (previous.seriesId) data.seriesId = previous.seriesId;
+      }
       return data;
     }
     if (kind === "medical") {
@@ -624,7 +666,7 @@ export function createApp(
   ];
   function safeClass(req, c) {
     const total = get(
-      "SELECT count(*) AS n FROM reservations WHERE org_id=? AND class_id=? AND status='confirmed'",
+      "SELECT count(*) AS n FROM reservations WHERE org_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
       req.org.id,
       c.id,
     ).n;
@@ -634,7 +676,7 @@ export function createApp(
     const org = req.org.id,
       manager = req.org.role === "owner";
     const members = all(
-      "SELECT u.id,u.name,m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.org_id=?",
+      "SELECT u.id,u.name,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
       org,
     );
     const result = {};
@@ -678,6 +720,62 @@ export function createApp(
       org,
       req.user.id,
     );
+    result.proformas = result.proformas.map((p) => ({
+      ...p,
+      activation:
+        p.status === "settled"
+          ? "active"
+          : p.status === "void"
+            ? "cancelled"
+            : "pending_payment",
+    }));
+    result.payments = all(
+      "SELECT * FROM payments WHERE org_id=?" +
+        (manager
+          ? ""
+          : " AND proforma_id IN (SELECT id FROM proformas WHERE member_id=?)"),
+      ...(manager ? [org] : [org, req.user.id]),
+    );
+    result.waitlist = all(
+      "SELECT * FROM waitlist WHERE org_id=?" +
+        (manager ? "" : " AND member_id=?") +
+        " ORDER BY created_at",
+      ...(manager ? [org] : [org, req.user.id]),
+    );
+    result.attendance = all(
+      "SELECT * FROM attendance WHERE org_id=?" +
+        (manager
+          ? ""
+          : " AND reservation_id IN (SELECT id FROM reservations WHERE member_id=?)"),
+      ...(manager ? [org] : [org, req.user.id]),
+    );
+    const staffModules = {
+      instructor: ["classes", "plans", "horses"],
+      vet: ["horses", "medical"],
+      caregiver: ["horses", "feeding", "tasks"],
+    }[req.org.role];
+    if (staffModules) {
+      for (const k of kinds) if (!staffModules.includes(k)) result[k] = [];
+      // Staff see operational records only, never other members' financial accounts.
+      for (const k of staffModules)
+        result[k] =
+          k === "classes"
+            ? records(org, k).map((c) => safeClass(req, c))
+            : records(org, k);
+      result.members = members.map(({ id, name, role }) => ({
+        id,
+        name,
+        role,
+      }));
+      if (req.org.role === "instructor") {
+        result.bookings = all("SELECT * FROM reservations WHERE org_id=?", org);
+        result.attendance = all("SELECT * FROM attendance WHERE org_id=?", org);
+        result.waitlist = all(
+          "SELECT * FROM waitlist WHERE org_id=? ORDER BY created_at",
+          org,
+        );
+      }
+    }
     result.emailConfigured = emailEnabled;
     res.json(result);
   });
@@ -695,7 +793,7 @@ export function createApp(
         "rest:" + rid + ":" + u,
       );
     for (const b of all(
-      "SELECT * FROM reservations WHERE org_id=? AND horse_id=? AND status='confirmed'",
+      "SELECT * FROM reservations WHERE org_id=? AND horse_id=? AND status IN ('confirmed','pending_payment')",
       org,
       h.id,
     )) {
@@ -713,21 +811,39 @@ export function createApp(
   app.post("/api/records/:kind", owner, (req, res) => {
     const { kind } = req.params;
     if (!kinds.includes(kind)) fail("Unknown module", 404);
-    const rid = id();
-    const data = validate(req, kind, req.body);
-    transaction(() => {
-      if (
-        ["discounts", "vouchers"].includes(kind) &&
-        records(req.org.id, kind).some((r) => r.code === data.code)
-      )
-        fail("Code already exists", 409);
-      put(req.org.id, kind, rid, data);
-      if (kind === "medical") restrictHorse(req, data, rid);
-      audit(req, kind + ".create", rid);
+    const created = transaction(() => {
+      const weeks =
+        kind === "classes"
+          ? integer(req.body.repeatWeeks || 1, "weeks", 1, 52)
+          : 1;
+      const seriesId = weeks > 1 ? id() : null;
+      return Array.from({ length: weeks }, (_, week) => {
+        const rid = id();
+        const body = { ...req.body };
+        if (kind === "classes")
+          for (const key of ["startsAt", "endsAt"])
+            body[key] = new Date(
+              Date.parse(iso(body[key])) + week * 7 * 86400000,
+            ).toISOString();
+        const data = {
+          ...validate(req, kind, body),
+          ...(seriesId ? { seriesId } : {}),
+        };
+        if (
+          ["discounts", "vouchers"].includes(kind) &&
+          records(req.org.id, kind).some((r) => r.code === data.code)
+        )
+          fail("Code already exists", 409);
+        put(req.org.id, kind, rid, data);
+        if (kind === "medical") restrictHorse(req, data, rid);
+        audit(req, kind + ".create", rid);
+        return { id: rid, ...data };
+      });
     });
     app.locals.remind();
-    res.status(201).json({ id: rid, ...data });
+    res.status(201).json({ ...created[0], created });
   });
+
   app.put("/api/records/:kind/:id", owner, (req, res) => {
     const { kind, id: rid } = req.params;
     if (!kinds.includes(kind)) fail("Unknown module", 404);
@@ -751,6 +867,18 @@ export function createApp(
         fail("Complete medical restrictions before returning horse to riding");
       put(req.org.id, kind, rid, data);
       if (kind === "medical") restrictHorse(req, data, rid);
+      if (kind === "classes")
+        for (const b of all(
+          "SELECT member_id FROM reservations WHERE org_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
+          req.org.id,
+          rid,
+        ))
+          notify(
+            req.org.id,
+            b.member_id,
+            "Class updated / تم تحديث الحصة",
+            data.title + " · " + data.startsAt,
+          );
       audit(req, kind + ".update", rid);
     });
     app.locals.remind();
@@ -758,7 +886,10 @@ export function createApp(
   });
   app.post("/api/tasks/:id/toggle", (req, res) => {
     const task = record(req.org.id, "tasks", req.params.id);
-    if (req.org.role !== "owner" && task.assigneeId !== req.user.id)
+    if (
+      !["owner", "caregiver"].includes(req.org.role) &&
+      task.assigneeId !== req.user.id
+    )
       fail("Not assigned to you", 403);
     put(req.org.id, "tasks", task.id, { ...task, done: !task.done });
     audit(req, "task.complete", task.id);
@@ -863,7 +994,7 @@ export function createApp(
         fail("Price changed; calculate the total again", 409);
       if (c.startsAt <= now()) fail("Class has already started");
       const active = all(
-        "SELECT * FROM reservations WHERE org_id=? AND status='confirmed'",
+        "SELECT * FROM reservations WHERE org_id=? AND status IN ('confirmed','pending_payment')",
         org,
       );
       if (active.some((b) => b.class_id === c.id && b.member_id === uid))
@@ -897,7 +1028,7 @@ export function createApp(
         uid,
         c.id,
         horseId,
-        "confirmed",
+        q.due > 0 ? "pending_payment" : "confirmed",
         now(),
       );
       run(
@@ -933,7 +1064,9 @@ export function createApp(
       notify(
         org,
         uid,
-        "Booking confirmed / تم تأكيد الحجز",
+        q.due > 0
+          ? "Payment pending / بانتظار الدفع"
+          : "Booking confirmed / تم تأكيد الحجز",
         `${c.title} · ${c.startsAt}`,
       );
       owners(org)
@@ -946,8 +1079,19 @@ export function createApp(
             req.user.name + " · " + c.title,
           ),
         );
+      run(
+        "DELETE FROM waitlist WHERE org_id=? AND member_id=? AND class_id=?",
+        org,
+        uid,
+        c.id,
+      );
       audit(req, "booking.create", bid);
-      return { id: bid, proformaId: pid, due: q.due };
+      return {
+        id: bid,
+        proformaId: pid,
+        due: q.due,
+        status: q.due > 0 ? "pending_payment" : "confirmed",
+      };
     });
     res.status(201).json(result);
   });
@@ -960,7 +1104,8 @@ export function createApp(
       );
       if (!b || (b.member_id !== req.user.id && req.org.role !== "owner"))
         fail("Booking not found", 404);
-      if (b.status !== "confirmed") fail("Booking already cancelled", 409);
+      if (!["confirmed", "pending_payment"].includes(b.status))
+        fail("Booking already cancelled", 409);
       if (record(req.org.id, "classes", b.class_id).startsAt <= now())
         fail("Past or started bookings cannot be cancelled");
       const p = get(
@@ -1004,6 +1149,17 @@ export function createApp(
         "Booking cancelled / تم إلغاء الحجز",
         "Pro forma voided; applied voucher balance restored.",
       );
+      for (const w of all(
+        "SELECT * FROM waitlist WHERE org_id=? AND class_id=? ORDER BY created_at",
+        req.org.id,
+        b.class_id,
+      ))
+        notify(
+          req.org.id,
+          w.member_id,
+          "Place available / مقعد متاح",
+          record(req.org.id, "classes", b.class_id).title,
+        );
       audit(req, "booking.cancel", b.id);
     });
     res.json({ ok: true });
@@ -1117,6 +1273,11 @@ export function createApp(
         p.credit_awarded ? "void" : "open",
         p.id,
       );
+      if (p.reservation_id)
+        run(
+          "UPDATE reservations SET status='pending_payment' WHERE id=? AND status='confirmed'",
+          p.reservation_id,
+        );
       notify(
         req.org.id,
         p.member_id,
@@ -1141,7 +1302,7 @@ export function createApp(
       const reference = text(req.body.reference, "payment reference", 200);
       const external = text(
         req.body.externalRef,
-        "external invoice reference",
+        "payment voucher details",
         200,
       );
       if (
@@ -1175,6 +1336,29 @@ export function createApp(
         "Payment recorded / تم تسجيل الدفعة",
         `${(amount / 100).toFixed(2)} SAR · ${reference}`,
       );
+      if (p.reservation_id && p.paid + amount === p.due) {
+        const booking = get(
+          "SELECT * FROM reservations WHERE id=? AND org_id=?",
+          p.reservation_id,
+          req.org.id,
+        );
+        if (!booking || booking.status !== "pending_payment")
+          fail("Booking cannot be activated", 409);
+        if (record(req.org.id, "classes", booking.class_id).startsAt <= now())
+          fail("Class has already started", 409);
+        if (record(req.org.id, "horses", booking.horse_id).status !== "ready")
+          fail("Horse is not ready; reconcile assignment before payment", 409);
+        run(
+          "UPDATE reservations SET status='confirmed' WHERE id=?",
+          booking.id,
+        );
+        notify(
+          req.org.id,
+          p.member_id,
+          "Booking activated / تم تفعيل الحجز",
+          p.description,
+        );
+      }
       awardCredits(p.id);
       audit(req, "payment.record", p.id);
     });
@@ -1197,7 +1381,7 @@ export function createApp(
       members: get("SELECT count(*) AS n FROM memberships WHERE org_id=?", org)
         .n,
       bookings: get(
-        "SELECT count(*) AS n FROM reservations WHERE org_id=? AND status='confirmed'",
+        "SELECT count(*) AS n FROM reservations WHERE org_id=? AND status IN ('confirmed','pending_payment')",
         org,
       ).n,
       ...get(
@@ -1214,6 +1398,181 @@ export function createApp(
       notice:
         "Operational report only; official tax invoices are managed in your external ZATCA system.",
     });
+  });
+  app.post("/api/waitlist", (req, res) => {
+    const c = record(req.org.id, "classes", req.body.classId);
+    if (c.startsAt <= now()) fail("Class has started");
+    if (safeClass(req, c).places > 0)
+      fail("Places are available; book the class");
+    if (
+      get(
+        "SELECT id FROM reservations WHERE org_id=? AND member_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
+        req.org.id,
+        req.user.id,
+        c.id,
+      )
+    )
+      fail("Already booked", 409);
+    run(
+      "INSERT OR IGNORE INTO waitlist VALUES(?,?,?,?,?)",
+      id(),
+      req.org.id,
+      req.user.id,
+      c.id,
+      now(),
+    );
+    res.status(201).json({ ok: true });
+  });
+  app.delete("/api/waitlist/:id", (req, res) => {
+    run(
+      "DELETE FROM waitlist WHERE id=? AND org_id=?" +
+        (req.org.role === "owner" ? "" : " AND member_id=?"),
+      ...(req.org.role === "owner"
+        ? [req.params.id, req.org.id]
+        : [req.params.id, req.org.id, req.user.id]),
+    );
+    res.json({ ok: true });
+  });
+  app.put("/api/attendance/:id", owner, (req, res) => {
+    const b = get(
+      "SELECT * FROM reservations WHERE id=? AND org_id=?",
+      req.params.id,
+      req.org.id,
+    );
+    if (!b || b.status !== "confirmed")
+      fail("Only activated bookings can have attendance", 409);
+    if (!["present", "absent", "excused"].includes(req.body.status))
+      fail("Invalid attendance");
+    run(
+      "INSERT INTO attendance VALUES(?,?,?,?,?) ON CONFLICT(reservation_id) DO UPDATE SET status=excluded.status,actor_id=excluded.actor_id,updated_at=excluded.updated_at",
+      b.id,
+      req.org.id,
+      req.body.status,
+      req.user.id,
+      now(),
+    );
+    audit(req, "attendance.update", b.id);
+    res.json({ ok: true });
+  });
+  app.post("/api/members", owner, async (req, res) => {
+    const name = text(req.body.name, "name", 100),
+      email = text(req.body.email, "email", 254).toLowerCase(),
+      password = text(req.body.password, "temporary password", 128);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12)
+      fail("Valid email and a password of at least 12 characters required");
+    const encrypted = await passwordHash(password),
+      uid = id();
+    transaction(() => {
+      if (get("SELECT id FROM users WHERE email=?", email))
+        fail("Email already registered; use an invitation", 409);
+      run(
+        "INSERT INTO users VALUES(?,?,?,?,?)",
+        uid,
+        email,
+        name,
+        encrypted,
+        now(),
+      );
+      run("INSERT INTO memberships VALUES(?,?,?)", uid, req.org.id, "member");
+      audit(req, "member.create", uid);
+    });
+    res.status(201).json({ id: uid });
+  });
+  app.put("/api/members/:id/role", owner, (req, res) => {
+    const uid = req.params.id,
+      role = req.body.role;
+    if (!["member", "instructor", "vet", "caregiver"].includes(role))
+      fail("Invalid staff role");
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=? AND role='member'",
+        req.org.id,
+        uid,
+      )
+    )
+      fail("Member not found or is manager", 404);
+    transaction(() => {
+      if (role === "member")
+        run(
+          "DELETE FROM staff_roles WHERE org_id=? AND user_id=?",
+          req.org.id,
+          uid,
+        );
+      else
+        run(
+          "INSERT INTO staff_roles VALUES(?,?,?) ON CONFLICT(org_id,user_id) DO UPDATE SET role=excluded.role",
+          req.org.id,
+          uid,
+          role,
+        );
+      audit(req, "member.role", uid);
+    });
+    res.json({ ok: true });
+  });
+  app.put("/api/members/:id", owner, (req, res) => {
+    const uid = req.params.id;
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        req.org.id,
+        uid,
+      )
+    )
+      fail("Member not found", 404);
+    const name = text(req.body.name, "name", 100);
+    // Names belong to the global account; do not modify another academy's account.
+    if (get("SELECT count(*) AS n FROM memberships WHERE user_id=?", uid).n > 1)
+      fail("Shared accounts must update their own profile", 409);
+    run("UPDATE users SET name=? WHERE id=?", name, uid);
+    audit(req, "member.update", uid);
+    res.json({ ok: true });
+  });
+  app.delete("/api/members/:id", owner, (req, res) => {
+    const uid = req.params.id;
+    transaction(() => {
+      if (
+        !get(
+          "SELECT user_id FROM memberships WHERE org_id=? AND user_id=? AND role='member'",
+          req.org.id,
+          uid,
+        )
+      )
+        fail("Member not found or is manager", 404);
+      if (
+        get(
+          "SELECT id FROM reservations WHERE org_id=? AND member_id=? AND status IN ('confirmed','pending_payment')",
+          req.org.id,
+          uid,
+        ) ||
+        creditBalance(req.org.id, uid) !== 0 ||
+        get(
+          "SELECT id FROM proformas WHERE org_id=? AND member_id=? AND status='open'",
+          req.org.id,
+          uid,
+        )
+      )
+        fail(
+          "Reconcile bookings, balances and payments before removing member",
+          409,
+        );
+      run(
+        "DELETE FROM staff_roles WHERE org_id=? AND user_id=?",
+        req.org.id,
+        uid,
+      );
+      run(
+        "DELETE FROM memberships WHERE org_id=? AND user_id=?",
+        req.org.id,
+        uid,
+      );
+      run(
+        "DELETE FROM waitlist WHERE org_id=? AND member_id=?",
+        req.org.id,
+        uid,
+      );
+      audit(req, "member.remove", uid);
+    });
+    res.json({ ok: true });
   });
   app.get("/api/audit", owner, (req, res) =>
     res.json(

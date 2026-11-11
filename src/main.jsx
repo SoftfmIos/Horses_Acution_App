@@ -21,6 +21,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { api } from "./api";
+import { Schedule, MemberTools } from "./Scheduling";
 import "./style.css";
 import "./system.css";
 const dict = {
@@ -147,7 +148,7 @@ const dict = {
     memberId: "Member",
     payment: "Record payment",
     reference: "Payment reference",
-    externalRef: "External invoice reference",
+    externalRef: "Payment voucher details / invoice reference",
     paid: "Payments recorded",
     outstanding: "Outstanding",
     recordedPayments: "Recorded payments",
@@ -171,9 +172,10 @@ const dict = {
     ride: "Ride",
     boarding: "Boarding",
     other: "Other",
-    open: "Open",
-    settled: "Settled",
+    open: "Pending payment",
+    settled: "Paid",
     void: "Void",
+    pending_payment: "Pending payment",
     confirmed: "Confirmed",
     cancelled: "Cancelled",
     cancelBooking: "Cancel booking",
@@ -194,7 +196,8 @@ const dict = {
       "Use a unique password of at least 12 characters. New stable accounts are managers; invitations create member accounts.",
     search: "Search…",
     saved: "Saved successfully.",
-    bookingSaved: "Booking confirmed.",
+    bookingSaved:
+      "Booking saved. Payment is pending until the academy records your payment voucher.",
     notificationIntro: "Booking updates and scheduled care reminders.",
     membersIntro:
       "Invite members to let them view classes and manage their bookings.",
@@ -205,6 +208,7 @@ const dict = {
     restrictionNote:
       "Completing care does not automatically clear rest. Edit the horse after veterinary clearance.",
     session: "Class",
+    caregiver: "Caregiver",
     owner: "Manager",
     role: "Role",
     allBookings: "All bookings",
@@ -348,7 +352,7 @@ const dict = {
     memberId: "العضو",
     payment: "تسجيل دفعة",
     reference: "مرجع الدفع",
-    externalRef: "مرجع الفاتورة الخارجية",
+    externalRef: "تفاصيل سند الدفع / مرجع الفاتورة",
     paid: "الدفعات المسجلة",
     outstanding: "المستحق",
     recordedPayments: "الدفعات المسجلة",
@@ -372,9 +376,10 @@ const dict = {
     ride: "جولة ركوب",
     boarding: "إيواء",
     other: "أخرى",
-    open: "مفتوح",
+    open: "بانتظار الدفع",
     settled: "مسدد",
     void: "ملغى",
+    pending_payment: "بانتظار الدفع",
     confirmed: "مؤكد",
     cancelled: "ملغى",
     cancelBooking: "إلغاء الحجز",
@@ -394,7 +399,7 @@ const dict = {
       "استخدم كلمة مرور فريدة من ١٢ حرفاً على الأقل. إنشاء إسطبل يمنح دور المدير، والدعوة تمنح دور العضو.",
     search: "بحث…",
     saved: "تم الحفظ بنجاح.",
-    bookingSaved: "تم تأكيد الحجز.",
+    bookingSaved: "تم حفظ الحجز. يبقى بانتظار الدفع حتى تسجيل سند الدفع.",
     notificationIntro: "تحديثات الحجوزات وتذكيرات الرعاية المجدولة.",
     membersIntro: "ادع الأعضاء لعرض الحصص وإدارة حجوزاتهم.",
     back: "رجوع",
@@ -462,7 +467,17 @@ function App() {
     [reports, setReports] = useState(null);
   const t = dict[lang],
     ar = lang === "ar",
-    manager = stable?.role === "owner";
+    manager = stable?.role === "owner",
+    staff = ["instructor", "vet", "caregiver"].includes(stable?.role);
+  const canManage = (kind) =>
+    manager ||
+    (
+      {
+        instructor: ["classes"],
+        vet: ["horses", "medical"],
+        caregiver: ["feeding", "tasks"],
+      }[stable?.role] || []
+    ).includes(kind);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = ar ? "rtl" : "ltr";
@@ -573,7 +588,29 @@ function App() {
         ]
       : []),
     ["notifications", Bell],
-  ];
+  ].filter(
+    ([key]) =>
+      !staff ||
+      [
+        "overview",
+        "notifications",
+        ...({
+          instructor: ["classes", "horses", "pricing"],
+          vet: ["horses", "medical"],
+          caregiver: ["horses", "feeding", "tasks"],
+        }[stable?.role] || []),
+      ].includes(key),
+  );
+  if (staff)
+    for (const [key, icon] of [
+      ["medical", HeartPulse],
+      ["feeding", Sprout],
+    ])
+      if (canManage(key) && !nav.some(([k]) => k === key))
+        nav.push([key, icon]);
+  t.repeatWeeks = ar
+    ? "تكرار أسبوعي (١–٥٢ أسبوعاً، للحصص الجديدة)"
+    : "Repeat weekly (1–52 weeks; new classes only)";
   function fields(kind) {
     const horses = data.horses.map((h) => [h.id, h.name]),
       members = data.members.map((m) => [m.id, m.name]);
@@ -607,6 +644,7 @@ function App() {
           ["active", "checkbox"],
         ],
         classes: [
+          ["repeatWeeks", "number", false],
           ["title", "text", true],
           ["startsAt", "datetime-local", true],
           ["endsAt", "datetime-local", true],
@@ -683,6 +721,7 @@ function App() {
           }
         : {}),
       active: true,
+      repeatWeeks: 1,
       capacity: 1,
       creditCost: 1,
       credits: 0,
@@ -771,7 +810,7 @@ function App() {
       <article className="panel record-card" key={r.id}>
         <div className="section-heading">
           <h3>{r.name || r.title || r.code || labelHorse(r.horseId)}</h3>
-          {manager && kind !== "vouchers" && (
+          {canManage(kind) && kind !== "vouchers" && (
             <button
               className="text-button"
               onClick={() => {
@@ -1040,8 +1079,10 @@ function App() {
         </header>
         <main>
           <p className="data-notice">
-            <strong>{manager ? t.academyPortal : t.memberPortal}</strong> ·{" "}
-            {t.dataNotice}
+            <strong>
+              {manager || staff ? t.academyPortal : t.memberPortal}
+            </strong>{" "}
+            · {t.dataNotice}
           </p>
           {failure && (
             <p className="error" role="alert">
@@ -1066,7 +1107,7 @@ function App() {
                           : ""}
               </p>
             </div>
-            {manager &&
+            {canManage(page === "pricing" ? "plans" : page) &&
               [
                 "classes",
                 "horses",
@@ -1118,7 +1159,7 @@ function App() {
                     CalendarDays,
                     data.bookings.filter(
                       (b) =>
-                        b.status === "confirmed" &&
+                        ["confirmed", "pending_payment"].includes(b.status) &&
                         data.classes.find((c) => c.id === b.class_id)
                           ?.startsAt > new Date().toISOString(),
                     ).length,
@@ -1159,7 +1200,7 @@ function App() {
                 {data.bookings
                   .filter(
                     (b) =>
-                      b.status === "confirmed" &&
+                      ["confirmed", "pending_payment"].includes(b.status) &&
                       data.classes.find((c) => c.id === b.class_id)?.startsAt >
                         new Date().toISOString(),
                   )
@@ -1248,8 +1289,9 @@ function App() {
                   [Activity, data.horses.length, t.horses],
                   [
                     CalendarDays,
-                    data.bookings.filter((b) => b.status === "confirmed")
-                      .length,
+                    data.bookings.filter((b) =>
+                      ["confirmed", "pending_payment"].includes(b.status),
+                    ).length,
                     t.bookings,
                   ],
                   [Check, data.tasks.filter((x) => !x.done).length, t.tasks],
@@ -1314,6 +1356,29 @@ function App() {
           )}
           {page === "classes" && (
             <>
+              <p className="notice">
+                {ar
+                  ? "الحجز بانتظار الدفع حتى تسجيل سند الدفع بالكامل. الحصص المسددة برصيد مدفوع مسبقاً تتفعل فوراً."
+                  : "Bookings remain pending until the academy records payment voucher details and full payment. Bookings using prepaid credits activate immediately."}
+              </p>
+              <Schedule
+                classes={data.classes.filter(
+                  (c) => !instructorFilter || c.instructor === instructorFilter,
+                )}
+                horses={data.horses}
+                ar={ar}
+                onSelect={(c) =>
+                  canManage("classes")
+                    ? openForm("classes", c)
+                    : setModal({
+                        kind: "booking",
+                        classId: c.id,
+                        title: c.title,
+                        form: {},
+                      })
+                }
+              />
+
               <p className="notice">{t.cancelPolicy}</p>
               <label className="instructor-filter">
                 {t.filterInstructor}
@@ -1347,7 +1412,7 @@ function App() {
                       (b) =>
                         b.class_id === c.id &&
                         b.member_id === auth.user.id &&
-                        b.status === "confirmed",
+                        ["confirmed", "pending_payment"].includes(b.status),
                     );
                     const plan = data.plans.find((p) => p.id === c.planId);
                     return (
@@ -1366,25 +1431,38 @@ function App() {
                         <div className="session-bottom">
                           <button
                             className="primary"
-                            disabled={busy || (!b && c.places <= 0)}
+                            disabled={busy}
                             onClick={() =>
-                              b
+                              !b && c.places <= 0
                                 ? action(() =>
-                                    request("/bookings/" + b.id + "/cancel", {
+                                    request("/waitlist", {
                                       method: "POST",
+                                      body: { classId: c.id },
                                     }),
                                   )
-                                : setModal({
-                                    kind: "booking",
-                                    classId: c.id,
-                                    title: c.title,
-                                    form: {},
-                                  })
+                                : b
+                                  ? action(() =>
+                                      request("/bookings/" + b.id + "/cancel", {
+                                        method: "POST",
+                                      }),
+                                    )
+                                  : setModal({
+                                      kind: "booking",
+                                      classId: c.id,
+                                      title: c.title,
+                                      form: {},
+                                    })
                             }
                           >
-                            {b ? t.cancelBooking : t.book}
+                            {b
+                              ? t.cancelBooking
+                              : c.places <= 0
+                                ? ar
+                                  ? "قائمة الانتظار"
+                                  : "Join waitlist"
+                                : t.book}
                           </button>
-                          {manager && (
+                          {canManage("classes") && (
                             <button
                               className="text-button"
                               onClick={() => openForm("classes", c)}
@@ -1397,15 +1475,37 @@ function App() {
                     );
                   })}
               </div>
+              <section className="panel">
+                <h3>{ar ? "قائمة الانتظار" : "Waitlist"}</h3>
+                {data.waitlist?.map((w) => (
+                  <div className="task-row" key={w.id}>
+                    <span>
+                      {data.classes.find((c) => c.id === w.class_id)?.title} ·{" "}
+                      {memberName(w.member_id)}
+                    </span>
+                    <button
+                      onClick={() =>
+                        action(() =>
+                          request("/waitlist/" + w.id, { method: "DELETE" }),
+                        )
+                      }
+                    >
+                      {ar ? "إزالة" : "Remove"}
+                    </button>
+                  </div>
+                ))}
+              </section>
               <h2 className="subheading">
-                {manager ? t.allBookings : t.myBookings}
+                {canManage("classes") ? t.allBookings : t.myBookings}
               </h2>
               <div className="panel table-wrap">
                 <table>
                   <thead>
                     <tr>
                       <th>{t.session}</th>
-                      {manager && <th>{t.member}</th>}
+                      {(manager || stable?.role === "instructor") && (
+                        <th>{t.member}</th>
+                      )}
                       <th>{t.horses}</th>
                       <th>{t.status}</th>
                       <th />
@@ -1417,11 +1517,50 @@ function App() {
                         <td>
                           {data.classes.find((c) => c.id === b.class_id)?.title}
                         </td>
-                        {manager && <td>{memberName(b.member_id)}</td>}
+                        {canManage("classes") && (
+                          <td>{memberName(b.member_id)}</td>
+                        )}
                         <td>{labelHorse(b.horse_id)}</td>
-                        <td>{t[b.status]}</td>
                         <td>
-                          {b.status === "confirmed" && (
+                          {t[b.status] || b.status}
+                          {canManage("classes") && b.status === "confirmed" && (
+                            <label>
+                              {ar ? "الحضور" : "Attendance"}
+                              <select
+                                aria-label={ar ? "الحضور" : "Attendance"}
+                                value={
+                                  data.attendance?.find(
+                                    (a) => a.reservation_id === b.id,
+                                  )?.status || ""
+                                }
+                                onChange={(e) =>
+                                  e.target.value &&
+                                  action(() =>
+                                    request("/attendance/" + b.id, {
+                                      method: "PUT",
+                                      body: { status: e.target.value },
+                                    }),
+                                  )
+                                }
+                              >
+                                <option value="">—</option>
+                                <option value="present">
+                                  {ar ? "حاضر" : "Present"}
+                                </option>
+                                <option value="absent">
+                                  {ar ? "غائب" : "Absent"}
+                                </option>
+                                <option value="excused">
+                                  {ar ? "بعذر" : "Excused"}
+                                </option>
+                              </select>
+                            </label>
+                          )}
+                        </td>
+                        <td>
+                          {["confirmed", "pending_payment"].includes(
+                            b.status,
+                          ) && (
                             <button
                               className="text-button"
                               disabled={busy}
@@ -1489,7 +1628,9 @@ function App() {
                   <thead>
                     <tr>
                       <th>{t.title}</th>
-                      {manager && <th>{t.member}</th>}
+                      {(manager || stable?.role === "instructor") && (
+                        <th>{t.member}</th>
+                      )}
                       <th>{t.due}</th>
                       <th>{t.paid}</th>
                       <th>{t.status}</th>
@@ -1585,6 +1726,14 @@ function App() {
                 ))}
               </div>
             </>
+          )}
+          {page === "members" && manager && (
+            <MemberTools
+              members={data.members}
+              request={request}
+              action={action}
+              ar={ar}
+            />
           )}
           {page === "members" && (
             <div className="panel table-wrap">
@@ -1940,6 +2089,24 @@ function App() {
                   <h3>{t.brand}</h3>
                 </div>
                 <p>{modal.record.description}</p>
+                <p>
+                  {ar ? "التفعيل" : "Activation"}:{" "}
+                  {modal.record.activation === "active"
+                    ? ar
+                      ? "مفعل"
+                      : "Active"
+                    : modal.record.activation === "cancelled"
+                      ? t.cancelled
+                      : t.pending_payment}
+                </p>
+                {data.payments
+                  ?.filter((p) => p.proforma_id === modal.record.id)
+                  .map((p) => (
+                    <p key={p.id}>
+                      {money(p.amount)} · {p.reference} · {p.external_ref} ·{" "}
+                      {when(p.created_at)}
+                    </p>
+                  ))}
                 {modal.record.credit_quantity > 0 && (
                   <p>
                     {t.lessonCredits}: {modal.record.credit_quantity}

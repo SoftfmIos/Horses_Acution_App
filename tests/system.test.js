@@ -234,7 +234,7 @@ test("concurrent bookings cannot oversell capacity", async (t) => {
   assert.equal(
     f.db
       .prepare(
-        "SELECT count(*) AS n FROM reservations WHERE status='confirmed'",
+        "SELECT count(*) AS n FROM reservations WHERE status IN ('confirmed','pending_payment')",
       )
       .get().n,
     1,
@@ -786,4 +786,251 @@ test("HTTPS production cookie policy and login sessions do not expose credential
     body: JSON.stringify(body),
   });
   assert.equal(response.status, 403);
+});
+
+test("payment voucher and full settlement gate activation; refunds suspend booking", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  const b = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(b.status, "pending_payment");
+  assert.equal(
+    (await f.owner.call("/attendance/" + b.id, "PUT", { status: "present" }))
+      .httpStatus,
+    409,
+  );
+  const endpoint = "/proformas/" + b.proformaId + "/payment";
+  assert.equal(
+    (await f.owner.call(endpoint, "POST", { amount: 10000, reference: "PV-1" }))
+      .httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.member.call(endpoint, "POST", {
+        amount: 20000,
+        reference: "PV-1",
+        externalRef: "Bank transfer voucher 1",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.owner.call(endpoint, "POST", {
+        amount: 10000,
+        reference: "PV-1",
+        externalRef: "Bank transfer voucher 1",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.owner.call("/data")).bookings[0].status,
+    "pending_payment",
+  );
+  assert.equal(
+    (
+      await f.owner.call(endpoint, "POST", {
+        amount: 10000,
+        reference: "PV-1",
+        externalRef: "Duplicate",
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal(
+    (
+      await f.owner.call(endpoint, "POST", {
+        amount: 10000,
+        reference: "PV-2",
+        externalRef: "Bank transfer voucher 2",
+      })
+    ).httpStatus,
+    200,
+  );
+  let d = await f.owner.call("/data");
+  assert.equal(d.bookings[0].status, "confirmed");
+  assert.equal(d.proformas[0].activation, "active");
+  assert.equal(d.payments.length, 2);
+  assert.equal(
+    (await f.owner.call("/attendance/" + b.id, "PUT", { status: "present" }))
+      .httpStatus,
+    200,
+  );
+  assert.equal((await f.owner.call("/data")).attendance[0].status, "present");
+  assert.equal(
+    (
+      await f.owner.call("/proformas/" + b.proformaId + "/refund", "POST", {
+        amount: 10000,
+        reference: "RF-1",
+        externalRef: "Refund voucher",
+      })
+    ).httpStatus,
+    200,
+  );
+  d = await f.owner.call("/data");
+  assert.equal(d.bookings[0].status, "pending_payment");
+  assert.equal(d.proformas[0].activation, "pending_payment");
+});
+
+test("weekly series are atomic and preserve Riyadh start time", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  const result = await f.owner.call("/records/classes", "POST", {
+    ...cls,
+    startsAt: "2026-12-01T10:00:00Z",
+    endsAt: "2026-12-01T11:00:00Z",
+    repeatWeeks: 4,
+  });
+  assert.equal(result.httpStatus, 201);
+  assert.equal(result.created.length, 4);
+  assert.equal(result.created[3].startsAt, "2026-12-22T10:00:00.000Z");
+  assert.equal(new Set(result.created.map((c) => c.seriesId)).size, 1);
+  const before = (await f.owner.call("/data")).classes.length;
+  const conflict = await f.owner.call("/records/classes", "POST", {
+    ...cls,
+    startsAt: "2026-11-24T10:00:00Z",
+    endsAt: "2026-11-24T11:00:00Z",
+    repeatWeeks: 3,
+  });
+  assert.equal(conflict.httpStatus, 409);
+  assert.equal((await f.owner.call("/data")).classes.length, before);
+});
+
+test("waitlist holds no seat and notifies on release without bypassing payment", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  const booked = await f.owner.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(
+    (await f.member.call("/waitlist", "POST", { classId: cls.id })).httpStatus,
+    201,
+  );
+  await f.member.call("/waitlist", "POST", { classId: cls.id });
+  assert.equal((await f.member.call("/data")).waitlist.length, 1);
+  await f.owner.call("/bookings/" + booked.id + "/cancel", "POST");
+  assert.ok(
+    (await f.member.call("/data")).notifications.some((n) =>
+      n.title.includes("Place available"),
+    ),
+  );
+  const b = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(b.status, "pending_payment");
+  assert.equal((await f.member.call("/data")).waitlist.length, 0);
+});
+
+test("direct members, constrained staff roles and removal preserve access boundaries", async (t) => {
+  const f = await fixture(t);
+  await setup(f);
+  const created = await f.owner.call("/members", "POST", {
+    name: "Staff",
+    email: "staff@test.com",
+    password: "Temporary secure password",
+  });
+  assert.equal(created.httpStatus, 201);
+  const staff = f.client();
+  assert.equal(
+    (
+      await staff.call("/auth/login", "POST", {
+        email: "staff@test.com",
+        password: "Temporary secure password",
+      })
+    ).httpStatus,
+    200,
+  );
+  staff.stable = f.owner.stable;
+  assert.equal(
+    (
+      await f.owner.call("/members/" + created.id + "/role", "PUT", {
+        role: "vet",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await staff.call("/records/horses", "POST", { name: "Vet horse" }))
+      .httpStatus,
+    201,
+  );
+  assert.equal(
+    (
+      await staff.call("/records/plans", "POST", {
+        name: "No access",
+        amount: 10,
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await staff.call("/members/" + created.id + "/role", "PUT", {
+        role: "instructor",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal((await staff.call("/reports")).httpStatus, 403);
+  assert.equal((await staff.call("/data")).proformas.length, 0);
+  assert.equal(
+    (
+      await f.owner.call("/members/" + created.id, "PUT", {
+        name: "Updated staff",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.owner.call("/members/" + created.id, "DELETE")).httpStatus,
+    200,
+  );
+  assert.equal((await staff.call("/data")).httpStatus, 403);
+});
+
+test("services remain pending until voucher-backed full payment", async (t) => {
+  const f = await fixture(t);
+  const { plan } = await setup(f);
+  const member = (await f.member.call("/auth/me")).user.id;
+  const order = await f.owner.call("/proformas", "POST", {
+    memberId: member,
+    planId: plan.id,
+  });
+  assert.equal(
+    (await f.member.call("/data")).proformas[0].activation,
+    "pending_payment",
+  );
+  await f.owner.call("/proformas/" + order.id + "/payment", "POST", {
+    amount: 20000,
+    reference: "SERVICE-PV-1",
+    externalRef: "Cash receipt voucher 2026-1",
+  });
+  assert.equal(
+    (await f.member.call("/data")).proformas[0].activation,
+    "active",
+  );
+});
+
+test("booked classes can move safely but cannot lose horses, seats or create member overlaps", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  await f.member.call("/bookings", "POST", { classId: cls.id });
+  let changed = await f.owner.call("/records/classes/" + cls.id, "PUT", {
+    ...cls,
+    title: "Updated lesson",
+    startsAt: "2026-11-12T12:00:00Z",
+    endsAt: "2026-11-12T13:00:00Z",
+  });
+  assert.equal(changed.httpStatus, 200);
+  assert.equal(
+    (await f.member.call("/data")).bookings[0].status,
+    "pending_payment",
+  );
+  assert.ok(
+    (await f.member.call("/data")).notifications.some((n) =>
+      n.title.includes("Class updated"),
+    ),
+  );
+  changed = await f.owner.call("/records/classes/" + cls.id, "PUT", {
+    ...cls,
+    horseIds: [],
+  });
+  assert.equal(changed.httpStatus, 400);
 });

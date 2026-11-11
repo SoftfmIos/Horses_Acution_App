@@ -90,6 +90,28 @@ let browser;
   await field("Price plan").selectOption({ index: 1 });
   await save();
   await page.getByRole("heading", { name: "Browser private class" }).waitFor();
+  const calendar = page.getByRole("region", { name: "Booking calendar" });
+  await calendar
+    .getByLabel("Date", { exact: true })
+    .fill(start.toISOString().slice(0, 10));
+  await calendar.getByLabel("View", { exact: true }).selectOption("month");
+  await calendar
+    .getByRole("button")
+    .filter({ hasText: "Browser private class" })
+    .waitFor();
+  await calendar.getByLabel("View", { exact: true }).selectOption("day");
+  await calendar
+    .getByLabel("Horse", { exact: true })
+    .selectOption({ label: "Browser Shams" });
+  await calendar
+    .getByLabel("Arena", { exact: true })
+    .selectOption("Main arena");
+  await calendar
+    .getByRole("button")
+    .filter({ hasText: "Browser private class" })
+    .waitFor();
+  await calendar.getByLabel("View", { exact: true }).selectOption("week");
+
   await page.getByRole("button", { name: "Book", exact: true }).click();
   await field("Discount code (optional)").fill("HELLO10");
   await page
@@ -144,15 +166,43 @@ let browser;
   await field("Voucher value (SAR)").fill("50");
   await field("Expiry").fill(expiry);
   await save();
+  // A pending booking must not activate while its assigned horse is on medical rest.
+  await page.evaluate(async () => {
+    const me = await (await fetch("/api/auth/me")).json();
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Requested-With": "RiyadhAcademy",
+      "X-Stable-Id": me.stables[0].id,
+    };
+    const data = await (await fetch("/api/data", { headers })).json();
+    for (const med of data.medical) {
+      const r = await fetch("/api/records/medical/" + med.id, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ ...med, completed: true }),
+      });
+      if (!r.ok) throw Error("Medical clearance failed");
+    }
+    for (const horse of data.horses) {
+      const r = await fetch("/api/records/horses/" + horse.id, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ ...horse, status: "ready" }),
+      });
+      if (!r.ok) throw Error("Horse clearance failed");
+    }
+  });
   await nav("Payment requests");
   await page
     .getByRole("button", { name: "Record payment", exact: true })
     .click();
   await field("Amount (SAR)").fill("180");
   await field("Payment reference").fill("BANK-UI-1");
-  await field("External invoice reference").fill("ZATCA-EXTERNAL-1");
+  await field("Payment voucher details / invoice reference").fill(
+    "ZATCA-EXTERNAL-1",
+  );
   await save();
-  await page.getByText("Settled", { exact: true }).waitFor();
+  await page.getByText("Paid", { exact: true }).waitFor();
   await page
     .getByRole("button", { name: "Record external refund", exact: true })
     .click();
@@ -329,6 +379,19 @@ let browser;
     await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
   )
     throw Error("Mobile overflow");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page
+    .getByRole("button", { name: "الحصص والركوب", exact: true })
+    .click();
+  await page.getByRole("region", { name: "تقويم الحجز" }).waitFor();
+  await page.screenshot({
+    path: "test-results/calendar-arabic-mobile.png",
+    fullPage: true,
+  });
+  if (
+    await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)
+  )
+    throw Error("Calendar mobile overflow");
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
     "PASS real UI: registration, horse and pricing creation, discounts, class scheduling, booking, pro forma, medical restriction, reports, member packages/credits/bookings, Arabic mobile",

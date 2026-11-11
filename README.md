@@ -16,7 +16,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Development starts the API on port 3001 and Vite on 5173. Vite proxies `/api` to the API with the same browser origin. `PORT` and `WEB_PORT` can override these. There are no seeded accounts, sample financial records, or default passwords. Create a stable account, add horses and prices, then schedule classes. Invite members from the Members screen; invitations are single-use and expire after seven days. An invitation is required to join an existing stable. Public registration without an invitation creates a **separate** stable.
+Development starts the API on port 3001 and Vite on 5173. Vite proxies `/api` to the API with the same browser origin. `PORT` and `WEB_PORT` can override these. There are no seeded accounts, sample financial records, or default passwords. Create a stable account, add horses and prices, then schedule classes. Invite members from the Members screen; invitations are single-use and expire after seven days. Managers can also create members directly with a temporary password of at least 12 characters. Public registration requires an invitation to join an existing stable. Public registration without an invitation creates a **separate** stable.
 
 ```sh
 npm run build
@@ -29,9 +29,9 @@ The Node server serves both the built website and API. Running `dist` on a stati
 
 | Area | Available now |
 | --- | --- |
-| Accounts | Stable registration, member invitations, login/logout, salted scrypt passwords, opaque hashed server sessions, HttpOnly cookies, server-enforced manager/member permissions |
+| Accounts | Stable registration, member invitations, login/logout, salted scrypt passwords, opaque hashed server sessions, HttpOnly cookies, server-enforced manager, member, instructor, vet and caregiver permissions |
 | Shared data | Organization-scoped server records, transactional writes, persistent SQLite database, audit events |
-| Classes | Create/edit dated classes and rides; instructor, arena, horse roster, capacity and price; reject overlapping resources; edit only without active bookings |
+| Classes | Create/edit dated classes and rides; instructor, arena, horse roster, capacity and price; reject overlapping resources; safe edits preserve booked seats, horse assignments and prices; weekly series up to 52 weeks |
 | Member portal | Personal upcoming sessions, lesson-credit balance/history, outstanding payment requests, own bookings and instructor filtering |
 | Bookings | Members book/cancel their own sessions; managers see all; server checks duplicates, rider overlap, capacity and horse availability; concurrent reservations cannot oversell |
 | Horses | Profiles, breed, birth date, microchip/passport, notes and riding status |
@@ -54,7 +54,7 @@ UI data refreshes every 30 seconds. Reminder jobs run every minute and deduplica
 
 Prices are manager-entered agreed amounts in SAR, stored/calculated as integer halalas. Only one discount and one voucher may be applied to a booking. Percentage discounts round down to a halala; discounts cannot exceed the gross amount. Quotes are revalidated on booking, and price changes require a fresh quote. Payment records describe money already received externally; this app does not collect funds. References prevent duplicate payment recordings. Refund records require a reference from the external credit-note/refund process and retain signed ledger entries.
 
-Default cancellation rule: future unpaid bookings can be cancelled; the pro forma is voided, the voucher restored and discount redemption released. Bookings with recorded payments require an externally completed refund to be recorded first. Past/started bookings cannot be cancelled. Managers cannot edit a class with active bookings. Voucher value cannot be edited after issuance; issue another voucher if required. These are current operational defaults, not finalized business policies.
+Default cancellation rule: future unpaid bookings can be cancelled; the pro forma is voided, the voucher restored and discount redemption released. Bookings with recorded payments require an externally completed refund to be recorded first. Past/started bookings cannot be cancelled. Managers can edit future booked classes while preserving booked capacity, assigned horses and the original price; rider and resource conflicts are rechecked and affected members notified. Voucher value cannot be edited after issuance; issue another voucher if required. These are current operational defaults, not finalized business policies.
 
 ## Academy portal and member portal
 
@@ -93,9 +93,25 @@ CHROMIUM_PATH=/usr/bin/chromium npm run test:browser
 
 API integration tests use temporary databases and cover authentication, stable isolation, permissions, CSRF, invitation reuse, password hashing, reservation concurrency, resource/medical restrictions, discount and voucher accounting, pro forma cancellation, external payments/refunds, notification ownership/deduplication, the email outbox and database persistence. The browser test uses an isolated in-memory API and built frontend to exercise account creation, horse/pricing/class setup, booking, discount redemption, pro formas, medical care, feeding, inventory, vouchers, payment/refund recording, reports, a separate invited member account, package purchase requests, credit-backed bookings/cancellation, and Arabic mobile layout. Browser screenshots are written to ignored `test-results/`.
 
+## Scheduling and member administration
+
+The booking screen has day, week and month calendars in Riyadh time, date navigation, and instructor, horse and arena filters. The calendar complements the session cards. New classes have a **Repeat weekly** field (1–52); creating a series validates every occurrence and rolls back the whole series on a conflict. Each occurrence can be edited independently. Series-wide editing and recurrence exceptions are not implemented.
+
+Managers can create members, edit their names, assign staff roles and remove academy access. Temporary passwords require 12 characters. Names of accounts shared across academies cannot be changed by one academy. Removal preserves financial history and is blocked until bookings, open payment requests and credit balances are reconciled. Instructors manage classes and attendance; vets manage horses and medical records; caregivers manage feeding and tasks. Staff cannot see other members' payment or credit records or manage billing/roles.
+
+Attendance (present, absent, excused) is available on activated bookings. Full classes offer a waitlist. Cancellation notifies waiting members when a place opens; joining the waitlist does not reserve a place or bypass payment, and members must explicitly book the available place.
+
+## Payment voucher approval and activation
+
+Cash-priced bookings start as **Pending payment** (`pending_payment`), holding capacity and the assigned horse. Services and packages also remain pending. Managers use **Record payment** to enter the received amount, unique payment voucher reference and voucher details/invoice reference. Details are required and stored in the payment ledger, visible from the payment request. Partial payments remain pending. Full payment changes the payment request to **Paid** (`settled`), activates the booking/service and releases package credits exactly once. Only managers may record payments.
+
+Bookings using previously paid lesson credits, or fully covered by gift vouchers/discounts with no remaining amount due, activate immediately. Refunding a paid booking suspends its activation until the balance is paid again. Payment activation rejects a started class or a medically unavailable assigned horse. Existing unpaid confirmed bookings migrate to pending on database startup. Pending places do not expire automatically; managers must cancel/reconcile abandoned requests to release capacity. Service activation is an operational status on its payment request; there is no automated third-party service provisioning.
+
+Production API traffic defaults to **https://riyadhpolo.softfm.com**, configured in `config/backend.json`. An existing `ACADEMY_BACKEND_URL` environment variable overrides it. See [backend deployment instructions](docs/VERCEL.md). DNS creation alone does not deploy the Node service; HTTPS and a persistent database must be configured on the backend host.
+
 ## Remaining scope
 
-This is a functional first server-backed release, not the entire long-term specification. Granular instructor/vet/caregiver roles, password recovery/email verification, recurring classes, attendance, waitlists, recurring subscription billing, document uploads, detailed breeding/foaling workflows, full purchasing/stock-movement accounting, advanced analytics, configurable cancellation rules, online payments, automated integration with the separate invoicing system, native apps and offline synchronization remain future work. Current medical fields record veterinary instructions; they do not prescribe doses. Managers and members are the two enforced roles in this release.
+This is a functional first server-backed release, not the entire long-term specification. Password recovery/email verification, recurring subscription billing, document uploads, detailed breeding/foaling workflows, full purchasing/stock-movement accounting, advanced analytics, configurable cancellation rules, online payments, automated integration with the separate invoicing system, native apps and offline synchronization remain future work. Current medical fields record veterinary instructions; they do not prescribe doses. Instructor, vet and caregiver permissions are enforced by the API; managers control role assignment.
 
 ## Brand and source
 

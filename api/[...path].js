@@ -1,8 +1,14 @@
+import backendConfig from "../config/backend.json" with { type: "json" };
 // Vercel's stateless function forwards API requests to the persistent Node service.
 // DATABASE_PATH belongs on that service, not in Vercel Functions.
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-  const configured = process.env.ACADEMY_BACKEND_URL;
+  const configured =
+    process.env.ACADEMY_BACKEND_URL ||
+    (process.env.VERCEL_ENV === "production" ||
+    process.env.NODE_ENV === "production"
+      ? backendConfig.productionOrigin
+      : undefined);
   if (!configured) {
     return res.status(503).json({
       error: "Academy backend is not connected. / خادم الأكاديمية غير متصل.",

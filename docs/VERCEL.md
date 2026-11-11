@@ -25,16 +25,16 @@ Backend settings:
 | `PUBLIC_ORIGIN` | `https://horsesacutionapp.vercel.app` |
 | `DATABASE_PATH` | `/var/lib/academy/academy.sqlite` |
 
-Use the platform-assigned `PORT`. Keep the Docker runtime start command; do not start Vite on the backend host. Wait until `https://YOUR-BACKEND-HOST/api/health` responds with `{"status":"ok","database":true}`. Save that backend HTTPS origin.
+Use the platform-assigned `PORT`. Keep the Docker runtime start command; do not start Vite on the backend host. Wait until `https://riyadhpolo.softfm.com/api/health` responds with `{"status":"ok","database":true}`. Save that backend HTTPS origin.
 
 The origin must be your **real backend address**, not an example value or the Vercel website URL. Do not add `/api` to it. If you change the public website hostname later, update `PUBLIC_ORIGIN` on the backend to that exact origin.
 
 ## 2. Connect Vercel
 
-In the Vercel project's **Settings → Environment Variables**, add:
+Production uses `config/backend.json` with `https://riyadhpolo.softfm.com` by default. In the Vercel project's **Settings → Environment Variables**, remove an outdated override or set:
 
 ```
-ACADEMY_BACKEND_URL=https://YOUR-ACTUAL-BACKEND-HOST
+ACADEMY_BACKEND_URL=https://riyadhpolo.softfm.com
 ```
 
 Set it for **Production**, then redeploy the latest `main` commit. The variable belongs to the Vercel server function; it does not need a `VITE_` prefix. Use Node.js 24 and leave the output directory as `dist`; `vercel.json` configures the Vite build and API function. Do not set a project root of `src` or `dist`: the project root must include the top-level `api` directory. Preserve any existing environment settings unrelated to this connection.
@@ -68,3 +68,9 @@ docker run --rm -p 3001:3001 --mount source=academy-data,target=/var/lib/academy
 ```
 
 This is a backend health/startup check. Login mutations must originate from the configured public website through its proxy. For ordinary local development, use `npm run dev` without `NODE_ENV=production`.
+
+## Backend subdomain
+
+The supplied subdomain is `riyadhpolo.softfm.com`. Enable a valid HTTPS certificate and reverse proxy that hostname to the persistent Node service (default port 3001). Preserve the `/api/*` path. The supplied HTTP address alone is insufficient for the production proxy, which requires HTTPS for authentication and payment data. Set `HOST=0.0.0.0`, mount the persistent database disk, and retain `PUBLIC_ORIGIN=https://horsesacutionapp.vercel.app` when browsers use that frontend. `PUBLIC_ORIGIN` is the browser website origin, not the backend hostname. No DNS, hosting, TLS or Vercel environment settings are changed by a Git push.
+
+Verify `https://riyadhpolo.softfm.com/api/health` returns API JSON, then redeploy the frontend and backend from the same commit. An existing `ACADEMY_BACKEND_URL` overrides the repository default and must be updated if it still points at an old host.
