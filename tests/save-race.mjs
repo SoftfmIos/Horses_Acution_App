@@ -17,7 +17,12 @@ try {
     args: ["--no-sandbox"],
   });
   const page = await browser.newPage();
-  const errors = [];
+  const errors = [],
+    reads = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/data") reads.push(url);
+  });
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("http://127.0.0.1:" + server.address().port);
   await page
@@ -41,7 +46,7 @@ try {
   let signal;
   const started = new Promise((r) => (signal = r));
   let first = true;
-  await page.route("**/api/data", async (route) => {
+  await page.route("**/api/data*", async (route) => {
     const response = await route.fetch();
     if (first) {
       first = false;
@@ -69,18 +74,25 @@ try {
     db.prepare("SELECT count(*) AS n FROM records WHERE kind='horses'").get().n,
     1,
   );
-  await page.unroute("**/api/data");
+  await page.unroute("**/api/data*");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByLabel("Name (English)", { exact: true })
     .fill("Omitted horse");
-  await page.route("**/api/data", async (route) => {
+  await page.route("**/api/data*", async (route) => {
     const response = await route.fetch();
     const payload = await response.json();
     payload.horses = payload.horses.filter((h) => h.name !== "Omitted horse");
     await route.fulfill({ response, json: payload });
   });
+  await page.route("**/api/records/horses/*", (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Record not found" }),
+    }),
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Save", exact: true })
@@ -89,20 +101,51 @@ try {
   await page.waitForFunction(() =>
     document
       .querySelector(".toast")
-      ?.textContent.includes("record could not be verified"),
+      ?.textContent.includes("could not read the record back"),
   );
   assert.equal(
     db.prepare("SELECT count(*) AS n FROM records WHERE kind='horses'").get().n,
     2,
   );
-  await page.unroute("**/api/data");
+  await page.unroute("**/api/records/horses/*");
+  await page.unroute("**/api/data*");
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await page
     .getByRole("heading", { name: "Omitted horse", exact: true })
     .waitFor();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Name (English)", { exact: true })
+    .fill("Readback horse");
+  await page.route("**/api/data*", async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    payload.horses = payload.horses.filter((h) => h.name !== "Readback horse");
+    await route.fulfill({ response, json: payload });
+  });
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page
+    .getByRole("heading", { name: "Readback horse", exact: true })
+    .waitFor();
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".toast")?.textContent === "Saved successfully.",
+  );
+  assert.equal(
+    db.prepare("SELECT count(*) AS n FROM records WHERE kind='horses'").get().n,
+    3,
+  );
+  await page.unroute("**/api/data*");
   assert.equal(errors.length, 0);
+  assert.ok(reads.every((url) => url.searchParams.has("_fresh")));
+  assert.equal(new Set(reads.map((url) => url.href)).size, reads.length);
   console.log(
-    "PASS overlapping save refresh, no duplicate writes, genuine missing-record warning, and refresh recovery",
+    "PASS uncached reads, overlapping refresh, direct read-back recovery, no duplicate writes and genuine read-back failure",
   );
 } finally {
   release?.();

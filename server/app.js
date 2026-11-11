@@ -1135,6 +1135,10 @@ export function createApp(
         );
     }
   }
+  app.get("/api/records/:kind/:id", owner, (req, res) => {
+    if (!kinds.includes(req.params.kind)) fail("Unknown module", 404);
+    res.json(record(req.org.id, req.params.kind, req.params.id));
+  });
   app.post("/api/records/:kind", owner, (req, res) => {
     const { kind } = req.params;
     if (!kinds.includes(kind)) fail("Unknown module", 404);

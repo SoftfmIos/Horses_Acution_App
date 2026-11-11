@@ -1,5 +1,11 @@
 export async function api(path, { method = "GET", body, stableId } = {}) {
-  const response = await fetch("/api" + path, {
+  const url = "/api" + path;
+  // A unique URL also avoids intermediary caches that ignore fetch cache settings.
+  const freshUrl =
+    method === "GET"
+      ? url + (url.includes("?") ? "&" : "?") + "_fresh=" + crypto.randomUUID()
+      : url;
+  const response = await fetch(freshUrl, {
     method,
     credentials: "same-origin",
     cache: "no-store",

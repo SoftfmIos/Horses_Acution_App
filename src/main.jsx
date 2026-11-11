@@ -925,22 +925,56 @@ function App() {
       b.value = Math.round(b.value * 100);
     setBusy(true);
     try {
-      const kind = modal.kind;
+      const kind = modal.kind,
+        savedStable = stable?.id;
       const saved = await request(
         "/records/" + kind + (modal.record ? "/" + modal.record.id : ""),
         { method: modal.record ? "PUT" : "POST", body: b },
       );
+      if (stableRef.current !== savedStable) return;
       // A successful write must not be hidden by an old search filter.
       setModal(null);
       go(kind === "plans" ? "pricing" : kind);
       const loaded = await refresh();
+      if (stableRef.current !== savedStable) return;
       if (loaded?.[kind]?.some((r) => r.id === saved.id)) notify(t.saved);
       else {
-        const message = ar
-          ? "تم إرسال الحفظ، لكن تعذر تأكيد ظهور السجل. حدّث الصفحة للتحقق قبل الإضافة مرة أخرى."
-          : "The save was submitted, but the record could not be verified in the list. Refresh before adding it again.";
-        setFailure(message);
-        notify(message);
+        try {
+          if (typeof saved.id !== "string" || !saved.id)
+            throw new Error("The backend returned no saved record ID");
+          const verified = await request(
+            "/records/" + kind + "/" + encodeURIComponent(saved.id),
+          );
+          if (stableRef.current !== savedStable) return;
+          if (verified.id !== saved.id)
+            throw new Error("The backend returned a different record");
+          // This is a server-confirmed record, not an optimistic copy of the form.
+          // A delayed collection response must not hide a successful read-back.
+          setData((previous) => ({
+            ...previous,
+            [kind]: [
+              ...(Array.isArray(previous[kind]) ? previous[kind] : []).filter(
+                (row) => row.id !== verified.id,
+              ),
+              verified,
+            ],
+          }));
+          setFailure("");
+          notify(t.saved);
+        } catch (error) {
+          const detail = error.status ? "HTTP " + error.status : error.message;
+          const message = ar
+            ? "قبل الخادم الحفظ، لكن تعذر تأكيد السجل من قاعدة البيانات (" +
+              detail +
+              "). حدّث الصفحة قبل الإضافة مرة أخرى. معرف السجل: " +
+              (saved.id || "—")
+            : "The backend accepted the save but could not read the record back (" +
+              detail +
+              "). Refresh before adding it again. Record ID: " +
+              (saved.id || "missing");
+          setFailure(message);
+          notify(message);
+        }
       }
     } catch (e) {
       if (e.code === "BACKEND_UPDATE_REQUIRED") setFailure(e.message);

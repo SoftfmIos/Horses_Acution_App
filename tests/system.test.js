@@ -1321,3 +1321,21 @@ test("multiple stables isolate horses and members while managers can link existi
   f.owner.stable = first;
   assert.equal((await f.owner.call("/data")).horses.length, 1);
 });
+
+test("saved record read-back is scoped and permission checked", async (t) => {
+  const f = await fixture(t);
+  const { horse } = await setup(f);
+  let r = await f.owner.call("/records/horses/" + horse.id);
+  assert.equal(r.httpStatus, 200);
+  assert.equal(r.id, horse.id);
+  assert.equal(r.name, "Shams");
+  assert.equal(
+    (await f.other.call("/records/horses/" + horse.id)).httpStatus,
+    404,
+  );
+  assert.equal(
+    (await f.member.call("/records/horses/" + horse.id)).httpStatus,
+    403,
+  );
+  assert.equal((await f.owner.call("/records/horses/missing")).httpStatus, 404);
+});

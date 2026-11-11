@@ -65,7 +65,7 @@ let browser;
       .click();
   };
   // Reproduce the incomplete response from an older cPanel backend across every Add form.
-  await page.route("**/api/data", async (route) => {
+  await page.route("**/api/data*", async (route) => {
     const response = await route.fetch();
     const payload = await response.json();
     for (const key of [
@@ -147,7 +147,7 @@ let browser;
     .getByRole("dialog")
     .getByRole("button", { name: "Cancel", exact: true })
     .click();
-  await page.unroute("**/api/data");
+  await page.unroute("**/api/data*");
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await settingsAdd("Horse breeds");
   await field("Name (English)").fill("Arabian");
