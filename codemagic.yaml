@@ -31,8 +31,9 @@ workflows:
       app_store_connect: Riyadh Polo Hills
     environment:
       xcode: "26.4"
-      groups:
-        - riyadh_polo_app_store
+      vars:
+        # Public App Store Connect app identifier; signing credentials stay in the integration.
+        APP_STORE_APPLE_ID: "6834111389"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.riyadhpolohills.academy

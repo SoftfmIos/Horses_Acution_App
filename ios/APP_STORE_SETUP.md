@@ -24,7 +24,7 @@ If the identifier already exists, use that identifier on the same team. Do not c
 6. Bundle ID: select **com.riyadhpolohills.academy**. Refresh the page if it was just registered and is not listed.
 7. SKU: **RPH-IOS-001**. This is an internal identifier; it is not the Bundle ID or numeric Apple ID.
 8. User access: select the appropriate team access, then **Create**.
-9. Open **App Information** and copy the numeric **Apple ID**. This number is safe to share and is needed in the next step.
+9. Open **App Information** and check the numeric **Apple ID**. This app uses **6834111389**, already configured in the TestFlight workflow. The number is safe to share.
 
 The Apple ID does not exist until the app record has been created. Do not enter an Apple login email into the Apple ID field in Codemagic.
 
@@ -35,14 +35,14 @@ The Apple ID does not exist until the app record has been created. Do not enter 
 3. If prompted for an App Store Connect API key, create a **team API key** in **App Store Connect → Users and Access → Integrations → App Store Connect API**. An account holder/admin may need to enable API access first. Use sufficient privileges for app distribution and signing management; Codemagic commonly uses an **App Manager** key, with Apple Developer certificate access available to the team.
 4. Enter the key ID, issuer ID and downloaded `.p8` private key directly into Codemagic's secure integration form. Never paste the private key, Apple password or signing certificate into chat or Git.
 5. Under Codemagic's iOS signing settings, configure automatic **App Store** signing for **com.riyadhpolohills.academy**, using the same team. Allow Codemagic to fetch/generate the required Apple Distribution certificate and App Store provisioning profile. If a certificate already exists, its matching private key must also be available to Codemagic.
-6. In your Codemagic application, create an environment-variable group named **riyadh_polo_app_store**. Add **APP_STORE_APPLE_ID** with the numeric Apple ID from step 2, and make the group available to this app/workflow. The number is not a secret.
+6. No environment-variable group is required. The TestFlight workflow already declares `APP_STORE_APPLE_ID: "6834111389"` under `environment.vars` in `codemagic.yaml`. If using a different app record, update that value to its numeric Apple ID. Leave signing keys and certificates in Codemagic’s secure integration/signing settings.
 
 If Codemagic reports certificate/profile permissions errors, have the Apple team administrator complete signing setup. API publishing access and usable signing identities are both required.
 
 ## 4. Start the TestFlight deployment
 
 1. In Codemagic choose the GitHub repository **SoftfmIos/Horses_Acution_App**.
-2. Refresh its repository configuration so it detects the root **codemagic.yaml** on branch **iOSApp**.
+2. Refresh its repository configuration so it detects the latest root **codemagic.yaml** on branch **iOSApp**. Refresh both the branch and workflow selectors if the start-build dialog was already open. The workflows pin Xcode **26.4**.
 3. Choose **Start new build → iOSApp → Riyadh Polo Hills - signed TestFlight deployment**.
 4. Start the build. It verifies that the numeric Apple ID belongs to the configured Bundle ID, selects a build number newer than the previous TestFlight build, runs simulator tests, applies signing profiles, builds the IPA, and uploads through the named App Store Connect integration.
 5. When Apple finishes processing, open **App Store Connect → Riyadh Polo Hills → TestFlight**.

@@ -59,7 +59,7 @@ Push notification delivery, if requested later, requires backend APNs device reg
 
 ## Codemagic and TestFlight
 
-A root `codemagic.yaml` defines an automatic unsigned simulator-check workflow and a manually started signed TestFlight workflow. Follow [Apple registration and Codemagic setup](APP_STORE_SETUP.md). The TestFlight workflow expects the App Store Connect integration named **Riyadh Polo Hills** and environment group **riyadh_polo_app_store** containing **APP_STORE_APPLE_ID**. No signing secrets are stored in this repository.
+A root `codemagic.yaml` defines an automatic unsigned simulator-check workflow and a manually started signed TestFlight workflow. Follow [Apple registration and Codemagic setup](APP_STORE_SETUP.md). The TestFlight workflow expects the App Store Connect integration named **Riyadh Polo Hills** and declares the public Apple ID **6834111389** as **APP_STORE_APPLE_ID** directly in the workflow. No environment-variable group is needed. No signing secrets are stored in this repository.
 
 ## Class reminders (1.0.1)
 

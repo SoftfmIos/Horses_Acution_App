@@ -28,7 +28,7 @@ def cli_json(*arguments):
 def main():
     app_id = os.environ.get("APP_STORE_APPLE_ID", "").strip()
     if not re.fullmatch(r"[0-9]+", app_id):
-        raise SystemExit("Create the App Store Connect app first, then set its numeric Apple ID as APP_STORE_APPLE_ID in Codemagic group riyadh_polo_app_store.")
+        raise SystemExit("Set APP_STORE_APPLE_ID to the numeric Apple ID from App Store Connect > App Information in codemagic.yaml under ios-testflight > environment > vars.")
     config_path = ROOT / "Configuration/App.xcconfig"
     config = config_path.read_text()
     bundle_id = re.search(r"^PRODUCT_BUNDLE_IDENTIFIER\s*=\s*(\S+)\s*$", config, re.M).group(1)
