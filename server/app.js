@@ -171,7 +171,22 @@ export function createApp(
     );
   function awardCredits(pid) {
     const p = get("SELECT * FROM proformas WHERE id=?", pid);
-    if (p.credit_quantity > 0 && !p.credit_awarded && p.status === "settled") {
+    if (
+      p.credit_quantity > 0 &&
+      !p.credit_awarded &&
+      p.status === "settled" &&
+      p.paid >= p.due
+    ) {
+      if (
+        get(
+          "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+          p.org_id,
+          p.id,
+        )
+      ) {
+        run("UPDATE proformas SET credit_awarded=1 WHERE id=?", p.id);
+        return;
+      }
       creditEntry(
         p.org_id,
         p.member_id,
@@ -1560,6 +1575,16 @@ export function createApp(
   app.get("/api/data", (req, res) => {
     const org = req.org.id,
       manager = req.org.role === "owner";
+    // Heal only fully-paid, immutable credit snapshots that have not been granted.
+    // Legacy invoices without a snapshot require an administrator's explicit review.
+    transaction(() => {
+      for (const p of all(
+        "SELECT id FROM proformas WHERE org_id=? AND status='settled' AND paid>=due AND credit_quantity>0 AND credit_awarded=0" +
+          (manager ? "" : " AND member_id=?"),
+        ...(manager ? [org] : [org, req.user.id]),
+      ))
+        awardCredits(p.id);
+    });
     const members = all(
       "SELECT u.id,u.name,u.email,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
       org,
@@ -1637,6 +1662,41 @@ export function createApp(
         return {
           descriptionEn: source?.titleEn || source?.nameEn || p.description,
           descriptionAr: source?.titleAr || source?.nameAr || "",
+        };
+      })(),
+      sessionCreditStatus: (() => {
+        const candidates = records(org, "plans").filter(
+          (plan) =>
+            plan.kind === "package" &&
+            (p.plan_id ? p.plan_id === plan.id : p.description === plan.name),
+        );
+        if (!p.credit_quantity && (!candidates.length || p.reservation_id))
+          return null;
+        const granted = !!get(
+          "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+          org,
+          p.id,
+        );
+        return {
+          quantity: p.credit_quantity,
+          awarded: !!p.credit_awarded && granted,
+          status: ["void", "refund_required"].includes(p.status)
+            ? "refunded"
+            : p.status !== "settled"
+              ? "pending"
+              : !p.credit_quantity
+                ? "missing_snapshot"
+                : granted && p.credit_awarded
+                  ? "credited"
+                  : "needs_review",
+          canRepair:
+            !p.credit_awarded &&
+            !granted &&
+            p.status === "settled" &&
+            p.paid >= p.due,
+          matchedPlanId: candidates.length === 1 ? candidates[0].id : null,
+          suggestedQuantity:
+            candidates.length === 1 ? candidates[0].credits : null,
         };
       })(),
       activation:
@@ -1718,6 +1778,21 @@ export function createApp(
             )?.status || "open",
         }))
       : [];
+    result.stallOccupancy =
+      manager &&
+      (req.org.isAdmin ||
+        req.org.permissions.includes("stalls") ||
+        req.org.permissions.includes("boarding"))
+        ? records(org, "boarding")
+            .filter((b) => b.status === "active")
+            .map((b) => ({
+              id: b.id,
+              stallId: b.stallId,
+              status: b.status,
+              startDate: b.startDate,
+              endDate: b.endDate,
+            }))
+        : [];
     result.stockMovements = manager ? records(org, "stockMovements") : [];
     if (!manager) result.stalls = [];
     result.userRole = req.org.role;
@@ -2416,8 +2491,11 @@ export function createApp(
       plan.amount,
       plan.amount === 0 ? "settled" : "open",
       now(),
-      plan.credits || 0,
+      plan.kind === "package"
+        ? integer(Number(plan.credits), "package session quantity", 1, 1000)
+        : 0,
     );
+    run("UPDATE proformas SET plan_id=? WHERE id=?", plan.id, pid);
     awardCredits(pid);
     notify(
       org,
@@ -2442,6 +2520,74 @@ export function createApp(
     );
     res.status(201).json({ id: pid });
   });
+  app.post(
+    "/api/proformas/:id/session-credits",
+    owner,
+    adminOnly,
+    (req, res) => {
+      const org = req.org.id;
+      const p = get(
+        "SELECT * FROM proformas WHERE org_id=? AND id=?",
+        org,
+        req.params.id,
+      );
+      if (!p) fail("Payment request not found", 404);
+      if (p.reservation_id || p.status !== "settled" || p.paid < p.due)
+        fail(
+          "Only fully paid package requests can receive missing credits",
+          409,
+        );
+      const existing = get(
+        "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+        org,
+        p.id,
+      );
+      if (p.credit_awarded || existing)
+        fail(
+          "Credits have already been processed; no additional credits were added",
+          409,
+        );
+      const reason = text(req.body.reason, "credit correction reason", 500);
+      const quantity = integer(
+        req.body.credits,
+        "confirmed session quantity",
+        1,
+        1000,
+      );
+      let planId = p.plan_id;
+      if (p.credit_quantity > 0) {
+        if (quantity !== p.credit_quantity)
+          fail("Use the original package session quantity", 409);
+      } else {
+        const plan = record(org, "plans", req.body.planId);
+        if (
+          plan.kind !== "package" ||
+          (p.plan_id ? p.plan_id !== plan.id : p.description !== plan.name)
+        )
+          fail("Select the lesson package matching this payment request", 409);
+        planId = plan.id;
+      }
+      transaction(() => {
+        run(
+          "UPDATE proformas SET credit_quantity=?,plan_id=? WHERE id=?",
+          quantity,
+          planId || null,
+          p.id,
+        );
+        awardCredits(p.id);
+        audit(req, "package.credits.repaired", p.id);
+        put(org, "creditCorrections", id(), {
+          proformaId: p.id,
+          memberId: p.member_id,
+          credits: quantity,
+          reason,
+          actorId: req.user.id,
+          createdAt: now(),
+        });
+      });
+      res.json({ ok: true, credits: quantity });
+    },
+  );
   app.post("/api/proformas/:id/refund", owner, (req, res) => {
     transaction(() => {
       const p = get(

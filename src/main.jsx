@@ -1,3 +1,4 @@
+import { BuySessions, PackageCreditStatus } from "./SessionCredits";
 import { AccountRecovery, ResetPassword } from "./AccountRecovery";
 import { InstructorBadge } from "./InstructorBadge";
 import { PaymentReport } from "./PaymentReport";
@@ -20,6 +21,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CalendarDays,
+  Printer,
   Users,
   HeartPulse,
   LayoutDashboard,
@@ -87,6 +89,7 @@ const dict = {
     memberPortal: "Member portal",
     myAccount: "My account",
     accountBalance: "My balance",
+    buySessions: "Buy sessions",
     sessionBalance: "Lesson credits remaining",
     credits: "Session credits (packages only)",
     creditCost: "Credits per booking",
@@ -328,6 +331,7 @@ const dict = {
     memberPortal: "بوابة العضو",
     myAccount: "حسابي",
     accountBalance: "رصيدي",
+    buySessions: "شراء حصص",
     sessionBalance: "رصيد الحصص المتبقي",
     credits: "عدد الحصص (للباقات فقط)",
     creditCost: "رصيد الحصص المطلوب للحجز",
@@ -588,6 +592,8 @@ function App() {
     [instructorFilter, setInstructorFilter] = useState(""),
     [q, setQ] = useState(""),
     [reports, setReports] = useState(null),
+    [paymentPrintRequest, setPaymentPrintRequest] = useState(0),
+    [paymentCanPrint, setPaymentCanPrint] = useState(false),
     [calendarDate, setCalendarDate] = useState(""),
     [taskPlanFilter, setTaskPlanFilter] = useState(null),
     [pendingVoucher, setPendingVoucher] = useState(() => {
@@ -755,7 +761,16 @@ function App() {
     setData(fresh);
     refresh();
     const timer = setInterval(() => refresh(true), 30000);
-    return () => clearInterval(timer);
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh(true);
+    };
+    window.addEventListener("focus", visible);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", visible);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, [stable?.id]);
   const notify = (m) => {
     setToast(m);
@@ -795,13 +810,20 @@ function App() {
   const go = (p) => {
     if (p === "tasks") setTaskPlanFilter(null);
     setPage(p);
+    if (["accountBalance", "buySessions", "billing"].includes(p) && stable)
+      refresh(true);
     setQ("");
     setMenu(false);
   };
   const nav = [
     ["overview", LayoutDashboard],
     ["classes", CalendarDays],
-    ...(!manager ? [["accountBalance", BookOpen]] : []),
+    ...(!manager
+      ? [
+          ["accountBalance", BookOpen],
+          ["buySessions", Ticket],
+        ]
+      : []),
     ["horses", HorseHead],
     ...(client ? [["instructors", GraduationCap]] : []),
     ...(manager
@@ -844,6 +866,7 @@ function App() {
           "overview",
           "classes",
           "accountBalance",
+          "buySessions",
           "horses",
           "instructors",
           "billing",
@@ -1144,6 +1167,10 @@ function App() {
       kind,
       record: row || null,
       form: { ...defaults(kind), ...row },
+      returnPage:
+        page === "boardingManagement" && kind === "stalls"
+          ? "boardingManagement"
+          : null,
     });
   }
   async function saveRecord(e) {
@@ -1278,7 +1305,7 @@ function App() {
       }
       // A successful write must not be hidden by an old search filter.
       setModal(null);
-      go(kind === "plans" ? "pricing" : kind);
+      go(modal.returnPage || (kind === "plans" ? "pricing" : kind));
       if (kind === "classes") {
         setInstructorFilter("");
         setCalendarDate(riyadhDay(saved.startsAt));
@@ -1452,6 +1479,17 @@ function App() {
               {t[r.status]}
             </span>
             <p>{r.notes}</p>
+          </>
+        ) : kind === "stalls" ? (
+          <>
+            <p>
+              {ar ? "السعة" : "Capacity"}: {r.capacity}
+            </p>
+            <p>{r.active ? t.active : ar ? "غير مفعّل" : "Inactive"}</p>
+            <p>{r.notes}</p>
+            <button className="soft" onClick={() => go("boardingManagement")}>
+              {ar ? "عرض التوفر والإيواء" : "View availability & boarding"}
+            </button>
           </>
         ) : kind === "plans" ? (
           <>
@@ -1888,13 +1926,34 @@ function App() {
                   {t.add}
                 </button>
               )}
-            {page === "billing" && canManage("billing", "add") && (
-              <button
-                className="primary"
-                onClick={() => setModal({ kind: "manualBilling", form: {} })}
+            {page === "billing" && manager && (
+              <div
+                className="billing-header-actions"
+                role="group"
+                aria-label={
+                  ar ? "إجراءات طلبات الدفع" : "Payment request actions"
+                }
               >
-                {t.createRequest}
-              </button>
+                <button
+                  className="soft payment-report-print-button"
+                  disabled={!paymentCanPrint}
+                  onClick={() => setPaymentPrintRequest((value) => value + 1)}
+                >
+                  <Printer size={17} />
+                  {ar ? "طباعة تقرير الدفعات" : "Print payment report"}
+                </button>
+                {canManage("billing", "add") && (
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      setModal({ kind: "manualBilling", form: {} })
+                    }
+                  >
+                    <Plus size={17} />
+                    {t.createRequest}
+                  </button>
+                )}
+              </div>
             )}
             {page === "members" && canManage("members", "add") && (
               <button
@@ -2188,6 +2247,25 @@ function App() {
               <p className="notice">{t.cancelPolicy}</p>
             </>
           )}
+          {page === "buySessions" && !manager && (
+            <BuySessions
+              key={stable.id}
+              data={data}
+              ar={ar}
+              money={money}
+              request={request}
+              action={action}
+              busy={busy}
+              onCreated={() => {
+                go("billing");
+                notify(
+                  ar
+                    ? "تم إنشاء طلب الدفع. تضاف الحصص بعد تأكيد السداد الكامل."
+                    : "Payment request created. Sessions are added after staff confirm full payment.",
+                );
+              }}
+            />
+          )}
           {page === "accountBalance" && !manager && (
             <>
               <div className="balance-hero panel">
@@ -2195,11 +2273,36 @@ function App() {
                   <p>{t.sessionBalance}</p>
                   <div className="big-money">{data.creditBalance}</div>
                 </div>
-                <button className="primary" onClick={() => go("pricing")}>
-                  {t.requestPackage}
+                <button className="primary" onClick={() => go("buySessions")}>
+                  {t.buySessions}
                 </button>
               </div>
               <p className="notice">{t.packageNotice}</p>
+              <button
+                className="soft"
+                disabled={busy}
+                onClick={() => refresh()}
+              >
+                {ar ? "تحديث رصيد الحصص" : "Refresh session balance"}
+              </button>
+              {data.proformas
+                .filter((p) => p.sessionCreditStatus)
+                .map((p) => (
+                  <article className="panel" key={p.id}>
+                    <h3>{p.description}</h3>
+                    <p>
+                      {t[p.status] || p.status} · {money(p.paid)} /{" "}
+                      {money(p.due)}
+                    </p>
+                    <PackageCreditStatus invoice={p} ar={ar} />
+                    <button
+                      className="soft"
+                      onClick={() => setModal({ kind: "proforma", record: p })}
+                    >
+                      {t.view}
+                    </button>
+                  </article>
+                ))}
               <div className="panel table-wrap">
                 <h2>{t.creditHistory}</h2>
                 <table>
@@ -2733,6 +2836,8 @@ function App() {
                   money={money}
                   when={when}
                   stableName={localizedName(stable, ar)}
+                  printRequest={paymentPrintRequest}
+                  onCanPrintChange={setPaymentCanPrint}
                 />
               )}
               <p className="notice">
@@ -3309,6 +3414,18 @@ function App() {
                   <h3>{t.brand}</h3>
                 </div>
                 <p>{modal.record.description}</p>
+                <PackageCreditStatus
+                  invoice={
+                    data.proformas.find((p) => p.id === modal.record.id) ||
+                    modal.record
+                  }
+                  ar={ar}
+                  admin={isSystemAdmin}
+                  action={action}
+                  request={request}
+                  busy={busy}
+                />
+
                 <p>
                   {ar ? "التفعيل" : "Activation"}:{" "}
                   {modal.record.activation === "active"

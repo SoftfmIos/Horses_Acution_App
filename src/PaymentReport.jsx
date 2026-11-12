@@ -1,9 +1,19 @@
-import React, { useState } from "react";
+import { historyMonths } from "./historyMonths";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { paymentReport } from "./paymentReport";
-export function PaymentReport({ data, ar, money, when, stableName }) {
+export function PaymentReport({
+  data,
+  ar,
+  money,
+  when,
+  stableName,
+  printRequest = 0,
+  onCanPrintChange,
+}) {
   const [groupBy, setGroupBy] = useState("invoice"),
     [search, setSearch] = useState(""),
+    [month, setMonth] = useState(""),
     [from, setFrom] = useState(""),
     [to, setTo] = useState(""),
     [preview, setPreview] = useState(false);
@@ -11,7 +21,17 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
   const groups = paymentReport({ ...data, groupBy, search, from, to });
   const total = (key) => groups.reduce((sum, g) => sum + g[key], 0);
   const invalid = from && to && from > to;
-  const sheet = () => (
+  const previousPrint = useRef(printRequest);
+  useEffect(() => {
+    onCanPrintChange?.(!invalid && groups.length > 0);
+  }, [invalid, groups.length, onCanPrintChange]);
+  useEffect(() => {
+    if (printRequest !== previousPrint.current) {
+      previousPrint.current = printRequest;
+      if (!invalid && groups.length) setPreview(true);
+    }
+  }, [printRequest, invalid, groups.length]);
+  const sheet = (print = false) => (
     <div className="payment-report-sheet" dir={ar ? "rtl" : "ltr"}>
       <div className="print-brand">
         <img
@@ -57,42 +77,60 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
             {l("Total paid", "إجمالي المدفوع")}: {money(g.paid)} ·{" "}
             {l("Outstanding", "المتبقي")}: {money(g.outstanding)}
           </p>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  {[
-                    l("User", "المستخدم"),
-                    l("Pro forma", "الفاتورة المبدئية"),
-                    l("Date (Riyadh)", "التاريخ (الرياض)"),
-                    l("Reference", "المرجع"),
-                    l("Details", "التفاصيل"),
-                    l("Amount", "المبلغ"),
-                  ].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {g.rows.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.user?.name || p.invoice.member_id}</td>
-                    <td>
-                      {p.invoice.description}
-                      <small className="record-id">{p.invoice.id}</small>
-                    </td>
-                    <td>{when(p.created_at)}</td>
-                    <td>{p.reference}</td>
-                    <td>{p.external_ref || "—"}</td>
-                    <td>
-                      {money(p.amount)}
-                      {p.amount < 0 && <small> {l("Refund", "استرداد")}</small>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {historyMonths(g.rows, (p) => p.created_at, ar).map((month) => (
+            <details
+              className="payment-month"
+              key={month.key}
+              open={print || undefined}
+            >
+              <summary>
+                <strong>{month.title}</strong>
+                <span>
+                  {month.items.length} {l("payments", "دفعات")} ·{" "}
+                  {l("Net", "الصافي")}:{" "}
+                  {money(month.items.reduce((sum, p) => sum + p.amount, 0))}
+                </span>
+              </summary>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      {[
+                        l("User", "المستخدم"),
+                        l("Pro forma", "الفاتورة المبدئية"),
+                        l("Date (Riyadh)", "التاريخ (الرياض)"),
+                        l("Reference", "المرجع"),
+                        l("Details", "التفاصيل"),
+                        l("Amount", "المبلغ"),
+                      ].map((h) => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {month.items.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.user?.name || p.invoice.member_id}</td>
+                        <td>
+                          {p.invoice.description}
+                          <small className="record-id">{p.invoice.id}</small>
+                        </td>
+                        <td>{when(p.created_at)}</td>
+                        <td>{p.reference}</td>
+                        <td>{p.external_ref || "—"}</td>
+                        <td>
+                          {money(p.amount)}
+                          {p.amount < 0 && (
+                            <small> {l("Refund", "استرداد")}</small>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
           <p>
             <strong>
               {l("Net payments in this group", "صافي دفعات المجموعة")}:{" "}
@@ -124,7 +162,11 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
       <div className="settings-form">
         <label>
           {l("Group payments by", "تجميع الدفعات حسب")}
-          <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+          <select
+            aria-label={l("Group payments by", "تجميع الدفعات حسب")}
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value)}
+          >
             <option value="invoice">
               {l("Pro forma invoice", "الفاتورة المبدئية")}
             </option>
@@ -144,11 +186,35 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
           />
         </label>
         <label>
+          {l("Payment month", "شهر الدفعات")}
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => {
+              const value = e.target.value;
+              setMonth(value);
+              if (value) {
+                const [year, m] = value.split("-").map(Number);
+                setFrom(value + "-01");
+                setTo(
+                  new Date(Date.UTC(year, m, 0)).toISOString().slice(0, 10),
+                );
+              } else {
+                setFrom("");
+                setTo("");
+              }
+            }}
+          />
+        </label>
+        <label>
           {l("From date", "من تاريخ")}
           <input
             type="date"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              setMonth("");
+            }}
           />
         </label>
         <label>
@@ -156,7 +222,10 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
           <input
             type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => {
+              setTo(e.target.value);
+              setMonth("");
+            }}
           />
         </label>
       </div>
@@ -168,13 +237,6 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
           )}
         </p>
       )}
-      <button
-        className="primary"
-        disabled={Boolean(invalid) || !groups.length}
-        onClick={() => setPreview(true)}
-      >
-        {l("Print payment report", "طباعة تقرير الدفعات")}
-      </button>
       {!invalid && sheet()}
       {preview &&
         createPortal(
@@ -194,7 +256,7 @@ export function PaymentReport({ data, ar, money, when, stableName }) {
                   {l("Close", "إغلاق")}
                 </button>
               </div>
-              {sheet()}
+              {sheet(true)}
             </section>
           </div>,
           document.body,

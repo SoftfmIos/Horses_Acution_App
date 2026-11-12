@@ -3078,3 +3078,236 @@ test("instructors upload only their own linked photos without general instructor
     200,
   );
 });
+
+test("fully paid package snapshots recover missing credits exactly once without granting unpaid packages", async (t) => {
+  const f = await fixture(t);
+  const plan = await f.create("plans", {
+    name: "Recovery package",
+    kind: "package",
+    amount: 10000,
+    credits: 5,
+    active: true,
+  });
+  const order = await f.member.call("/packages", "POST", { planId: plan.id });
+  assert.equal(
+    f.db.prepare("SELECT plan_id FROM proformas WHERE id=?").get(order.id)
+      .plan_id,
+    plan.id,
+  );
+  await f.owner.call("/proformas/" + order.id + "/payment", "POST", {
+    amount: 10000,
+    reference: "RECOVERY-FULL",
+    externalRef: "Received",
+  });
+  f.db
+    .prepare(
+      "DELETE FROM credit_ledger WHERE proforma_id=? AND reason='package.paid'",
+    )
+    .run(order.id);
+  f.db
+    .prepare("UPDATE proformas SET credit_awarded=0 WHERE id=?")
+    .run(order.id);
+  assert.equal((await f.member.call("/data")).creditBalance, 5);
+  assert.equal((await f.member.call("/data")).creditBalance, 5);
+  assert.equal(
+    f.db
+      .prepare(
+        "SELECT count(*) n FROM credit_ledger WHERE proforma_id=? AND reason='package.paid'",
+      )
+      .get(order.id).n,
+    1,
+  );
+  f.db
+    .prepare("UPDATE proformas SET credit_awarded=0 WHERE id=?")
+    .run(order.id);
+  assert.equal((await f.member.call("/data")).creditBalance, 5);
+  const unpaid = await f.member.call("/packages", "POST", { planId: plan.id });
+  assert.equal(
+    (await f.member.call("/data")).proformas.find((p) => p.id === unpaid.id)
+      .sessionCreditStatus.status,
+    "pending",
+  );
+  assert.equal((await f.member.call("/data")).creditBalance, 5);
+});
+
+test("legacy paid package correction requires administrator review and cannot grant twice", async (t) => {
+  const f = await fixture(t);
+  const plan = await f.create("plans", {
+    name: "Legacy package",
+    kind: "package",
+    amount: 10000,
+    credits: 5,
+    active: true,
+  });
+  const order = await f.member.call("/packages", "POST", { planId: plan.id });
+  await f.owner.call("/proformas/" + order.id + "/payment", "POST", {
+    amount: 10000,
+    reference: "LEGACY-PAID",
+    externalRef: "Received",
+  });
+  f.db.prepare("DELETE FROM credit_ledger WHERE proforma_id=?").run(order.id);
+  f.db
+    .prepare(
+      "UPDATE proformas SET credit_quantity=0,credit_awarded=0,plan_id=NULL WHERE id=?",
+    )
+    .run(order.id);
+  const data = await f.member.call("/data");
+  assert.equal(data.creditBalance, 0);
+  assert.equal(
+    data.proformas[0].sessionCreditStatus.status,
+    "missing_snapshot",
+  );
+  const body = {
+    credits: 3,
+    planId: plan.id,
+    reason: "Verified original three-session package purchase",
+  };
+  assert.equal(
+    (
+      await f.member.call(
+        "/proformas/" + order.id + "/session-credits",
+        "POST",
+        body,
+      )
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.other.call(
+        "/proformas/" + order.id + "/session-credits",
+        "POST",
+        body,
+      )
+    ).httpStatus,
+    404,
+  );
+  assert.equal(
+    (
+      await f.owner.call(
+        "/proformas/" + order.id + "/session-credits",
+        "POST",
+        body,
+      )
+    ).httpStatus,
+    200,
+  );
+  assert.equal((await f.member.call("/data")).creditBalance, 3);
+  assert.equal(
+    (
+      await f.owner.call(
+        "/proformas/" + order.id + "/session-credits",
+        "POST",
+        body,
+      )
+    ).httpStatus,
+    409,
+  );
+  assert.equal((await f.member.call("/data")).creditBalance, 3);
+  assert.equal(
+    f.db
+      .prepare(
+        "SELECT count(*) n FROM audit WHERE action='package.credits.repaired'",
+      )
+      .get().n,
+    1,
+  );
+});
+
+test("boarding edits retain the invoice, check capacity excluding self and preserve paid terms", async (t) => {
+  const f = await fixture(t),
+    member = (await f.member.call("/auth/me")).user.id;
+  const horse = await f.create("horses", {
+    name: "Boarding horse",
+    ownerId: member,
+  });
+  const second = await f.create("horses", {
+    name: "Second horse",
+    ownerId: member,
+  });
+  const stall = await f.create("stalls", {
+    name: "A",
+    capacity: 1,
+    active: true,
+  });
+  const otherStall = await f.create("stalls", {
+    name: "B",
+    capacity: 1,
+    active: true,
+  });
+  const plan = await f.create("plans", {
+    name: "Boarding",
+    kind: "boarding",
+    amount: 10000,
+    active: true,
+  });
+  const otherPlan = await f.create("plans", {
+    name: "Other boarding",
+    kind: "boarding_full",
+    amount: 20000,
+    active: true,
+  });
+  const body = {
+    horseId: horse.id,
+    stallId: stall.id,
+    memberId: member,
+    planId: plan.id,
+    startDate: "2026-11-11",
+    endDate: "2026-11-20",
+  };
+  const stay = await f.owner.call("/boarding", "POST", body);
+  assert.equal(stay.httpStatus, 201);
+  assert.equal(
+    (
+      await f.owner.call("/boarding/" + stay.id, "PUT", {
+        ...body,
+        endDate: "2026-11-21",
+      })
+    ).httpStatus,
+    200,
+  );
+  const occupied = await f.owner.call("/boarding", "POST", {
+    ...body,
+    horseId: second.id,
+    stallId: otherStall.id,
+  });
+  assert.equal(occupied.httpStatus, 201);
+  assert.equal(
+    (
+      await f.owner.call("/boarding/" + stay.id, "PUT", {
+        ...body,
+        stallId: otherStall.id,
+      })
+    ).httpStatus,
+    409,
+  );
+  await f.owner.call("/proformas/" + stay.invoiceId + "/payment", "POST", {
+    amount: 10000,
+    reference: "BOARD-EDIT-PAID",
+    externalRef: "Received",
+  });
+  const edited = await f.owner.call("/boarding/" + stay.id, "PUT", {
+    ...body,
+    endDate: "2026-11-22",
+  });
+  assert.equal(edited.httpStatus, 200);
+  assert.equal(edited.invoiceId, stay.invoiceId);
+  assert.equal(
+    (
+      await f.owner.call("/boarding/" + stay.id, "PUT", {
+        ...body,
+        planId: otherPlan.id,
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal(
+    (await f.member.call("/boarding/" + stay.id, "PUT", body)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.other.call("/boarding/" + stay.id, "PUT", body)).httpStatus,
+    404,
+  );
+  assert.equal((await f.owner.call("/data")).proformas.length, 2);
+});

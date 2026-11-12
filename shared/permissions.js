@@ -105,7 +105,9 @@ export function permissionForRoute(path, method) {
       : method === "DELETE" || /\/(cancel|end)$/.test(path)
         ? "delete"
         : method === "POST" &&
-            !/\/(toggle|payment|refund|email|email-login)$/.test(path)
+            !/\/(toggle|payment|refund|email|email-login|session-credits)$/.test(
+              path,
+            )
           ? "add"
           : "edit";
   return { page, action };

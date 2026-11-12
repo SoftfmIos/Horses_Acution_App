@@ -394,9 +394,9 @@ export function stableOperations(c) {
     });
     res.json({ ok: true });
   });
-  app.post("/api/boarding", owner, (req, res) => {
+  function boardingDetails(req, previous = null) {
     const org = req.org.id,
-      b = req.body,
+      b = { ...previous, ...req.body },
       horse = record(org, "horses", b.horseId),
       stall = record(org, "stalls", b.stallId),
       plan = record(org, "plans", b.planId);
@@ -415,6 +415,7 @@ export function stableOperations(c) {
       fail("Choose a boarding price");
     const rows = records(org, "boarding").filter(
       (x) =>
+        x.id !== previous?.id &&
         x.status === "active" &&
         x.startDate <= endDate &&
         x.endDate >= startDate,
@@ -432,6 +433,22 @@ export function stableOperations(c) {
         stall.capacity
       )
         fail("Stall capacity is full for these dates", 409);
+    const memberId = b.memberId || horse.ownerId;
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        org,
+        memberId,
+      )
+    )
+      fail("Billed member must belong to this stable");
+    if (!plan.active && plan.id !== previous?.planId)
+      fail("Boarding price is inactive");
+    return { org, b, horse, stall, plan, startDate, endDate, memberId };
+  }
+  app.post("/api/boarding", owner, (req, res) => {
+    const { org, b, horse, stall, plan, startDate, endDate, memberId } =
+      boardingDetails(req);
     const bid = id();
     transaction(() => {
       const invoiceId = createPaymentRequest(
@@ -468,6 +485,74 @@ export function stableOperations(c) {
       audit(req, "boarding.create", bid);
     });
     res.status(201).json(record(org, "boarding", bid));
+  });
+  app.put("/api/boarding/:id", owner, (req, res) => {
+    const previous = record(req.org.id, "boarding", req.params.id);
+    if (previous.status !== "active")
+      fail("Only active boarding stays can be edited", 409);
+    const { org, horse, stall, plan, startDate, endDate, memberId } =
+      boardingDetails(req, previous);
+    const invoice = get(
+      "SELECT * FROM proformas WHERE org_id=? AND id=?",
+      org,
+      previous.invoiceId,
+    );
+    if (!invoice || ["void", "refund_required"].includes(invoice.status))
+      fail("Reconcile the closed boarding invoice before editing", 409);
+    const financialChange =
+      memberId !== previous.memberId || plan.id !== previous.planId;
+    if (
+      financialChange &&
+      (invoice.paid > 0 ||
+        invoice.status !== "open" ||
+        invoice.discount ||
+        invoice.voucher)
+    )
+      fail(
+        "Paid or adjusted invoices keep their billed member and price; reconcile payment before changing them",
+        409,
+      );
+    transaction(() => {
+      if (memberId !== previous.memberId)
+        run(
+          "UPDATE proformas SET member_id=? WHERE org_id=? AND id=?",
+          memberId,
+          org,
+          invoice.id,
+        );
+      if (plan.id !== previous.planId)
+        run(
+          "UPDATE proformas SET description=?,gross=?,due=?,plan_id=?,status=? WHERE org_id=? AND id=?",
+          plan.name,
+          plan.amount,
+          plan.amount,
+          plan.id,
+          plan.amount === 0 ? "settled" : "open",
+          org,
+          invoice.id,
+        );
+      put(org, "boarding", previous.id, {
+        ...previous,
+        horseId: horse.id,
+        stallId: stall.id,
+        memberId,
+        planId: plan.id,
+        startDate,
+        endDate,
+        updatedAt: now(),
+        updatedBy: req.user.id,
+      });
+      notify(
+        org,
+        memberId,
+        "Boarding updated / تم تحديث الإيواء",
+        "Your boarding details have been updated. / تم تحديث تفاصيل الإيواء.",
+        null,
+        mailDetails(org, memberId, invoice.id),
+      );
+      audit(req, "boarding.update", previous.id);
+    });
+    res.json(record(org, "boarding", previous.id));
   });
   app.post("/api/boarding/:id/end", owner, (req, res) => {
     const b = record(req.org.id, "boarding", req.params.id);

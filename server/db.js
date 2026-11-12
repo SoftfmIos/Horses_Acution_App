@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS email_outbox(id TEXT PRIMARY KEY,user_id TEXT REFEREN
   db.exec(
     `CREATE TABLE IF NOT EXISTS credit_ledger(id TEXT PRIMARY KEY,org_id TEXT REFERENCES organizations(id),member_id TEXT REFERENCES users(id),delta INTEGER NOT NULL,reason TEXT NOT NULL,reservation_id TEXT,proforma_id TEXT,created_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS credits_member ON credit_ledger(org_id,member_id);`,
   );
+  if (
+    !db
+      .prepare("PRAGMA table_info(proformas)")
+      .all()
+      .some((c) => c.name === "plan_id")
+  )
+    db.exec("ALTER TABLE proformas ADD COLUMN plan_id TEXT");
   for (const column of ["credit_quantity", "credit_awarded", "credit_used"])
     if (
       !db

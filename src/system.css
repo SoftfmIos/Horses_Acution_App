@@ -2248,3 +2248,122 @@ pre {
 .instructor-badge .photo-error {
   display: none;
 }
+.payment-month {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.payment-month > summary {
+  cursor: pointer;
+  padding: 14px;
+  background: var(--stone);
+}
+.payment-month > summary span {
+  margin-inline-start: 16px;
+  font-size: 12px;
+}
+.payment-month[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.payment-report-print-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.package-credit-status {
+  margin: 16px 0;
+}
+@media print {
+  .payment-month {
+    border: 0;
+  }
+  .payment-month > summary {
+    list-style: none;
+    break-after: avoid;
+    padding: 8px 0;
+  }
+  .payment-month > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+.boarding-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.boarding-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  margin-top: 0;
+}
+.boarding > .section-heading > p {
+  flex: 1 1 440px;
+}
+.boarding-stay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.boarding-stay-card .boarding-actions {
+  margin-top: auto;
+}
+.boarding-stay-card .profile-photo-image {
+  width: 88px;
+  height: 88px;
+}
+.boarding-stay-card .profile-photo {
+  margin-bottom: 0;
+}
+.boarding .modal form {
+  display: grid;
+  gap: 14px;
+}
+.boarding .modal :is(select, input) {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+}
+@media (max-width: 600px) {
+  .boarding > .section-heading > p {
+    flex-basis: auto;
+  }
+  .boarding-actions > button {
+    flex: 1 1 150px;
+  }
+}
+.stall-date-filters {
+  margin: 16px 0;
+}
+.stall-availability {
+  font-weight: 600;
+  color: var(--navy);
+}
+.billing-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.billing-header-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}

@@ -67,6 +67,13 @@ export function ClientHome({
           <ArrowRight size={18} />
         </button>
       </section>
+      <button
+        className="primary"
+        disabled={busy}
+        onClick={() => go("buySessions")}
+      >
+        {label("Buy sessions", "شراء حصص")}
+      </button>
       <div className="client-summary">
         <button className="panel" onClick={() => go("accountBalance")}>
           <BookOpen />
