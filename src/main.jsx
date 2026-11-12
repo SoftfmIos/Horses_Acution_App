@@ -1,3 +1,5 @@
+import { BookingCredits } from "./BookingCredits";
+import { paymentStatusTone } from "./paymentStatus";
 import { BuySessions, PackageCreditStatus } from "./SessionCredits";
 import { AccountRecovery, ResetPassword } from "./AccountRecovery";
 import { InstructorBadge } from "./InstructorBadge";
@@ -2844,6 +2846,17 @@ function App() {
                 <FileText size={20} />
                 {t.proforma}
               </p>
+              <div className="payment-status-legend">
+                <span className="payment-status-paid">
+                  {ar ? "مدفوع بالكامل" : "Paid in full"}
+                </span>
+                <span className="payment-status-partial">
+                  {ar ? "مدفوع جزئياً" : "Partially paid"}
+                </span>
+                <span className="payment-status-pending">
+                  {ar ? "بانتظار الدفع" : "Awaiting payment"}
+                </span>
+              </div>
               <div className="panel table-wrap">
                 <table>
                   <thead>
@@ -2860,7 +2873,10 @@ function App() {
                   </thead>
                   <tbody>
                     {data.proformas.map((p) => (
-                      <tr key={p.id}>
+                      <tr
+                        key={p.id}
+                        className={"payment-status-" + paymentStatusTone(p)}
+                      >
                         <td>
                           {p.description}
                           <small className="record-id">
@@ -3208,42 +3224,55 @@ function App() {
                     <strong>{localizedName(auth.user, ar)}</strong>
                   </p>
                 )}
-                <p>
-                  {t.sessionBalance}:{" "}
-                  <strong>
-                    {manager
-                      ? data.members.find((m) => m.id === modal.form.memberId)
-                          ?.creditBalance || 0
-                      : data.creditBalance}
-                  </strong>
-                </p>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    disabled={
-                      (manager
-                        ? data.members.find((m) => m.id === modal.form.memberId)
-                            ?.creditBalance || 0
-                        : data.creditBalance) <
-                      (data.classes.find((c) => c.id === modal.classId)
-                        ?.creditCost || 1)
-                    }
-                    checked={Boolean(modal.form.useCredits)}
-                    onChange={(e) =>
-                      setModal((m) => ({
-                        ...m,
-                        form: {
-                          ...m.form,
-                          useCredits: e.target.checked,
-                          discountCode: "",
-                          voucherCode: "",
-                        },
-                        quote: null,
-                      }))
-                    }
-                  />
-                  {t.useCredits}
-                </label>
+                <BookingCredits
+                  key={
+                    stable.id +
+                    "|" +
+                    (manager ? modal.form.memberId || "" : auth.user.id)
+                  }
+                  onReview={
+                    !manager || permitted("billing")
+                      ? async (id) => {
+                          const loaded = await refresh(true);
+                          const invoice = (
+                            loaded?.proformas || data.proformas
+                          ).find((p) => p.id === id);
+                          if (invoice)
+                            setModal({ kind: "proforma", record: invoice });
+                          else {
+                            setModal(null);
+                            go("billing");
+                          }
+                        }
+                      : undefined
+                  }
+                  memberId={manager ? modal.form.memberId : auth.user.id}
+                  stableId={stable.id}
+                  request={request}
+                  ar={ar}
+                  creditCost={
+                    data.classes.find((c) => c.id === modal.classId)
+                      ?.creditCost || 1
+                  }
+                  checked={Boolean(modal.form.useCredits)}
+                  refreshKey={rawData}
+                  onChange={(useCredits) =>
+                    setModal((m) =>
+                      m && m.kind === "booking"
+                        ? {
+                            ...m,
+                            form: {
+                              ...m.form,
+                              useCredits,
+                              discountCode: "",
+                              voucherCode: "",
+                            },
+                            quote: null,
+                          }
+                        : m,
+                    )
+                  }
+                />
                 <label>
                   {t.discountCode}
                   <input

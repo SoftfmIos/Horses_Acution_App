@@ -110,3 +110,11 @@ Payment reports support a month filter and collapsible month sections inside use
 Boarding cards display the horse photo and consistently sized actions. Active stays can be edited with overlap/capacity checks while retaining the original invoice. Paid/adjusted invoices keep their original billed member and price. Unpaid, unadjusted requests can update those details with the stay; dates are not automatically prorated. Stall edits return to the boarding screen rather than a nearly empty generic record card. Availability uses peak simultaneous occupancy for a selected date range, excludes the current stay during edits, and exposes occupancy-only data to authorized stall viewers without revealing boarding customer details.
 
 Deploy the frontend and backend together and restart Node.js. Database updates are additive. No live production database was accessed during development; repairs apply to eligible records only after the new backend is deployed, and missing historical package counts require administrator review.
+
+## 1.25.0
+
+Booking dialogs fetch the selected member’s current session balance directly instead of relying on member-summary data. Changing member, reopening the dialog, or refreshing updates the balance. Loading and request failures no longer appear as zero. Purchased, used, restored and refunded totals explain the balance, and missing paid-package allocations link to the existing invoice review workflow. Class staff may read balances within their stable; members may read only their own. Missing historical session counts still require an administrator to verify the original purchase; this release does not guess or automatically allocate them.
+
+Payment requests and grouped payment report rows use pale green for fully paid invoices, pale yellow for partially paid invoices, and pale orange for pending invoices. A text legend preserves status meaning independently of color. Voided/refund-required invoices retain neutral styling.
+
+Deploy frontend and backend together and restart Node.js. Health should report version 1.25.0. No live production database was changed during development.

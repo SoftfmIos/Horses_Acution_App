@@ -2367,3 +2367,33 @@ pre {
   font-size: 13px;
   line-height: 1.4;
 }
+.payment-status-paid {
+  background-color: #e6f4ea;
+  color: #173e26;
+}
+.payment-status-partial {
+  background-color: #fff8d6;
+  color: #5a490c;
+}
+.payment-status-pending {
+  background-color: #ffecd9;
+  color: #703d12;
+}
+.payment-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+  font-size: 12px;
+}
+.payment-status-legend > span {
+  padding: 7px 12px;
+  border-radius: 4px;
+}
+.booking-session-balance {
+  padding: 12px 0;
+}
+.credit-breakdown {
+  font-size: 12px;
+  color: var(--muted);
+}

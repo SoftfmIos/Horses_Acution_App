@@ -1,3 +1,4 @@
+import { paymentStatusTone } from "./paymentStatus";
 import { historyMonths } from "./historyMonths";
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -109,7 +110,12 @@ export function PaymentReport({
                   </thead>
                   <tbody>
                     {month.items.map((p) => (
-                      <tr key={p.id}>
+                      <tr
+                        key={p.id}
+                        className={
+                          "payment-status-" + paymentStatusTone(p.invoice)
+                        }
+                      >
                         <td>{p.user?.name || p.invoice.member_id}</td>
                         <td>
                           {p.invoice.description}

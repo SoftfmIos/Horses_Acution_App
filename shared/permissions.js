@@ -68,6 +68,8 @@ export function staffPolicy(modules = PERMISSION_PAGES, actions = null) {
   };
 }
 export function permissionForRoute(path, method) {
+  if (method === "GET" && /^\/members\/[^/]+\/credits$/.test(path))
+    return { page: "classes", action: null };
   let page = path.startsWith("/records/")
     ? path.split("/")[2]
     : path.startsWith("/photos/")

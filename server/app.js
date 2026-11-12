@@ -1572,19 +1572,95 @@ export function createApp(
       places: Math.max(0, Math.min(c.capacity - total, usable - total)),
     };
   }
-  app.get("/api/data", (req, res) => {
-    const org = req.org.id,
-      manager = req.org.role === "owner";
-    // Heal only fully-paid, immutable credit snapshots that have not been granted.
-    // Legacy invoices without a snapshot require an administrator's explicit review.
+  function reconcilePackageCredits(org, memberId = null) {
     transaction(() => {
       for (const p of all(
         "SELECT id FROM proformas WHERE org_id=? AND status='settled' AND paid>=due AND credit_quantity>0 AND credit_awarded=0" +
-          (manager ? "" : " AND member_id=?"),
-        ...(manager ? [org] : [org, req.user.id]),
+          (memberId ? " AND member_id=?" : ""),
+        ...(memberId ? [org, memberId] : [org]),
       ))
         awardCredits(p.id);
     });
+  }
+  app.get("/api/members/:id/credits", (req, res) => {
+    const org = req.org.id,
+      memberId = req.params.id;
+    if (req.org.role !== "owner" && req.user.id !== memberId)
+      fail("Session balance access denied", 403);
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        org,
+        memberId,
+      )
+    )
+      fail("Member not found", 404);
+    reconcilePackageCredits(org, memberId);
+    const ledger = all(
+      "SELECT delta,reason FROM credit_ledger WHERE org_id=? AND member_id=?",
+      org,
+      memberId,
+    );
+    const plans = records(org, "plans");
+    const invoices = all(
+      "SELECT id,description,status,paid,due,credit_quantity,credit_awarded,plan_id,reservation_id FROM proformas WHERE org_id=? AND member_id=?",
+      org,
+      memberId,
+    );
+    const paid = invoices.filter(
+      (p) => p.status === "settled" && p.paid >= p.due,
+    );
+    const missing = paid.filter(
+      (p) =>
+        !p.reservation_id &&
+        !p.credit_quantity &&
+        plans.some(
+          (plan) =>
+            plan.kind === "package" &&
+            (p.plan_id ? p.plan_id === plan.id : p.description === plan.name),
+        ),
+    );
+    const review = paid.filter(
+      (p) =>
+        p.credit_quantity > 0 &&
+        (!p.credit_awarded ||
+          !get(
+            "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+            org,
+            p.id,
+          )),
+    );
+    res.json({
+      memberId,
+      balance: creditBalance(org, memberId),
+      credited: ledger
+        .filter((l) => l.reason === "package.paid")
+        .reduce((n, l) => n + l.delta, 0),
+      used: -ledger
+        .filter((l) => l.reason === "booking.used")
+        .reduce((n, l) => n + l.delta, 0),
+      restored: ledger
+        .filter((l) => l.reason === "booking.cancelled")
+        .reduce((n, l) => n + l.delta, 0),
+      refunded: -ledger
+        .filter((l) => l.reason === "package.refunded")
+        .reduce((n, l) => n + l.delta, 0),
+      needsReview: [...missing, ...review].map((p) => ({
+        id: p.id,
+        description: p.description,
+      })),
+      pendingPackages: invoices.filter(
+        (p) => p.credit_quantity > 0 && p.status === "open",
+      ).length,
+      paidRequestsWithoutSessions: paid.filter(
+        (p) => !p.credit_quantity && !missing.some((m) => m.id === p.id),
+      ).length,
+    });
+  });
+  app.get("/api/data", (req, res) => {
+    const org = req.org.id,
+      manager = req.org.role === "owner";
+    reconcilePackageCredits(org, manager ? null : req.user.id);
     const members = all(
       "SELECT u.id,u.name,u.email,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
       org,

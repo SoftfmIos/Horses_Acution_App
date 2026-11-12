@@ -3311,3 +3311,80 @@ test("boarding edits retain the invoice, check capacity excluding self and prese
   );
   assert.equal((await f.owner.call("/data")).proformas.length, 2);
 });
+
+test("booking credit lookup returns a fresh balance for the selected member with review diagnostics and scoped access", async (t) => {
+  const f = await fixture(t),
+    member = (await f.member.call("/auth/me")).user.id;
+  const plan = await f.create("plans", {
+    name: "Lookup package",
+    kind: "package",
+    credits: 5,
+    amount: 10000,
+    active: true,
+  });
+  const request = await f.member.call("/packages", "POST", { planId: plan.id });
+  await f.owner.call("/proformas/" + request.id + "/payment", "POST", {
+    amount: 10000,
+    reference: "LOOKUP-PAID",
+    externalRef: "Received",
+  });
+  let result = await f.owner.call("/members/" + member + "/credits");
+  assert.equal(result.balance, 5);
+  assert.equal(result.credited, 5);
+  assert.equal(result.memberId, member);
+  assert.equal(
+    (await f.member.call("/members/" + member + "/credits")).balance,
+    5,
+  );
+  assert.equal(
+    (
+      await f.member.call(
+        "/members/" + (await f.owner.call("/auth/me")).user.id + "/credits",
+      )
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.other.call("/members/" + member + "/credits")).httpStatus,
+    404,
+  );
+  f.db.prepare("DELETE FROM credit_ledger WHERE proforma_id=?").run(request.id);
+  f.db
+    .prepare(
+      "UPDATE proformas SET credit_awarded=0,credit_quantity=0 WHERE id=?",
+    )
+    .run(request.id);
+  result = await f.owner.call("/members/" + member + "/credits");
+  assert.equal(result.balance, 0);
+  assert.equal(result.needsReview[0].id, request.id);
+  const staff = await f.owner.call("/members", "POST", {
+    name: "Booking staff",
+    email: "creditlookup-staff@test.com",
+    password: "123456",
+    role: "staff",
+  });
+  await f.owner.call("/permissions/" + staff.id, "PUT", {
+    role: "staff",
+    permissions: ["classes"],
+    actionPermissions: { classes: [] },
+  });
+  const actor = f.client();
+  await actor.call("/auth/login", "POST", {
+    email: "creditlookup-staff@test.com",
+    password: "123456",
+  });
+  actor.stable = f.owner.stable;
+  assert.equal(
+    (await actor.call("/members/" + member + "/credits")).httpStatus,
+    200,
+  );
+  await f.owner.call("/permissions/" + staff.id, "PUT", {
+    role: "staff",
+    permissions: ["tasks"],
+    actionPermissions: { tasks: [] },
+  });
+  assert.equal(
+    (await actor.call("/members/" + member + "/credits")).httpStatus,
+    403,
+  );
+});
