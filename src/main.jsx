@@ -1,3 +1,5 @@
+import { PaymentReport } from "./PaymentReport";
+import { EmailSettings } from "./EmailSettings";
 import { BookingPlanner } from "./BookingPlanner";
 import { UserPermissions } from "./UserPermissions";
 import {
@@ -59,6 +61,8 @@ import "./system.css";
 const dict = {
   en: {
     settings: "Settings",
+    systemSettings: "System settings",
+    emailSettings: "Email settings",
     permissions: "Users & Permissions",
     frequencyHours: "Dose interval (hours)",
     durationDays: "Treatment duration (days)",
@@ -297,6 +301,8 @@ const dict = {
   },
   ar: {
     settings: "الإعدادات",
+    systemSettings: "إعدادات النظام",
+    emailSettings: "إعدادات البريد الإلكتروني",
     permissions: "المستخدمون والصلاحيات",
     frequencyHours: "تكرار الجرعة كل (ساعة)",
     durationDays: "مدة العلاج (أيام)",
@@ -629,7 +635,11 @@ function App() {
   const allowedModules =
     rawData.permissions || stable?.permissions || PERMISSION_PAGES;
   const moduleFor = (kind) =>
-    ({ plans: "pricing", boardingManagement: "boarding" })[kind] || kind;
+    ({
+      plans: "pricing",
+      boardingManagement: "boarding",
+      systemSettings: "settings",
+    })[kind] || kind;
   const actionGrants =
     rawData.actionPermissions ||
     stable?.actionPermissions ||
@@ -792,10 +802,14 @@ function App() {
           ["boardingManagement", HorseHead],
           ["reports", BarChart3],
           ["members", Users],
-          ...(permitted("settings") || permitted("stables")
+          ...(permitted("settings") ||
+          permitted("stables") ||
+          permitted("emailSettings")
             ? [["settings", SettingsIcon]]
             : []),
-          ...(isSystemAdmin ? [["permissions", Users]] : []),
+          ...(isSystemAdmin || permitted("members")
+            ? [["permissions", Users]]
+            : []),
         ]
       : []),
     ["notifications", Bell],
@@ -830,7 +844,9 @@ function App() {
       manager &&
       !["overview", "notifications", "permissions"].includes(nav[i][0]) &&
       !(nav[i][0] === "settings"
-        ? permitted("settings") || permitted("stables")
+        ? permitted("settings") ||
+          permitted("stables") ||
+          permitted("emailSettings")
         : permitted(nav[i][0]))
     )
       nav.splice(i, 1);
@@ -1840,6 +1856,24 @@ function App() {
             )}
           </div>
 
+          {page === "permissions" &&
+            manager &&
+            !isSystemAdmin &&
+            permitted("members") && (
+              <MemberTools
+                key={stable.id}
+                canAdd={canManage("members", "add")}
+                canEdit={canManage("members", "edit")}
+                canDelete={canManage("members", "delete")}
+                isAdmin={false}
+                members={data.members}
+                emailConfigured={data.emailConfigured}
+                busy={busy}
+                request={request}
+                action={action}
+                ar={ar}
+              />
+            )}
           {page === "permissions" && isSystemAdmin && (
             <UserPermissions
               key={stable.id}
@@ -1928,51 +1962,71 @@ function App() {
               }}
             />
           )}
-          {page === "settings" && manager && (
-            <SettingsHub
-              can={canManage}
-              canView={permitted}
-              settings={data.settings}
-              stableName={localizedName(
-                {
-                  name: stable.name,
-                  nameEn: rawData.settings?.academyNameEn ?? stable.nameEn,
-                  nameAr: rawData.settings?.academyNameAr ?? stable.nameAr,
-                },
-                ar,
-              )}
-              data={data}
-              ar={ar}
-              request={request}
-              action={action}
-              onSaved={(name, form) => {
-                setStable((s) => ({
-                  ...s,
-                  name,
-                  nameEn: form.academyNameEn || name,
-                  nameAr: form.academyNameAr || "",
-                }));
-                setAuth((a) => ({
-                  ...a,
-                  stables: a.stables.map((s) =>
-                    s.id === stable.id
-                      ? {
-                          ...s,
-                          name,
-                          nameEn: form.academyNameEn || name,
-                          nameAr: form.academyNameAr || "",
-                        }
-                      : s,
-                  ),
-                }));
-                notify(t.saved);
-              }}
-              go={go}
-              openForm={openForm}
-              busy={busy}
-              t={t}
-            />
-          )}
+          {page === "emailSettings" &&
+            manager &&
+            permitted("emailSettings") && (
+              <>
+                <button className="soft" onClick={() => go("settings")}>
+                  {ar ? "العودة إلى الإعدادات" : "Back to settings"}
+                </button>
+                <EmailSettings
+                  key={stable.id}
+                  settings={data.emailSettings}
+                  ar={ar}
+                  request={request}
+                  action={action}
+                  busy={busy || !canManage("emailSettings", "edit")}
+                />
+              </>
+            )}
+          {["settings", "systemSettings"].includes(page) &&
+            manager &&
+            (page === "settings" || permitted("settings")) && (
+              <SettingsHub
+                page={page}
+                can={canManage}
+                canView={permitted}
+                settings={data.settings}
+                stableName={localizedName(
+                  {
+                    name: stable.name,
+                    nameEn: rawData.settings?.academyNameEn ?? stable.nameEn,
+                    nameAr: rawData.settings?.academyNameAr ?? stable.nameAr,
+                  },
+                  ar,
+                )}
+                data={data}
+                ar={ar}
+                request={request}
+                action={action}
+                onSaved={(name, form) => {
+                  setStable((s) => ({
+                    ...s,
+                    name,
+                    nameEn: form.academyNameEn || name,
+                    nameAr: form.academyNameAr || "",
+                  }));
+                  setAuth((a) => ({
+                    ...a,
+                    stables: a.stables.map((s) =>
+                      s.id === stable.id
+                        ? {
+                            ...s,
+                            name,
+                            nameEn: form.academyNameEn || name,
+                            nameAr: form.academyNameAr || "",
+                          }
+                        : s,
+                    ),
+                  }));
+                  notify(t.saved);
+                }}
+                go={go}
+                openForm={openForm}
+                busy={busy}
+                t={t}
+              />
+            )}
           {page === "overview" && !manager && !client && (
             <>
               <section className="stats">
@@ -2589,6 +2643,16 @@ function App() {
           )}
           {page === "billing" && (
             <>
+              {manager && (
+                <PaymentReport
+                  key={stable.id}
+                  data={data}
+                  ar={ar}
+                  money={money}
+                  when={when}
+                  stableName={localizedName(stable, ar)}
+                />
+              )}
               <p className="notice">
                 <FileText size={20} />
                 {t.proforma}
@@ -2706,6 +2770,7 @@ function App() {
               canDelete={canManage("members", "delete")}
               isAdmin={isSystemAdmin}
               members={data.members}
+              emailConfigured={data.emailConfigured}
               busy={busy}
               request={request}
               action={action}
@@ -3164,6 +3229,45 @@ function App() {
                       ? t.cancelled
                       : t.pending_payment}
                 </p>
+                {canManage("billing", "edit") && (
+                  <div className="modal-actions no-print">
+                    <button
+                      className="soft"
+                      disabled={busy || !data.emailConfigured}
+                      onClick={() =>
+                        action(() =>
+                          request("/proformas/" + modal.record.id + "/email", {
+                            method: "POST",
+                            body: {},
+                          }),
+                        )
+                      }
+                    >
+                      {ar ? "إرسال الفاتورة المبدئية" : "Email pro forma"}
+                    </button>
+                    <button
+                      className="soft"
+                      disabled={
+                        busy ||
+                        !data.emailConfigured ||
+                        !data.payments.some(
+                          (p) =>
+                            p.proforma_id === modal.record.id && p.amount > 0,
+                        )
+                      }
+                      onClick={() =>
+                        action(() =>
+                          request("/proformas/" + modal.record.id + "/email", {
+                            method: "POST",
+                            body: { receipt: true },
+                          }),
+                        )
+                      }
+                    >
+                      {ar ? "إرسال تأكيد الدفع" : "Email payment confirmation"}
+                    </button>
+                  </div>
+                )}
                 {data.payments
                   ?.filter((p) => p.proforma_id === modal.record.id)
                   .map((p) => (

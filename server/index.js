@@ -1,3 +1,4 @@
+import { renderEmail } from "./email-template.js";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -65,16 +66,21 @@ async function tick() {
           const config = app.locals.emailSettings.config(job.org_id);
           if (!config) continue;
           const mail = app.locals.emailSettings.transport(config);
+          const details = JSON.parse(job.details || "{}");
+          if (details.credentials?.passwordEncrypted)
+            details.credentials.password = app.locals.emailSettings.decrypt(
+              details.credentials.passwordEncrypted,
+            );
           await mail.sendMail({
             from: config.from,
             replyTo: config.replyTo || undefined,
             to: job.email,
             subject: job.subject,
-            text: job.body,
+            ...renderEmail({ ...job, details }),
             messageId: `<${job.id}@academy.notifications>`,
           });
           db.prepare(
-            "UPDATE email_outbox SET status='sent',attempts=attempts+1 WHERE id=?",
+            "UPDATE email_outbox SET status='sent',attempts=attempts+1,details=json_remove(details,'$.credentials.passwordEncrypted') WHERE id=?",
           ).run(job.id);
         } catch {
           db.prepare(

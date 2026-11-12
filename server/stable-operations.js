@@ -17,6 +17,8 @@ export function stableOperations(c) {
     id,
     now,
     audit,
+    notify,
+    mailDetails,
     createPaymentRequest,
   } = c;
   const day = (value) =>
@@ -439,6 +441,21 @@ export function stableOperations(c) {
         invoiceId,
         createdAt: now(),
       });
+      const details = mailDetails(org, b.memberId || horse.ownerId, invoiceId);
+      details.boarding = {
+        ...record(org, "boarding", bid),
+        horseName: horse.name,
+        stallName: stall.name,
+        planName: plan.name,
+      };
+      notify(
+        org,
+        b.memberId || horse.ownerId,
+        "Boarding arranged / تم تسجيل الإيواء",
+        "Your horse boarding details and payment request. / تفاصيل إيواء خيلك وطلب الدفع.",
+        null,
+        details,
+      );
       audit(req, "boarding.create", bid);
     });
     res.status(201).json(record(org, "boarding", bid));
@@ -451,6 +468,14 @@ export function stableOperations(c) {
         status: "ended",
         endedAt: now(),
       });
+      notify(
+        req.org.id,
+        b.memberId,
+        "Boarding ended / انتهى الإيواء",
+        "Your boarding stay has ended. / انتهت فترة الإيواء.",
+        null,
+        mailDetails(req.org.id, b.memberId, b.invoiceId),
+      );
       audit(req, "boarding.end", b.id);
     });
     res.json({ ok: true });

@@ -240,10 +240,12 @@ export function MemberTools({
   canAdd = true,
   canEdit = true,
   canDelete = true,
+  emailConfigured = false,
 }) {
   const [form, setForm] = useState(null);
   const [credentials, setCredentials] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [accountEmailSent, setAccountEmailSent] = useState(false);
   const label = (en, arabic) => (ar ? arabic : en);
   return (
     <section className="panel">
@@ -253,12 +255,15 @@ export function MemberTools({
           disabled={!canAdd}
           onClick={() => {
             setShowPassword(false);
+            setAccountEmailSent(false);
             setForm({
               mode: "create",
               nameEn: "",
               nameAr: "",
               email: "",
               password: "",
+              sendWelcomeEmail: true,
+              includePassword: false,
             });
           }}
         >
@@ -306,15 +311,22 @@ export function MemberTools({
                   form.mode === "link"
                     ? "/members/link"
                     : "/members" + (form.id ? "/" + form.id : "");
+                let createdId;
                 if (
-                  await action(() =>
-                    request(path, {
+                  await action(async () => {
+                    const result = await request(path, {
                       method: form.id ? "PUT" : "POST",
                       body: form,
-                    }),
-                  )
+                    });
+                    if (form.mode === "create") createdId = result.id;
+                  })
                 ) {
-                  if (form.mode === "create") setCredentials({ ...form });
+                  if (form.mode === "create") {
+                    setCredentials({ ...form, createdId });
+                    setAccountEmailSent(
+                      emailConfigured && form.sendWelcomeEmail !== false,
+                    );
+                  }
                   setForm(null);
                   setShowPassword(false);
                 }
@@ -428,6 +440,46 @@ export function MemberTools({
                   </span>
                 </label>
               )}
+              {form.mode === "create" && (
+                <>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.sendWelcomeEmail}
+                      disabled={!emailConfigured}
+                      onChange={(e) =>
+                        setForm({ ...form, sendWelcomeEmail: e.target.checked })
+                      }
+                    />
+                    {label(
+                      "Email welcome and login details",
+                      "إرسال الترحيب وبيانات الدخول بالبريد",
+                    )}
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.includePassword}
+                      disabled={!emailConfigured || !form.sendWelcomeEmail}
+                      onChange={(e) =>
+                        setForm({ ...form, includePassword: e.target.checked })
+                      }
+                    />
+                    {label(
+                      "Include password in the welcome email",
+                      "تضمين كلمة المرور في رسالة الترحيب",
+                    )}
+                  </label>
+                  {!emailConfigured && (
+                    <p>
+                      {label(
+                        "Enable email delivery in Email Settings to send login details.",
+                        "فعّل إرسال البريد في إعدادات البريد لإرسال بيانات الدخول.",
+                      )}
+                    </p>
+                  )}
+                </>
+              )}
               <p className="notice">
                 {label(
                   "This member will belong to the currently selected stable.",
@@ -497,9 +549,40 @@ export function MemberTools({
                 "احتفظ بهذه البيانات بسرية. تتوفر كلمة المرور هنا فقط حتى إغلاق هذه البطاقة.",
               )}
             </p>
+            {accountEmailSent && (
+              <p className="no-print" role="status">
+                {label(
+                  "Account email queued for delivery.",
+                  "تمت إضافة رسالة الحساب إلى قائمة الإرسال.",
+                )}
+              </p>
+            )}
             <div className="modal-actions no-print">
               <button className="primary" onClick={() => window.print()}>
                 {label("Print account details", "طباعة بيانات الحساب")}
+              </button>
+              <button
+                className="soft"
+                disabled={busy || !emailConfigured || !canEdit}
+                onClick={async () => {
+                  if (
+                    await action(() =>
+                      request(
+                        "/members/" + credentials.createdId + "/email-login",
+                        {
+                          method: "POST",
+                          body: { password: credentials.password },
+                        },
+                      ),
+                    )
+                  )
+                    setAccountEmailSent(true);
+                }}
+              >
+                {label(
+                  "Email password & login details",
+                  "إرسال كلمة المرور وبيانات الدخول",
+                )}
               </button>
               <button className="soft" onClick={() => setCredentials(null)}>
                 {label("Close", "إغلاق")}
@@ -571,6 +654,20 @@ export function MemberTools({
               }
             >
               {label("Edit user", "تعديل المستخدم")}
+            </button>
+            <button
+              className="soft"
+              disabled={busy || !canEdit || !emailConfigured}
+              onClick={() =>
+                action(() =>
+                  request("/members/" + m.id + "/email-login", {
+                    method: "POST",
+                    body: {},
+                  }),
+                )
+              }
+            >
+              {label("Email login details", "إرسال بيانات الدخول")}
             </button>
             <button
               className="text-button"

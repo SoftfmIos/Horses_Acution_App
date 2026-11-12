@@ -2651,3 +2651,233 @@ test("administrators edit user names and login emails atomically with access bou
     409,
   );
 });
+
+test("email settings and user add/update/delete grants are independent for each staff account", async (t) => {
+  const f = await fixture(t);
+  const staff = (await f.member.call("/auth/me")).user.id;
+  const grant = async (policy) => {
+    const result = await f.owner.call("/permissions/" + staff, "PUT", {
+      role: "staff",
+      permissions: Object.keys(policy),
+      actionPermissions: policy,
+    });
+    assert.equal(result.httpStatus, 200);
+  };
+  const smtp = {
+    enabled: true,
+    host: "smtp.example.com",
+    port: 587,
+    username: "sender@example.com",
+    from: "sender@example.com",
+    password: "mail-secret",
+  };
+  assert.equal(
+    (await f.owner.call("/settings/email", "PUT", smtp)).httpStatus,
+    200,
+  );
+  await grant({ settings: ["edit"], members: ["add"] });
+  assert.equal((await f.member.call("/data")).emailSettings, undefined);
+  assert.equal(
+    (await f.member.call("/settings/email", "PUT", smtp)).httpStatus,
+    403,
+  );
+  const created = await f.member.call("/members", "POST", {
+    name: "Managed user",
+    email: "managed@test.com",
+    password: "123456",
+  });
+  assert.equal(created.httpStatus, 201);
+  assert.equal(
+    (await f.member.call("/members/" + created.id, "PUT", { name: "Denied" }))
+      .httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.member.call("/members/" + created.id, "DELETE")).httpStatus,
+    403,
+  );
+  await grant({ emailSettings: [], members: ["edit"] });
+  assert.equal(
+    (await f.member.call("/data")).emailSettings.passwordSaved,
+    true,
+  );
+  assert.equal(
+    (await f.member.call("/settings/email", "PUT", smtp)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.member.call("/members/" + created.id, "PUT", { name: "Updated" }))
+      .httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.member.call("/members", "POST", {
+        name: "Denied",
+        email: "denied@test.com",
+        password: "123456",
+      })
+    ).httpStatus,
+    403,
+  );
+  await grant({ emailSettings: ["edit"], members: ["delete"] });
+  assert.equal(
+    (await f.member.call("/settings/email", "PUT", { ...smtp, password: "" }))
+      .httpStatus,
+    200,
+  );
+  assert.equal((await f.member.call("/settings", "PUT", {})).httpStatus, 403);
+  assert.equal(
+    (await f.member.call("/members/" + created.id, "DELETE")).httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.member.call("/permissions/" + staff, "PUT", {
+        role: "admin",
+        permissions: [],
+      })
+    ).httpStatus,
+    403,
+  );
+});
+
+test("account emails encrypt optional passwords, validate resends and never change the user password", async (t) => {
+  const f = await fixture(t);
+  await f.owner.call("/settings/email", "PUT", {
+    enabled: true,
+    host: "smtp.example.com",
+    port: 587,
+    username: "sender@example.com",
+    from: "sender@example.com",
+    password: "smtp-secret",
+  });
+  const created = await f.owner.call("/members", "POST", {
+    name: "Welcome User",
+    email: "welcome@test.com",
+    password: "private-password",
+    includePassword: true,
+  });
+  assert.equal(created.httpStatus, 201);
+  let job = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE user_id=? ORDER BY rowid DESC LIMIT 1",
+    )
+    .get(created.id);
+  assert.ok(job.subject.includes("Welcome"));
+  assert.equal(job.details.includes("private-password"), false);
+  const details = JSON.parse(job.details);
+  assert.equal(
+    f.app.locals.emailSettings.decrypt(details.credentials.passwordEncrypted),
+    "private-password",
+  );
+  assert.equal(details.credentials.email, "welcome@test.com");
+  assert.equal(
+    (
+      await f.owner.call("/members/" + created.id + "/email-login", "POST", {
+        password: "incorrect",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (await f.other.call("/members/" + created.id + "/email-login", "POST", {}))
+      .httpStatus,
+    404,
+  );
+  assert.equal(
+    (await f.owner.call("/members/" + created.id + "/email-login", "POST", {}))
+      .httpStatus,
+    200,
+  );
+  job = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE user_id=? ORDER BY rowid DESC LIMIT 1",
+    )
+    .get(created.id);
+  assert.equal(
+    JSON.parse(job.details).credentials.passwordEncrypted,
+    undefined,
+  );
+});
+
+test("booking, partial payment and final payment emails keep complete snapshots and payment history", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f, 10000);
+  await f.owner.call("/settings/email", "PUT", {
+    enabled: true,
+    host: "smtp.example.com",
+    port: 587,
+    username: "sender@example.com",
+    from: "sender@example.com",
+    password: "smtp-secret",
+  });
+  const booked = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(booked.httpStatus, 201);
+  let job = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE subject LIKE 'Payment pending%' ORDER BY rowid DESC LIMIT 1",
+    )
+    .get();
+  let details = JSON.parse(job.details);
+  assert.equal(details.booking.location, "A");
+  assert.equal(details.booking.instructor, "Layla");
+  assert.equal(details.proforma.id, booked.proformaId);
+  assert.equal(details.booking.status, "pending_payment");
+  assert.equal(
+    (
+      await f.owner.call(
+        "/proformas/" + booked.proformaId + "/payment",
+        "POST",
+        { amount: 4000, reference: "FIRST", externalRef: "Bank transfer" },
+      )
+    ).httpStatus,
+    200,
+  );
+  job = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE subject LIKE 'Payment recorded%' ORDER BY rowid DESC LIMIT 1",
+    )
+    .get();
+  details = JSON.parse(job.details);
+  assert.equal(details.proforma.paid, 4000);
+  assert.equal(details.payments.length, 1);
+  assert.equal(details.booking.status, "pending_payment");
+  assert.equal(
+    (
+      await f.owner.call(
+        "/proformas/" + booked.proformaId + "/payment",
+        "POST",
+        { amount: 6000, reference: "SECOND", externalRef: "Bank transfer" },
+      )
+    ).httpStatus,
+    200,
+  );
+  job = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE subject LIKE 'Payment recorded%' ORDER BY rowid DESC LIMIT 1",
+    )
+    .get();
+  details = JSON.parse(job.details);
+  assert.equal(details.proforma.status, "settled");
+  assert.equal(details.payments.length, 2);
+  assert.equal(details.booking.status, "confirmed");
+  assert.equal(
+    (
+      await f.owner.call("/proformas/" + booked.proformaId + "/email", "POST", {
+        receipt: true,
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.other.call(
+        "/proformas/" + booked.proformaId + "/email",
+        "POST",
+        {},
+      )
+    ).httpStatus,
+    404,
+  );
+});

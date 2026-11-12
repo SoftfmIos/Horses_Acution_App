@@ -92,6 +92,10 @@ export function createApp(
   const app = express();
   const email = emailSettings(db);
   app.locals.emailSettings = email;
+  const emailAvailable = (org) =>
+    email.publicSettings(org)
+      ? email.enabled(org)
+      : emailEnabled || email.enabled(org);
   app.disable("x-powered-by");
   app.use(
     helmet({
@@ -296,7 +300,90 @@ export function createApp(
       rid,
       now(),
     );
-  const notify = (org, user, title, message, dedupe = null) => {
+  function mailDetails(
+    org,
+    user,
+    proformaId = null,
+    bookingId = null,
+    payment = null,
+  ) {
+    const settings = records(org, "academySettings")[0] || {};
+    const proforma = proformaId
+      ? get("SELECT * FROM proformas WHERE id=? AND org_id=?", proformaId, org)
+      : null;
+    const reservation = bookingId || proforma?.reservation_id;
+    const b = reservation
+      ? get(
+          "SELECT * FROM reservations WHERE id=? AND org_id=?",
+          reservation,
+          org,
+        )
+      : null;
+    let booking = null;
+    if (b) {
+      const c = record(org, "classes", b.class_id);
+      const name = (kind, rid) => {
+        const r = records(org, kind).find((x) => x.id === rid);
+        return r
+          ? [r.nameEn || r.name, r.nameAr].filter(Boolean).join(" / ")
+          : "";
+      };
+      booking = {
+        id: b.id,
+        title: [c.nameEn || c.title, c.nameAr].filter(Boolean).join(" / "),
+        startsAt: c.startsAt,
+        endsAt: c.endsAt,
+        location:
+          name("arenas", c.arenaId) ||
+          c.arena ||
+          settings.address ||
+          "Riyadh Polo Hills / الرياض بولو هيلز",
+        instructor: name("instructors", c.instructorId) || c.instructor,
+        horse: name("horses", b.horse_id),
+        status:
+          payment && proforma?.status === "settled" ? "confirmed" : b.status,
+        holdExpiresAt: b.hold_expires_at,
+      };
+    }
+    const stay = proforma
+      ? records(org, "boarding").find((b) => b.invoiceId === proforma.id)
+      : null;
+    return {
+      academy: [
+        settings.academyNameEn ||
+          settings.academyName ||
+          get("SELECT name FROM organizations WHERE id=?", org)?.name,
+        settings.academyNameAr,
+      ]
+        .filter(Boolean)
+        .join(" / "),
+      phone: settings.phone,
+      address: settings.address,
+      recipient: get("SELECT name FROM users WHERE id=?", user)?.name,
+      proforma,
+      payments: proforma
+        ? all(
+            "SELECT amount,reference,external_ref,created_at FROM payments WHERE org_id=? AND proforma_id=? ORDER BY created_at,rowid",
+            org,
+            proforma.id,
+          )
+        : [],
+      boarding: stay
+        ? {
+            ...stay,
+            horseName: records(org, "horses").find((h) => h.id === stay.horseId)
+              ?.name,
+            stallName: records(org, "stalls").find((s) => s.id === stay.stallId)
+              ?.name,
+            planName: records(org, "plans").find((p) => p.id === stay.planId)
+              ?.name,
+          }
+        : null,
+      booking,
+      payment,
+    };
+  }
+  const notify = (org, user, title, message, dedupe = null, details = null) => {
     const rid = id();
     const result = run(
       "INSERT OR IGNORE INTO notifications(id,org_id,user_id,title,message,dedupe,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -308,14 +395,15 @@ export function createApp(
       dedupe,
       now(),
     );
-    if ((emailEnabled || email.enabled(org)) && result.changes)
+    if (emailAvailable(org) && result.changes)
       run(
-        "INSERT INTO email_outbox(id,user_id,subject,body,org_id) VALUES(?,?,?,?,?)",
+        "INSERT INTO email_outbox(id,user_id,subject,body,org_id,details) VALUES(?,?,?,?,?,?)",
         rid,
         user,
         title,
         message,
         org,
+        JSON.stringify(details || mailDetails(org, user)),
       );
   };
   const owners = (org) =>
@@ -712,6 +800,7 @@ export function createApp(
       modules: PERMISSION_PAGES,
       actions: PERMISSION_ACTIONS,
       permissionVersion: 2,
+      emailConfigured: emailAvailable(req.org.id),
       users: all(
         "SELECT u.id,u.name,u.email,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.org_id=?",
         req.org.id,
@@ -1562,8 +1651,12 @@ export function createApp(
         };
     }
     result.backendVersion = release.version;
-    result.emailConfigured = emailEnabled || email.enabled(org);
-    if (manager) result.emailSettings = email.publicSettings(org);
+    result.emailConfigured = emailAvailable(org);
+    if (
+      manager &&
+      (req.org.isAdmin || req.org.permissions.includes("emailSettings"))
+    )
+      result.emailSettings = email.publicSettings(org);
     res.json(result);
   });
   function restrictHorse(req, data, rid) {
@@ -1612,6 +1705,8 @@ export function createApp(
     id,
     now,
     audit,
+    notify,
+    mailDetails,
     createPaymentRequest,
   });
   app.get("/api/class-series/:id", owner, (req, res) => {
@@ -1770,7 +1865,7 @@ export function createApp(
         );
       if (kind === "classes")
         for (const b of all(
-          "SELECT member_id FROM reservations WHERE org_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
+          "SELECT id,member_id FROM reservations WHERE org_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
           req.org.id,
           rid,
         ))
@@ -1779,6 +1874,8 @@ export function createApp(
             b.member_id,
             "Class updated / تم تحديث الحصة",
             data.title + " · " + data.startsAt,
+            null,
+            mailDetails(req.org.id, b.member_id, null, b.id),
           );
       audit(req, kind + ".update", rid);
     });
@@ -2034,6 +2131,8 @@ export function createApp(
           ? "Payment pending / بانتظار الدفع"
           : "Booking confirmed / تم تأكيد الحجز",
         `${c.title} · ${c.startsAt}`,
+        null,
+        mailDetails(org, uid, pid, bid),
       );
       owners(org)
         .filter((u) => u !== uid)
@@ -2121,6 +2220,8 @@ export function createApp(
         b.member_id,
         "Booking cancelled / تم إلغاء الحجز",
         "Pro forma voided; applied voucher balance restored.",
+        null,
+        mailDetails(req.org.id, b.member_id, p.id, b.id),
       );
       for (const w of all(
         "SELECT * FROM waitlist WHERE org_id=? AND class_id=? ORDER BY created_at",
@@ -2168,7 +2269,14 @@ export function createApp(
       plan.credits || 0,
     );
     awardCredits(pid);
-    notify(org, uid, "Payment request / طلب دفع", plan.name);
+    notify(
+      org,
+      uid,
+      "Payment request / طلب دفع",
+      plan.name,
+      null,
+      mailDetails(org, uid, pid),
+    );
     audit(req, "proforma.create", pid);
     return pid;
   }
@@ -2330,6 +2438,13 @@ export function createApp(
         p.member_id,
         "Payment recorded / تم تسجيل الدفعة",
         `${(amount / 100).toFixed(2)} SAR · ${reference}`,
+        null,
+        mailDetails(req.org.id, p.member_id, p.id, null, {
+          amount,
+          reference,
+          externalRef: external,
+          createdAt: now(),
+        }),
       );
       if (p.reservation_id && p.paid + amount === p.due) {
         const booking = get(
@@ -2362,6 +2477,8 @@ export function createApp(
           p.member_id,
           "Booking activated / تم تفعيل الحجز",
           p.description,
+          null,
+          mailDetails(req.org.id, p.member_id, p.id, booking.id),
         );
       }
       awardCredits(p.id);
@@ -2629,8 +2746,105 @@ export function createApp(
         req.body.role === "staff" ? "owner" : "member",
       );
       audit(req, "member.create", uid);
+      if (req.body.sendWelcomeEmail !== false) {
+        const details = mailDetails(req.org.id, uid);
+        details.credentials = {
+          email,
+          role: req.body.role === "staff" ? "Staff / موظف" : "Member / عضو",
+          loginUrl: publicOrigin || req.get("origin"),
+          ...(req.body.includePassword === true
+            ? { passwordEncrypted: app.locals.emailSettings.encrypt(password) }
+            : {}),
+        };
+        notify(
+          req.org.id,
+          uid,
+          "Welcome — your account is ready / مرحباً — حسابك جاهز",
+          "Your account has been created. Sign in using your email. / تم إنشاء حسابك. سجّل الدخول باستخدام بريدك الإلكتروني.",
+          null,
+          details,
+        );
+      }
     });
     res.status(201).json({ id: uid });
+  });
+  app.post("/api/members/:id/email-login", owner, async (req, res) => {
+    const uid = req.params.id;
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        req.org.id,
+        uid,
+      )
+    )
+      fail("User not found", 404);
+    if (!emailAvailable(req.org.id))
+      fail("Configure email delivery first", 409);
+    const account = get("SELECT email,password FROM users WHERE id=?", uid);
+    const details = mailDetails(req.org.id, uid);
+    details.credentials = {
+      email: account.email,
+      loginUrl: publicOrigin || req.get("origin"),
+    };
+    if (req.body.password !== undefined) {
+      const password = text(req.body.password, "password", 128);
+      if (!(await passwordValid(password, account.password)))
+        fail("Password does not match this user", 400);
+      details.credentials.passwordEncrypted = email.encrypt(password);
+    }
+    notify(
+      req.org.id,
+      uid,
+      "Your login details / بيانات تسجيل الدخول",
+      "Your account login details. / بيانات تسجيل الدخول إلى حسابك.",
+      null,
+      details,
+    );
+    audit(req, "member.email-login", uid);
+    res.json({ queued: true });
+  });
+  app.post("/api/proformas/:id/email", owner, (req, res) => {
+    const p = get(
+      "SELECT * FROM proformas WHERE id=? AND org_id=?",
+      req.params.id,
+      req.org.id,
+    );
+    if (!p) fail("Payment request not found", 404);
+    if (!emailAvailable(req.org.id))
+      fail("Configure email delivery first", 409);
+    const payment = get(
+      "SELECT * FROM payments WHERE proforma_id=? AND org_id=? AND amount>0 ORDER BY created_at DESC,rowid DESC LIMIT 1",
+      p.id,
+      req.org.id,
+    );
+    const receipt = req.body.receipt === true;
+    if (receipt && !payment) fail("No payment has been recorded", 409);
+    const details = mailDetails(
+      req.org.id,
+      p.member_id,
+      p.id,
+      null,
+      receipt
+        ? {
+            amount: payment.amount,
+            reference: payment.reference,
+            externalRef: payment.external_ref,
+            createdAt: payment.created_at,
+          }
+        : null,
+    );
+    notify(
+      req.org.id,
+      p.member_id,
+      receipt
+        ? "Payment confirmation / تأكيد الدفع"
+        : "Pro forma invoice / فاتورة مبدئية",
+      p.description,
+      null,
+      details,
+    );
+    audit(req, receipt ? "payment.email" : "proforma.email", p.id);
+    res.json({ queued: true });
   });
   app.put("/api/members/:id/role", owner, adminOnly, (req, res) => {
     const uid = req.params.id,
@@ -2870,6 +3084,7 @@ export function createApp(
               "Upcoming class / حصة قادمة",
               c.title + " · " + c.startsAt,
               "class:" + b.id + ":" + c.startsAt,
+              mailDetails(org.id, b.member_id, null, b.id),
             );
         }
       }

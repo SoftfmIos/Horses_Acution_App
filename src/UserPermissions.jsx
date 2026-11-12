@@ -18,8 +18,9 @@ export function UserPermissions({ request, ar, onSaved }) {
     billing: l("Invoices & payments", "الفواتير والمدفوعات"),
     inventory: l("Inventory", "المخزون"),
     reports: l("Reports", "التقارير"),
-    members: l("Members", "الأعضاء"),
-    settings: l("Settings", "الإعدادات"),
+    members: l("User management", "إدارة المستخدمين"),
+    settings: l("System settings", "إعدادات النظام"),
+    emailSettings: l("Email settings", "إعدادات البريد الإلكتروني"),
     instructors: l("Instructors", "المدربون"),
     arenas: l("Training locations & arenas", "مواقع التدريب والميادين"),
     breeds: l("Horse breeds", "سلالات الخيول"),
@@ -66,6 +67,7 @@ export function UserPermissions({ request, ar, onSaved }) {
           ar={ar}
           busy={busy}
           isAdmin={true}
+          emailConfigured={data.emailConfigured}
           action={async (fn) => {
             setBusy(true);
             setError("");
@@ -182,7 +184,7 @@ export function UserPermissions({ request, ar, onSaved }) {
                           {
                             {
                               add: l("Add", "إضافة"),
-                              edit: l("Edit", "تعديل"),
+                              edit: l("Update", "تحديث"),
                               delete: l("Delete", "حذف"),
                             }[a]
                           }
@@ -227,7 +229,7 @@ export function UserPermissions({ request, ar, onSaved }) {
                                   " — " +
                                   {
                                     add: l("Add", "إضافة"),
-                                    edit: l("Edit", "تعديل"),
+                                    edit: l("Update", "تحديث"),
                                     delete: l("Delete", "حذف"),
                                   }[a]
                                 }

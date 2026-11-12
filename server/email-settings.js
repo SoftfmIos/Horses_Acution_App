@@ -13,6 +13,15 @@ export function emailSettings(db) {
       .some((c) => c.name === "org_id")
   )
     db.exec("ALTER TABLE email_outbox ADD COLUMN org_id TEXT");
+  if (
+    !db
+      .prepare("PRAGMA table_info(email_outbox)")
+      .all()
+      .some((c) => c.name === "details")
+  )
+    db.exec(
+      "ALTER TABLE email_outbox ADD COLUMN details TEXT NOT NULL DEFAULT '{}'",
+    );
   let key;
   function encryptionKey() {
     if (key) return key;
@@ -114,6 +123,8 @@ export function emailSettings(db) {
     });
   }
   return {
+    encrypt,
+    decrypt,
     publicSettings,
     save,
     config,

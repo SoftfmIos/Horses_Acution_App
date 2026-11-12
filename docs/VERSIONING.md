@@ -68,3 +68,15 @@ Deploy the same release to the frontend and backend; pull the repository and res
 ## 1.19.0
 
 Users & Permissions now includes Add user, password generation, printable account details and Edit user alongside the permissions editor. User lists show email addresses; administrators can edit English/Arabic names and login emails. Email changes reject duplicates and shared accounts and invalidate existing sessions. Deploy matching frontend and backend versions so the new profile fields and email updates are available together.
+
+## 1.20.0
+
+Settings is a hub with dedicated System Settings and Email Settings pages. Email settings have independent view/update grants; User Management has independent Add/Update/Delete grants for each staff user. Staff with user-management access can open the user management page; only administrators can assign permissions and change login emails or staff access.
+
+Outgoing messages use the academy crest, bilingual Arabic/English layouts and Riyadh timestamps. Booking and upcoming-session emails include session, instructor, horse, location and confirmation/payment details; confirmed sessions include a Google Calendar link and an ICS attachment for Apple Calendar/Outlook. Pro forma emails include a self-contained printable HTML invoice copy and payment history. Partial/final payment receipts show the current payment, total paid and remaining balance. Boarding creation/end notifications include stay and payment details. Invoice and receipt emails can be resent from the pro forma dialog.
+
+New users receive a welcome/login email when delivery is configured. Account creation can opt out and can explicitly include the password. Generated passwords can also be emailed from the creation card; existing users can be emailed their login link. Passwords in queued account emails are encrypted with the server email key and removed from the outbox after successful sending. Existing passwords cannot be retrieved; resending a password requires the current known password to match its hash.
+
+Billing includes searchable payment reports grouped by pro forma or user, with date filters, individual payments/refunds, lifetime invoice balances and a printable report. Date/search filters affect the selected payments; invoice balances remain lifetime totals.
+
+Deploy frontend and backend from the same release and restart the backend. Existing SMTP settings continue working. Preserve the database and its `.email-key` file. Pro forma copies and payment reports are operational documents, not official tax invoices.

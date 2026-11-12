@@ -30,16 +30,21 @@ export const PERMISSION_PAGES = [
   "discounts",
   "vouchers",
   "stables",
+  "emailSettings",
 ];
 export const actionsForPage = (page) =>
-  page === "reports" ? [] : page === "settings" ? ["edit"] : PERMISSION_ACTIONS;
+  page === "reports"
+    ? []
+    : ["settings", "emailSettings"].includes(page)
+      ? ["edit"]
+      : PERMISSION_ACTIONS;
 export function staffPolicy(modules = PERMISSION_PAGES, actions = null) {
   const legacyChildren = {
     classes: ["instructors", "arenas"],
     horses: ["breeds", "stalls", "boarding"],
     pricing: ["discounts"],
     billing: ["vouchers"],
-    settings: ["stables"],
+    settings: ["stables", "emailSettings"],
   };
   const pages = [
     ...new Set(
@@ -86,18 +91,21 @@ export function permissionForRoute(path, method) {
                   ? "members"
                   : /^\/stables/.test(path)
                     ? "stables"
-                    : /^\/settings/.test(path)
-                      ? "settings"
-                      : /^\/(reports|audit)/.test(path)
-                        ? "reports"
-                        : null;
+                    : /^\/settings\/email/.test(path)
+                      ? "emailSettings"
+                      : /^\/settings/.test(path)
+                        ? "settings"
+                        : /^\/(reports|audit)/.test(path)
+                          ? "reports"
+                          : null;
   if (!PERMISSION_PAGES.includes(page)) return null;
   const action =
     ["GET", "HEAD", "OPTIONS"].includes(method) || path === "/quote"
       ? null
       : method === "DELETE" || /\/(cancel|end)$/.test(path)
         ? "delete"
-        : method === "POST" && !/\/(toggle|payment|refund)$/.test(path)
+        : method === "POST" &&
+            !/\/(toggle|payment|refund|email|email-login)$/.test(path)
           ? "add"
           : "edit";
   return { page, action };
