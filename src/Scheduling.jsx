@@ -248,7 +248,7 @@ export function MemberTools({
   const [accountEmailSent, setAccountEmailSent] = useState(false);
   const label = (en, arabic) => (ar ? arabic : en);
   return (
-    <section className="panel">
+    <section className="panel user-management">
       <div className="member-toolbar">
         <button
           className="primary"
@@ -295,7 +295,7 @@ export function MemberTools({
                     : label("Add user", "إضافة مستخدم")}
               </h2>
               <button
-                className="icon-button"
+                className="soft"
                 aria-label={label("Close", "إغلاق")}
                 disabled={busy}
                 onClick={() => setForm(null)}
@@ -670,7 +670,7 @@ export function MemberTools({
               {label("Email login details", "إرسال بيانات الدخول")}
             </button>
             <button
-              className="text-button"
+              className="soft user-delete-button"
               disabled={!canDelete}
               onClick={() => {
                 if (

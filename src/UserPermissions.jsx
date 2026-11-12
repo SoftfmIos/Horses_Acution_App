@@ -91,7 +91,7 @@ export function UserPermissions({ request, ar, onSaved }) {
         </p>
       )}
       {data && (
-        <label>
+        <label className="permission-user-field">
           {l("User", "المستخدم")}
           <select
             aria-label={l("Permissions user", "مستخدم الصلاحيات")}
@@ -134,7 +134,7 @@ export function UserPermissions({ request, ar, onSaved }) {
             }
           }}
         >
-          <label>
+          <label className="permission-user-field">
             {l("Access level", "مستوى الوصول")}
             <select
               aria-label={l("Access level", "مستوى الوصول")}

@@ -80,3 +80,7 @@ New users receive a welcome/login email when delivery is configured. Account cre
 Billing includes searchable payment reports grouped by pro forma or user, with date filters, individual payments/refunds, lifetime invoice balances and a printable report. Date/search filters affect the selected payments; invoice balances remain lifetime totals.
 
 Deploy frontend and backend from the same release and restart the backend. Existing SMTP settings continue working. Preserve the database and its `.email-key` file. Pro forma copies and payment reports are operational documents, not official tax invoices.
+
+## 1.21.0
+
+Email Settings and System Settings now use the same icon cards and Manage controls as the other settings modules. User-management buttons share sizing, spacing and shape, and the User and Access Level selectors have matching widths. Horse timelines, rides, medical records, care tasks, documents and boarding stays are grouped by month using Riyadh time, newest first. Print horse card & history prints a compact horse summary and the selected section, with month headers and without editing/upload controls. English and Arabic month labels follow the current language.

@@ -2,6 +2,8 @@ import { DEFAULT_HOLD_HOURS, MAX_HOLD_HOURS } from "../shared/booking-policy";
 import React, { useState } from "react";
 import {
   Users,
+  Mail,
+  Settings2,
   GraduationCap,
   MapPin,
   CalendarDays,
@@ -86,6 +88,8 @@ export function SettingsHub({
     ],
   ];
   const links = [
+    ["systemSettings", Settings2],
+    ["emailSettings", Mail],
     ["horses", HorseHead],
     ["stalls", HorseHead],
     ["boardingManagement", HorseHead],
@@ -105,32 +109,6 @@ export function SettingsHub({
   ];
   return (
     <>
-      {page === "settings" && (
-        <div className="settings-grid">
-          {[
-            [
-              "systemSettings",
-              label("System settings", "إعدادات النظام"),
-              "settings",
-            ],
-            [
-              "emailSettings",
-              label("Email settings", "إعدادات البريد الإلكتروني"),
-              "emailSettings",
-            ],
-          ].map(
-            ([key, title, module]) =>
-              canView(module) && (
-                <article className="panel settings-card" key={key}>
-                  <h2>{title}</h2>
-                  <button className="primary" onClick={() => go(key)}>
-                    {label("Open", "فتح")}
-                  </button>
-                </article>
-              ),
-          )}
-        </div>
-      )}
       {page === "systemSettings" && (
         <>
           <button className="soft" onClick={() => go("settings")}>
@@ -263,7 +241,16 @@ export function SettingsHub({
           </p>
           <div className="settings-grid">
             {links.map(([key, Icon]) => {
-              const module = key === "pricing" ? "plans" : key;
+              const module =
+                key === "systemSettings"
+                  ? "settings"
+                  : key === "pricing"
+                    ? "plans"
+                    : key;
+              const dedicated = ["systemSettings", "emailSettings"].includes(
+                key,
+              );
+              if (dedicated && !canView(module)) return null;
               const count = data[module]?.length;
               return (
                 <article className="panel settings-card" key={key}>
@@ -282,19 +269,21 @@ export function SettingsHub({
                     >
                       {label("Manage", "إدارة")}
                     </button>
-                    <button
-                      className="primary"
-                      disabled={!can(module, "add")}
-                      onClick={() =>
-                        ["members", "boardingManagement"].includes(key)
-                          ? go(key)
-                          : key === "billing"
-                            ? go("billing")
-                            : openForm(module)
-                      }
-                    >
-                      {t.add}
-                    </button>
+                    {!dedicated && (
+                      <button
+                        className="primary"
+                        disabled={!can(module, "add")}
+                        onClick={() =>
+                          ["members", "boardingManagement"].includes(key)
+                            ? go(key)
+                            : key === "billing"
+                              ? go("billing")
+                              : openForm(module)
+                        }
+                      >
+                        {t.add}
+                      </button>
+                    )}
                   </div>
                 </article>
               );

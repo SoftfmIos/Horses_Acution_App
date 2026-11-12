@@ -1,3 +1,5 @@
+import { Printer } from "lucide-react";
+import { historyMonths } from "./historyMonths";
 import { ProfilePhoto } from "./ProfilePhoto";
 import React, { useEffect, useState } from "react";
 import { localizedName } from "./localization";
@@ -93,6 +95,22 @@ export function HorseProfile({
           {error}
         </p>
       )}
+      <div className="horse-print-brand">
+        <img src="/logos/riyadh-polo-club-academy.png" alt="" width="70" />
+        <h2>{l("Horse card & history", "بطاقة الخيل والسجل")}</h2>
+      </div>
+      <div className="section-heading no-print">
+        <p>
+          {l(
+            "Print the horse card and the selected history section.",
+            "اطبع بطاقة الخيل وقسم السجل المحدد.",
+          )}
+        </p>
+        <button className="soft" onClick={() => window.print()}>
+          <Printer size={17} />
+          {l("Print horse card & history", "طباعة بطاقة الخيل والسجل")}
+        </button>
+      </div>
       <div className="horse-master-detail">
         <aside className="horse-master">
           <ProfilePhoto
@@ -152,7 +170,7 @@ export function HorseProfile({
           </div>
         </aside>
         <div className="horse-detail">
-          <div className="profile-tabs">
+          <div className="profile-tabs no-print">
             {[
               ["timeline", "Timeline", "السجل الزمني"],
               ["care", "Care & feeding", "الرعاية والتغذية"],
@@ -171,15 +189,20 @@ export function HorseProfile({
           {tab === "timeline" && (
             <>
               <h3>{l("Horse history", "سجل الحصان")}</h3>
-              <ol className="horse-timeline">
-                {profile.events.map((e) => (
-                  <li key={e.type + e.id}>
-                    <time>{when(e.date)}</time>
-                    <strong>{e.title}</strong>
-                    <p>{e.details}</p>
-                  </li>
-                ))}
-              </ol>
+              {historyMonths(profile.events, (e) => e.date, ar).map((month) => (
+                <section className="horse-history-month" key={month.key}>
+                  <h4>{month.title}</h4>
+                  <ol className="horse-timeline">
+                    {month.items.map((e) => (
+                      <li key={e.type + e.id}>
+                        <time>{when(e.date)}</time>
+                        <strong>{e.title}</strong>
+                        <p>{e.details}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ))}
               {!profile.events.length && (
                 <p>{l("No history yet.", "لا يوجد سجل بعد.")}</p>
               )}
@@ -212,32 +235,40 @@ export function HorseProfile({
                     </tr>
                   </thead>
                   <tbody>
-                    {profile.bookings
-                      .slice()
-                      .sort((a, b) =>
-                        b.session.startsAt.localeCompare(a.session.startsAt),
-                      )
-                      .map((b) => (
-                        <tr key={b.id}>
-                          <td>{when(b.session.startsAt)}</td>
-                          <td>{localizedName(b.session, ar, "title")}</td>
-                          <td>{b.memberName || "—"}</td>
-                          <td>{localizedName(b.session, ar, "instructor")}</td>
-                          <td>{localizedName(b.session, ar, "arena")}</td>
-                          <td>
-                            {{
-                              confirmed: l("Confirmed", "مؤكد"),
-                              pending_payment: l(
-                                "Awaiting payment",
-                                "بانتظار السداد",
-                              ),
-                              cancelled: l("Cancelled", "ملغى"),
-                              expired: l("Expired", "منتهي"),
-                            }[b.status] || b.status}
-                          </td>
-                          <td>{b.attendance || "—"}</td>
+                    {historyMonths(
+                      profile.bookings,
+                      (b) => b.session.startsAt,
+                      ar,
+                    ).map((month) => (
+                      <React.Fragment key={month.key}>
+                        <tr className="history-month-row">
+                          <th colSpan={7}>{month.title}</th>
                         </tr>
-                      ))}
+                        {month.items.map((b) => (
+                          <tr key={b.id}>
+                            <td>{when(b.session.startsAt)}</td>
+                            <td>{localizedName(b.session, ar, "title")}</td>
+                            <td>{b.memberName || "—"}</td>
+                            <td>
+                              {localizedName(b.session, ar, "instructor")}
+                            </td>
+                            <td>{localizedName(b.session, ar, "arena")}</td>
+                            <td>
+                              {{
+                                confirmed: l("Confirmed", "مؤكد"),
+                                pending_payment: l(
+                                  "Awaiting payment",
+                                  "بانتظار السداد",
+                                ),
+                                cancelled: l("Cancelled", "ملغى"),
+                                expired: l("Expired", "منتهي"),
+                              }[b.status] || b.status}
+                            </td>
+                            <td>{b.attendance || "—"}</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -249,22 +280,29 @@ export function HorseProfile({
           {tab === "care" && (
             <>
               <h3>{l("Medical records", "السجل الطبي")}</h3>
-              {profile.medical.map((m) => (
-                <article className="panel" key={m.id}>
-                  <strong>{m.type}</strong>
-                  <p>
-                    {when(m.date)} · {m.notes}
-                  </p>
-                  {m.dueAt && (
-                    <p>
-                      {l("Next due", "الموعد القادم")}: {when(m.dueAt)}
-                    </p>
-                  )}
-                  <p>
-                    {m.medication} {m.dose}
-                  </p>
-                </article>
-              ))}
+              {historyMonths(profile.medical, (m) => m.date, ar).map(
+                (month) => (
+                  <section className="horse-history-month" key={month.key}>
+                    <h4>{month.title}</h4>
+                    {month.items.map((m) => (
+                      <article className="panel" key={m.id}>
+                        <strong>{m.type}</strong>
+                        <p>
+                          {when(m.date)} · {m.notes}
+                        </p>
+                        {m.dueAt && (
+                          <p>
+                            {l("Next due", "الموعد القادم")}: {when(m.dueAt)}
+                          </p>
+                        )}
+                        <p>
+                          {m.medication} {m.dose}
+                        </p>
+                      </article>
+                    ))}
+                  </section>
+                ),
+              )}
               <h3>{l("Care task history", "سجل مهام الرعاية")}</h3>
               <div className="table-wrap">
                 <table>
@@ -277,22 +315,31 @@ export function HorseProfile({
                     </tr>
                   </thead>
                   <tbody>
-                    {profile.tasks
-                      .filter((t) => !t.cancelled)
-                      .map((t) => (
-                        <tr key={t.id}>
-                          <td>{t.title}</td>
-                          <td>{when(t.dueAt)}</td>
-                          <td>{t.done ? "✓" : l("Pending", "معلق")}</td>
-                          <td>
-                            {t.done
-                              ? (t.completedByName || "—") +
-                                " · " +
-                                when(t.completedAt)
-                              : "—"}
-                          </td>
+                    {historyMonths(
+                      profile.tasks.filter((t) => !t.cancelled),
+                      (t) => t.dueAt,
+                      ar,
+                    ).map((month) => (
+                      <React.Fragment key={month.key}>
+                        <tr className="history-month-row">
+                          <th colSpan={4}>{month.title}</th>
                         </tr>
-                      ))}
+                        {month.items.map((t) => (
+                          <tr key={t.id}>
+                            <td>{t.title}</td>
+                            <td>{when(t.dueAt)}</td>
+                            <td>{t.done ? "✓" : l("Pending", "معلق")}</td>
+                            <td>
+                              {t.done
+                                ? (t.completedByName || "—") +
+                                  " · " +
+                                  when(t.completedAt)
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -303,11 +350,18 @@ export function HorseProfile({
                 </p>
               ))}
               <h3>{l("Boarding", "الإيواء")}</h3>
-              {profile.boarding.map((b) => (
-                <p key={b.id}>
-                  {b.stall} · {b.startDate} – {b.endDate}
-                </p>
-              ))}
+              {historyMonths(profile.boarding, (b) => b.startDate, ar).map(
+                (month) => (
+                  <section className="horse-history-month" key={month.key}>
+                    <h4>{month.title}</h4>
+                    {month.items.map((b) => (
+                      <p key={b.id}>
+                        {b.stall} · {b.startDate} – {b.endDate}
+                      </p>
+                    ))}
+                  </section>
+                ),
+              )}
             </>
           )}
           {tab === "documents" && (
@@ -319,7 +373,10 @@ export function HorseProfile({
                 )}
               </p>
               {canAddDocuments && (
-                <form className="panel profile-upload" onSubmit={upload}>
+                <form
+                  className="panel profile-upload no-print"
+                  onSubmit={upload}
+                >
                   <label>
                     {l("Document title (English)", "عنوان الوثيقة بالإنجليزية")}
                     <input name="titleEn" required maxLength={100} />
@@ -364,37 +421,44 @@ export function HorseProfile({
                   </button>
                 </form>
               )}
-              {profile.documents.map((d) => (
-                <article className="panel" key={d.id}>
-                  <strong>{localizedName(d, ar, "title")}</strong>
-                  <p>
-                    {d.filename} · {Math.ceil(d.size / 1024)} KB ·{" "}
-                    {when(d.createdAt)}
-                  </p>
-                  <button
-                    className="soft"
-                    disabled={busy}
-                    onClick={() => download(d)}
-                  >
-                    {l("Download", "تنزيل")}
-                  </button>
-                  {canDeleteDocuments && (
-                    <button
-                      disabled={busy}
-                      onClick={async () => {
-                        const ok = await action(() =>
-                          request("/horse-documents/" + d.id, {
-                            method: "DELETE",
-                          }),
-                        );
-                        if (ok) load();
-                      }}
-                    >
-                      {l("Remove document", "حذف الوثيقة")}
-                    </button>
-                  )}
-                </article>
-              ))}
+              {historyMonths(profile.documents, (d) => d.createdAt, ar).map(
+                (month) => (
+                  <section className="horse-history-month" key={month.key}>
+                    <h4>{month.title}</h4>
+                    {month.items.map((d) => (
+                      <article className="panel" key={d.id}>
+                        <strong>{localizedName(d, ar, "title")}</strong>
+                        <p>
+                          {d.filename} · {Math.ceil(d.size / 1024)} KB ·{" "}
+                          {when(d.createdAt)}
+                        </p>
+                        <button
+                          className="soft"
+                          disabled={busy}
+                          onClick={() => download(d)}
+                        >
+                          {l("Download", "تنزيل")}
+                        </button>
+                        {canDeleteDocuments && (
+                          <button
+                            disabled={busy}
+                            onClick={async () => {
+                              const ok = await action(() =>
+                                request("/horse-documents/" + d.id, {
+                                  method: "DELETE",
+                                }),
+                              );
+                              if (ok) load();
+                            }}
+                          >
+                            {l("Remove document", "حذف الوثيقة")}
+                          </button>
+                        )}
+                      </article>
+                    ))}
+                  </section>
+                ),
+              )}
             </>
           )}
         </div>

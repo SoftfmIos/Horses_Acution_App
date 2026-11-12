@@ -2066,3 +2066,155 @@ pre {
     break-after: avoid;
   }
 }
+
+/* User management uses the same control geometry in toolbars, rows and dialogs. */
+.user-management :is(button.primary, button.soft) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: normal;
+}
+.user-management :is(.member-toolbar, .modal-actions) {
+  justify-content: flex-start;
+}
+.user-management .user-delete-button {
+  color: #9c3030;
+}
+.member-modal-form :is(input:not([type="checkbox"]), select) {
+  width: 100%;
+  min-height: 46px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+.member-modal-form label:has(> input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+}
+.member-modal-form input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  padding: 0;
+}
+.permissions-page .permission-user-field {
+  width: 100%;
+  max-width: 680px;
+}
+.permissions-page .permission-user-field select {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 4px;
+  font: inherit;
+}
+.horse-print-brand {
+  display: none;
+}
+.horse-history-month {
+  margin: 24px 0;
+}
+.horse-history-month > h4,
+.history-month-row th {
+  padding: 12px 14px;
+  background: var(--stone);
+  color: var(--navy);
+  text-align: start;
+}
+@media print {
+  .horse-print-brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .horse-profile .horse-master-detail {
+    display: block;
+  }
+  .horse-profile .horse-master {
+    position: static;
+    border: 1px solid #aaa;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .horse-profile
+    :is(button, .profile-photo-actions, .profile-upload, .photo-error) {
+    display: none !important;
+  }
+  .horse-profile .table-wrap {
+    overflow: visible;
+  }
+  .horse-profile table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .horse-profile :is(th, td) {
+    padding: 7px;
+    border: 1px solid #aaa;
+    overflow-wrap: anywhere;
+  }
+  .horse-profile thead {
+    display: table-header-group;
+  }
+  .horse-profile :is(tr, .horse-timeline li, .horse-facts > div) {
+    break-inside: avoid;
+  }
+  .horse-profile :is(h3, h4, .history-month-row) {
+    break-after: avoid;
+  }
+}
+@media print {
+  .horse-profile .horse-master {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 8px 16px;
+    break-inside: avoid;
+  }
+  .horse-master > .profile-photo {
+    grid-row: span 2;
+    margin: 0;
+  }
+  .horse-master .profile-photo-image {
+    width: 70px;
+    height: 70px;
+  }
+  .horse-master > h3 {
+    margin: 0;
+  }
+  .horse-master .horse-facts {
+    grid-column: 2;
+    grid-template-columns: repeat(4, 1fr);
+    margin: 0;
+  }
+  .horse-master > p,
+  .horse-master .horse-summary {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .horse-master .horse-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-top: 8px;
+  }
+  .horse-master p {
+    margin: 4px 0;
+  }
+  .horse-profile .horse-history-month {
+    margin: 12px 0;
+  }
+  .horse-profile .horse-history-month > h4 {
+    margin: 8px 0;
+    padding: 7px 10px;
+  }
+}
