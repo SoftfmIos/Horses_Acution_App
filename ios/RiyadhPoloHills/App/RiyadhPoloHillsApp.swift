@@ -2,6 +2,7 @@ import SwiftUI
 
 @main @MainActor struct RiyadhPoloHillsApp: App {
     @StateObject private var store = AcademyStore()
+    init() { _ = ClassReminderService.shared }
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(store)

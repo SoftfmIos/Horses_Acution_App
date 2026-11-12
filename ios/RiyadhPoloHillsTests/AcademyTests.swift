@@ -56,3 +56,61 @@ final class AcademyTests: XCTestCase {
 
     }
 }
+
+extension AcademyTests {
+    private func reminderData(status: String = "confirmed", memberID: String = "rider", start: String = "2026-11-13T10:00:00Z", sessionID: String = "session") throws -> AcademyData {
+        let json: [String: Any] = [
+            "classes": [["id": sessionID,"title":"Lesson","startsAt":start,"endsAt":"2026-11-13T11:00:00Z","instructor":"Teacher","instructorId":"teacher-profile","arena":"Arena A","planId":"plan"]],
+            "bookings": [["id":"booking","member_id":memberID,"class_id":sessionID,"status":status]]
+        ]
+        return try JSONDecoder().decode(AcademyData.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+    func testReminderIsThirtyMinutesBeforeClass() throws {
+        let data = try reminderData()
+        let plan = ClassReminderPlan.make(accountID:"rider",stableID:"academy",bookings:data.bookings,sessions:data.classes,instructorIDs:[],arabic:false,now:AcademyDates.parse("2026-11-13T08:00:00Z")!)
+        XCTAssertEqual(plan.count,1)
+        XCTAssertEqual(plan.first?.fireDate,AcademyDates.parse("2026-11-13T09:30:00Z"))
+        XCTAssertTrue(plan.first?.body.contains("Arena A") == true)
+    }
+    func testPendingCancelledAndOtherMembersAreExcluded() throws {
+        let now = AcademyDates.parse("2026-11-13T08:00:00Z")!
+        for status in ["pending_payment","cancelled","expired"] {
+            let data = try reminderData(status:status)
+            XCTAssertTrue(ClassReminderPlan.make(accountID:"rider",stableID:"academy",bookings:data.bookings,sessions:data.classes,instructorIDs:[],arabic:false,now:now).isEmpty)
+        }
+        let data = try reminderData()
+        XCTAssertTrue(ClassReminderPlan.make(accountID:"unrelated-user",stableID:"academy",bookings:data.bookings,sessions:data.classes,instructorIDs:[],arabic:false,now:now).isEmpty)
+    }
+    func testAssignedInstructorGetsOneReminderAndPastTriggersAreSkipped() throws {
+        let data = try reminderData()
+        let now = AcademyDates.parse("2026-11-13T08:00:00Z")!
+        let plan = ClassReminderPlan.make(accountID:"teacher-user",stableID:"academy",bookings:data.bookings+data.bookings,sessions:data.classes,instructorIDs:["teacher-profile"],arabic:true,now:now)
+        XCTAssertEqual(plan.count,1)
+        XCTAssertEqual(plan.first?.title,"حصتك تبدأ بعد 30 دقيقة")
+        XCTAssertTrue(ClassReminderPlan.make(accountID:"rider",stableID:"academy",bookings:data.bookings,sessions:data.classes,instructorIDs:[],arabic:false,now:AcademyDates.parse("2026-11-13T09:45:00Z")!).isEmpty)
+    }
+    func testReschedulingPreservesReminderIdentityAndChangesTrigger() throws {
+        let original = try reminderData()
+        let updated = try reminderData(start:"2026-11-13T12:00:00Z")
+        let now = AcademyDates.parse("2026-11-13T08:00:00Z")!
+        let first = ClassReminderPlan.make(accountID:"rider",stableID:"academy",bookings:original.bookings,sessions:original.classes,instructorIDs:[],arabic:false,now:now)
+        let second = ClassReminderPlan.make(accountID:"rider",stableID:"academy",bookings:updated.bookings,sessions:updated.classes,instructorIDs:[],arabic:false,now:now)
+        XCTAssertEqual(first.first?.id,second.first?.id)
+        XCTAssertNotEqual(first.first?.fireDate,second.first?.fireDate)
+    }
+}
+
+extension AcademyTests {
+    func testReminderQueueStaysBelowIOSPendingLimit() throws {
+        var sessions: [RidingSession] = []
+        var bookings: [Booking] = []
+        for index in 0..<70 {
+            let data = try reminderData(sessionID: "session-\(index)")
+            sessions += data.classes
+            bookings += data.bookings
+        }
+        let plan = ClassReminderPlan.make(accountID:"rider",stableID:"academy",bookings:bookings,sessions:sessions,instructorIDs:[],arabic:false,now:AcademyDates.parse("2026-11-13T08:00:00Z")!)
+        XCTAssertEqual(plan.count,60)
+        XCTAssertEqual(Set(plan.map(\.id)).count,60)
+    }
+}

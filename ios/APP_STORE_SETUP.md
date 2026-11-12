@@ -1,6 +1,6 @@
 # Apple Developer → Codemagic → TestFlight
 
-The native app is **Riyadh Polo Hills**, version **1.0.0**, branch **iOSApp**. It uses bundle ID **com.riyadhpolohills.academy** and the website **https://app.riyadhpolohills.com**. Administrative settings stay in the web portal.
+The native app is **Riyadh Polo Hills**, version **1.0.1**, branch **iOSApp**. It uses bundle ID **com.riyadhpolohills.academy** and the website **https://app.riyadhpolohills.com**. Administrative settings stay in the web portal.
 
 ## 1. Register the Bundle ID in Apple Developer
 
@@ -9,7 +9,7 @@ The native app is **Riyadh Polo Hills**, version **1.0.0**, branch **iOSApp**. I
 3. Click **+ → App IDs → Continue → App → Continue**.
 4. Description: **Riyadh Polo Hills**.
 5. Bundle ID: **Explicit**, then enter **com.riyadhpolohills.academy** exactly.
-6. Leave capabilities unchanged. The current app does not need Push Notifications, Sign in with Apple, iCloud, or In-App Purchase capabilities. Its optional Calendar editor does not require a portal capability.
+6. Leave capabilities unchanged. On-device class reminders do not require the Push Notifications capability; if you have already enabled it, it can remain enabled. Remote APNs delivery still requires separate backend/key setup. Sign in with Apple, iCloud, and In-App Purchase capabilities are not used. Its optional Calendar editor does not require a portal capability.
 7. Click **Continue → Register**.
 
 If the identifier already exists, use that identifier on the same team. Do not create a wildcard ID. If the Identifiers section is unavailable, check membership and team permissions with the account holder.

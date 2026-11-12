@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 struct SessionsView: View {
     @EnvironmentObject var store: AcademyStore
@@ -103,6 +104,7 @@ struct BookingDetailView: View {
     let booking: Booking
     @State private var cancel = false
     @State private var calendar = false
+    @State private var notificationsDenied = false
     var current: Booking { store.data.bookings.first { $0.id == booking.id } ?? booking }
     var body: some View {
         Form {
@@ -114,6 +116,15 @@ struct BookingDetailView: View {
                     LabeledContent(store.text("Instructor", "المدرب"), value: session.instructor)
                     LabeledContent(store.text("Location", "الموقع"), value: session.arena)
                     if current.status == "confirmed" { Button(store.text("Add to calendar", "إضافة إلى التقويم")) { calendar = true } }
+                    if current.status == "confirmed" {
+                        Label(store.text("Allow notifications for a reminder 30 minutes before class. Open the app after booking to sync reminders.", "اسمح بالإشعارات لتذكير قبل الحصة بـ30 دقيقة. افتح التطبيق بعد الحجز لمزامنة التذكيرات."), systemImage: "bell").font(.footnote)
+                        if notificationsDenied {
+                            Text(store.text("Enable notifications for Riyadh Polo Hills in iPhone Settings to receive class reminders.", "فعّل إشعارات الرياض بولو هيلز في إعدادات آيفون لاستلام تذكيرات الحصص.")).font(.footnote)
+                            Button(store.text("Open iPhone notification settings", "فتح إعدادات إشعارات آيفون")) { if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) } }
+                        }
+                        if let notice = store.notice { Text(notice).font(.footnote) }
+                    }
+
                 }
                 if current.status == "pending_payment" { LabeledContent(store.text("Pay before", "الدفع قبل"), value: store.date(current.hold_expires_at)) }
                 Text(current.id).font(.caption).textSelection(.enabled)
@@ -122,6 +133,10 @@ struct BookingDetailView: View {
                 Section { Button(store.text("Cancel booking", "إلغاء الحجز"), role: .destructive) { cancel = true } }
             }
         }.navigationTitle(store.text("Booking", "الحجز"))
+            .task { notificationsDenied = await ClassReminderService.shared.status() == .denied }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                Task { notificationsDenied = await ClassReminderService.shared.status() == .denied }
+            }
             .confirmationDialog(store.text("Cancel this booking?", "إلغاء هذا الحجز؟"), isPresented: $cancel, titleVisibility: .visible) {
                 Button(store.text("Cancel booking", "إلغاء الحجز"), role: .destructive) { Task { await store.perform { try await store.mutate("bookings/\(booking.id)/cancel") } } }
             } message: { Text(store.text("Paid bookings require payment reconciliation before cancellation.", "تتطلب الحجوزات المدفوعة تسوية الدفعات قبل الإلغاء.")) }

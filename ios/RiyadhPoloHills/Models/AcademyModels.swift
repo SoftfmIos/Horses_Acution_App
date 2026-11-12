@@ -32,6 +32,7 @@ struct RidingSession: Decodable, Identifiable {
     let capacity: Int?
     let creditCost: Int?
     let planId: String
+    let instructorId: String?
     let titleEn: String?
     let titleAr: String?
     func display(_ arabic: Bool) -> String { arabic ? (titleAr?.nonempty ?? title) : (titleEn?.nonempty ?? title) }
@@ -80,14 +81,16 @@ struct HorseEvent: Decodable, Identifiable {
 struct HorseProfileData: Decodable {
     let horse: Horse; let ownerName: String?; let events: [HorseEvent]
 }
+struct InstructorIdentity: Decodable { let id: String }
 struct AcademyData: Decodable {
     var classes: [RidingSession] = []; var bookings: [Booking] = []; var plans: [PricePlan] = []
     var proformas: [Invoice] = []; var payments: [Payment] = []; var horses: [Horse] = []
     var tasks: [CareTask] = []; var notifications: [InboxItem] = []; var members: [Member] = []
+    var myInstructorProfiles: [InstructorIdentity] = []
     var creditBalance: Int = 0; var isAdmin: Bool = false; var userRole: String?
     var permissions: [String] = []; var actionPermissions: [String: [String]] = [:]
     init() {}
-    enum CodingKeys: String, CodingKey { case classes, bookings, plans, proformas, payments, horses, tasks, notifications, members, creditBalance, isAdmin, userRole, permissions, actionPermissions }
+    enum CodingKeys: String, CodingKey { case classes, bookings, plans, proformas, payments, horses, tasks, notifications, members, myInstructorProfiles, creditBalance, isAdmin, userRole, permissions, actionPermissions }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         classes = try c.decodeIfPresent([RidingSession].self, forKey: .classes) ?? []
@@ -99,6 +102,7 @@ struct AcademyData: Decodable {
         tasks = try c.decodeIfPresent([CareTask].self, forKey: .tasks) ?? []
         notifications = try c.decodeIfPresent([InboxItem].self, forKey: .notifications) ?? []
         members = try c.decodeIfPresent([Member].self, forKey: .members) ?? []
+        myInstructorProfiles = try c.decodeIfPresent([InstructorIdentity].self, forKey: .myInstructorProfiles) ?? []
         creditBalance = try c.decodeIfPresent(Int.self, forKey: .creditBalance) ?? 0
         isAdmin = try c.decodeIfPresent(Bool.self, forKey: .isAdmin) ?? false
         userRole = try c.decodeIfPresent(String.self, forKey: .userRole)

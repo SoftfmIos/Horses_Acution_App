@@ -11,7 +11,7 @@ import SwiftUI
     @Published var error: String?
     @Published var notice: String?
     @Published var arabic = UserDefaults.standard.string(forKey: "academy.language").map { $0 == "ar" } ?? (Locale.preferredLanguages.first?.hasPrefix("ar") ?? false) {
-        didSet { UserDefaults.standard.set(arabic ? "ar" : "en", forKey: "academy.language") }
+        didSet { UserDefaults.standard.set(arabic ? "ar" : "en", forKey: "academy.language"); Task { await synchronizeReminders() } }
     }
     let api: APIClient
     init(api: APIClient? = nil) { self.api = api ?? APIClient() }
@@ -80,10 +80,12 @@ import SwiftUI
         guard stable?.id == id else { return }
         data = snapshot
         snapshotLoaded = true
+        await synchronizeReminders()
     }
     func reload() async { await perform { try await refresh() } }
     func chooseStable(_ id: String) async {
         guard !busy, id != stable?.id else { return }
+        ClassReminderService.shared.clear()
         data = AcademyData()
         snapshotLoaded = false
         stable = stables.first { $0.id == id }
@@ -95,6 +97,14 @@ import SwiftUI
         let _: APIResult = try await api.send(path, method: method, body: body, stableID: stableID)
         try await refresh()
     }
+    func synchronizeReminders() async {
+        guard let accountID = account?.id, let stableID = stable?.id, snapshotLoaded else { return }
+        let ids = Set(data.myInstructorProfiles.map(\.id))
+        let reminders = ClassReminderPlan.make(accountID: accountID, stableID: stableID,
+            bookings: data.bookings, sessions: data.classes, instructorIDs: ids, arabic: arabic)
+        do { try await ClassReminderService.shared.synchronize(reminders, stableID: stableID); notice = nil }
+        catch { notice = text("Class reminders could not be scheduled. Your booking is saved; reopen the app to retry.", "تعذر جدولة تذكيرات الحصص. حجزك محفوظ؛ أعد فتح التطبيق للمحاولة.") }
+    }
     func signOut() async {
         await perform {
             let _: APIResult = try await api.send("auth/logout", method: "POST")
@@ -102,6 +112,7 @@ import SwiftUI
         }
     }
     func clear() {
+        ClassReminderService.shared.clear()
         api.clearSession()
         account = nil; stable = nil; stables = []; data = AcademyData(); snapshotLoaded = false; notice = nil
         try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appendingPathComponent("InvoiceExports"))

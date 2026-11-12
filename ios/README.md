@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, initially **1.0.0 (1)**; the web/backend release remains **1.21.0**. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.0.1 (2)**; the web/backend release remains **1.21.0**. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -32,7 +32,7 @@ Sessions are kept in the iPhone Keychain with device-only, unlocked access. Pass
 - Staff task search, assignment/completion filters and completion/reopening according to page/action grants and historical-task rules.
 - Pro forma list, grouped payment history per invoice, remaining balances, authorized staff payment recording and native PDF sharing/printing.
 - Lesson-package payment requests; credits activate only after full payment is recorded by the academy.
-- Personal notification inbox and read status. The app refreshes while active and when brought to the foreground. **APNs push notifications and background email delivery are not implemented by this app**; existing server emails continue independently.
+- Personal notification inbox and read status, plus iOS local notifications 30 minutes before confirmed classes. The app refreshes while active and when brought to the foreground. Remote APNs delivery is not implemented; existing server emails continue independently.
 - Support and account privacy information. **System settings, email settings, user administration and permission management stay in the web portal.** Basic account controls cover language, academy selection and sign-out only.
 
 This is a native daily-work app, not a full replacement for every administrator/editor workflow in the website. Email configuration, user creation, bulk scheduling, care-plan authoring, stock configuration and administrative reporting remain in the web portal.
@@ -60,3 +60,15 @@ Push notification delivery, if requested later, requires backend APNs device reg
 ## Codemagic and TestFlight
 
 A root `codemagic.yaml` defines an automatic unsigned simulator-check workflow and a manually started signed TestFlight workflow. Follow [Apple registration and Codemagic setup](APP_STORE_SETUP.md). The TestFlight workflow expects the App Store Connect integration named **Riyadh Polo Hills** and environment group **riyadh_polo_app_store** containing **APP_STORE_APPLE_ID**. No signing secrets are stored in this repository.
+
+## Class reminders (1.0.1)
+
+After syncing confirmed bookings, the app asks for iOS notification permission and schedules a single alert **30 minutes before class**. Alerts use the selected Arabic/English language and include the class, Riyadh start time and location. Members receive reminders for their own confirmed bookings. Linked instructors also receive one reminder per confirmed assigned class when the deployed backend supplies `myInstructorProfiles` and class instructor IDs. Unrelated staff bookings do not generate reminders.
+
+These are **on-device local notifications**, not server/APNs pushes. Once scheduled, iOS can show them while the app is closed. No APNs key or Push Notifications entitlement is required for these local alerts; the capability already selected in Apple Developer may remain enabled. Delivery depends on permission, iOS Focus/notification settings and the device being available. Changes made on another device while this app stays closed are reflected only on the next successful sync. Open the app after making bookings in the web portal. A remote APNs service would be needed to update reminders without opening the app.
+
+A successful refresh replaces changed reminders and removes cancelled/pending bookings. Changing academy or signing out removes reminders and delivered notifications from the previous scope. Only the currently selected academy is scheduled. At most the nearest 60 class reminders are queued, leaving space below iOS's pending-notification limit. A class first synced after its 30-minute reminder time does not produce an immediate late alert. The confirmed-booking page explains notification permission and links to iPhone notification settings if permission is denied.
+
+The app icon is already packaged in the asset catalog; a review/download copy is in `ios/AppStoreAssets/AppIcon-1024.png`. Both are identical, opaque RGB 1024px PNGs using the existing crest on ivory.
+
+Notification scheduling, permission prompts and physical-device delivery must be tested in Xcode/TestFlight. The Linux workspace can validate source syntax and packaging but cannot run iOS notification delivery tests.
