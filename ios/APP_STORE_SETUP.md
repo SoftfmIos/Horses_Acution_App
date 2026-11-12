@@ -66,3 +66,9 @@ After deploying website release 1.28.0, use these public URLs in App Store Conne
 - Privacy Policy URL: `https://app.riyadhpolohills.com/privacy.html`
 
 The app uses Apple's Standard Licensed Application End User License Agreement: `https://www.apple.com/legal/internet-services/itunes/dev/stdeula/`. Keep the default standard agreement; leave custom license text empty. The native privacy screen also links to the policy and agreement.
+
+## Uploaded binary is not visible yet
+
+If publishing says the binary was uploaded successfully but no matching build is found, check App Store Connect → TestFlight for the exact version/build and Apple's developer-account email for validation errors (often an ITMS code). Upload acceptance alone does not mean Apple finished processing or approved the binary.
+
+The workflow allows 30 minutes for the uploaded build to become discoverable and 30 minutes for processing, with a 120-minute overall build limit. These bounded waits handle processing delays; they do not override Apple's validation failures. If the build is already processing, check its result before starting another upload. An invalid or missing build accompanied by an Apple validation email must be corrected using that message.
