@@ -3388,3 +3388,67 @@ test("booking credit lookup returns a fresh balance for the selected member with
     403,
   );
 });
+
+test("pricing persists package session edits and rejects credit counts on non-package prices without discarding them", async (t) => {
+  const f = await fixture(t);
+  const invalid = await f.owner.call("/records/plans", "POST", {
+    name: "Eight lessons",
+    amount: 10000,
+    kind: "class",
+    credits: 8,
+  });
+  assert.equal(invalid.httpStatus, 400);
+  assert.match(invalid.error, /Choose Lesson package/);
+  assert.equal((await f.owner.call("/data")).plans.length, 0);
+  const plan = await f.create("plans", {
+    name: "Eight lessons",
+    amount: 10000,
+    kind: "package",
+    credits: 8,
+  });
+  assert.equal((await f.owner.call("/records/plans/" + plan.id)).credits, 8);
+  const order = await f.member.call("/packages", "POST", { planId: plan.id });
+  const edited = await f.owner.call("/records/plans/" + plan.id, "PUT", {
+    name: "Ten lessons",
+    amount: 12000,
+    kind: "package",
+    credits: 10,
+  });
+  assert.equal(edited.httpStatus, 200);
+  assert.equal((await f.owner.call("/records/plans/" + plan.id)).credits, 10);
+  const rejected = await f.owner.call("/records/plans/" + plan.id, "PUT", {
+    name: "Wrong category",
+    amount: 12000,
+    kind: "private",
+    credits: 10,
+  });
+  assert.equal(rejected.httpStatus, 400);
+  const unchanged = await f.owner.call("/records/plans/" + plan.id);
+  assert.equal(unchanged.kind, "package");
+  assert.equal(unchanged.credits, 10);
+  for (const credits of [0, -1, 1.5, 1001]) {
+    assert.equal(
+      (
+        await f.owner.call("/records/plans/" + plan.id, "PUT", {
+          name: "Invalid count",
+          amount: 12000,
+          kind: "package",
+          credits,
+        })
+      ).httpStatus,
+      400,
+    );
+  }
+  await f.owner.call("/proformas/" + order.id + "/payment", "POST", {
+    amount: 10000,
+    reference: "ORIGINAL-EIGHT",
+    externalRef: "Received",
+  });
+  assert.equal((await f.member.call("/data")).creditBalance, 8);
+  const regular = await f.create("plans", {
+    name: "One class",
+    amount: 1000,
+    kind: "class",
+  });
+  assert.equal(regular.credits, 0);
+});

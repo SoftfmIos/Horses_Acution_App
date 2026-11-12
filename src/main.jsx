@@ -998,7 +998,7 @@ function App() {
               "other",
             ].map((v) => [v, t[v]]),
           ],
-          ["credits", "number"],
+          ["credits", "number", modal?.form?.kind === "package"],
           ["active", "checkbox"],
         ],
         classes: [
@@ -1215,6 +1215,15 @@ function App() {
             ).toISOString()
           : "";
     }
+    if (modal.kind === "plans" && b.credits > 0 && b.kind !== "package") {
+      setModal((m) => ({
+        ...m,
+        error: ar
+          ? "لحفظ عدد الحصص، اختر باقة حصص من الفئة. لم يتم حفظ التغييرات بعد."
+          : "Choose Lesson package in Category to save session credits. Your changes have not been saved yet.",
+      }));
+      return;
+    }
     if (modal.kind === "discounts" && b.mode === "fixed")
       b.value = Math.round(b.value * 100);
     let expected = null,
@@ -1408,6 +1417,7 @@ function App() {
           : {}),
       },
       touched: [...(m.touched || []), key],
+      error: "",
       quote: null,
     }));
   }
@@ -1928,6 +1938,25 @@ function App() {
                   {t.add}
                 </button>
               )}
+            {page === "pricing" && canManage("plans", "add") && (
+              <button
+                className="soft"
+                onClick={() =>
+                  setModal({
+                    kind: "plans",
+                    record: null,
+                    form: {
+                      ...defaults("plans"),
+                      kind: "package",
+                      credits: "",
+                    },
+                  })
+                }
+              >
+                <Plus size={17} />
+                {ar ? "إضافة باقة حصص" : "Add session package"}
+              </button>
+            )}
             {page === "billing" && manager && (
               <div
                 className="billing-header-actions"
@@ -3547,6 +3576,11 @@ function App() {
               </>
             ) : (
               <form onSubmit={saveRecord}>
+                {modal.error && (
+                  <p className="notice" role="alert">
+                    {modal.error}
+                  </p>
+                )}
                 {modal.kind === "medical" && (
                   <p className="notice">
                     {ar
@@ -3578,6 +3612,13 @@ function App() {
                     ) : (
                       <>
                         {key === "amount" ? t.price : t[key]}
+                        {modal.kind === "plans" && key === "credits" && (
+                          <small id="plan-credits-help">
+                            {ar
+                              ? "اختر باقة حصص من الفئة لحفظ عدد الحصص (1–1000). تضاف الحصص لرصيد العضو بعد سداد قيمة الباقة بالكامل."
+                              : "Choose Lesson package in Category to save 1–1000 session credits. Members receive these credits after the package is paid in full."}
+                          </small>
+                        )}
                         {key === "frequencyHours" && (
                           <small>
                             {ar
@@ -3658,9 +3699,23 @@ function App() {
                                 : undefined
                             }
                             type={type === "money" ? "number" : type}
+                            aria-describedby={
+                              modal.kind === "plans" && key === "credits"
+                                ? "plan-credits-help"
+                                : undefined
+                            }
                             min={
-                              ["number", "money"].includes(type)
-                                ? "0"
+                              modal.kind === "plans" &&
+                              key === "credits" &&
+                              modal.form.kind === "package"
+                                ? "1"
+                                : ["number", "money"].includes(type)
+                                  ? "0"
+                                  : undefined
+                            }
+                            max={
+                              modal.kind === "plans" && key === "credits"
+                                ? "1000"
                                 : undefined
                             }
                             step={

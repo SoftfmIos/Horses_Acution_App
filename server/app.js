@@ -1172,14 +1172,19 @@ export function createApp(
         notes: optional(b.notes),
       };
     }
-    if (kind === "plans")
+    if (kind === "plans") {
+      const credits = integer(
+        b.credits ?? 0,
+        "lesson credits",
+        b.kind === "package" ? 1 : 0,
+        1000,
+      );
+      if (b.kind !== "package" && credits > 0)
+        fail("Choose Lesson package as the category to save session credits.");
       return {
         name: text(b.name, "price name", 100),
         amount: integer(b.amount, "price", b.kind === "package" ? 1 : 0),
-        credits:
-          b.kind === "package"
-            ? integer(b.credits, "lesson credits", 1, 1000)
-            : 0,
+        credits,
         kind: [
           "class",
           "private",
@@ -1195,6 +1200,7 @@ export function createApp(
           : "class",
         active: b.active !== false,
       };
+    }
     if (kind === "discounts") {
       if (rid) b.code = record(org, kind, rid).code;
       else if (

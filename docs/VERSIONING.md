@@ -118,3 +118,9 @@ Booking dialogs fetch the selected member’s current session balance directly i
 Payment requests and grouped payment report rows use pale green for fully paid invoices, pale yellow for partially paid invoices, and pale orange for pending invoices. A text legend preserves status meaning independently of color. Voided/refund-required invoices retain neutral styling.
 
 Deploy frontend and backend together and restart Node.js. Health should report version 1.25.0. No live production database was changed during development.
+
+## 1.26.0
+
+Pricing no longer silently discards session counts on regular class, private lesson, boarding or other non-package prices. The form retains entered values and explains that Category must be Lesson package; the API rejects inconsistent creates/updates before changing the saved record. Add session package opens the correct category directly, with a required whole-number count from 1 to 1000 and bilingual guidance on credit activation after full payment. Package session counts persist through create, edit and reload. Changing a current package count does not change an existing purchase's saved session snapshot.
+
+Deploy frontend and backend together and restart Node.js; health should report version 1.26.0. Previously discarded counts cannot be recovered from zero automatically. Confirm the intended quantity and edit the plan; already paid requests with missing historical snapshots still use the administrator's Review missing sessions workflow.
