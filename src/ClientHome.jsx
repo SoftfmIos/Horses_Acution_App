@@ -1,3 +1,4 @@
+import { SessionTotals } from "./SessionTotals";
 import { InstructorBadge } from "./InstructorBadge";
 import { ProfilePhoto } from "./ProfilePhoto";
 import React, { useState } from "react";
@@ -20,6 +21,8 @@ export function ClientHome({
   money,
   cancel,
   busy,
+  loading,
+  refresh,
 }) {
   const [history, setHistory] = useState(false);
   const label = (en, arabic) => (ar ? arabic : en);
@@ -55,6 +58,10 @@ export function ClientHome({
             {label("Welcome, ", "مرحباً، ")}
             {user.name}
           </h2>
+          <p className="member-login-email">
+            {label("Login email", "البريد الإلكتروني للدخول")}:{" "}
+            <bdi>{user.email}</bdi>
+          </p>
           <p>
             {label(
               "Your lessons, bookings and next ride. All in one place.",
@@ -67,17 +74,25 @@ export function ClientHome({
           <ArrowRight size={18} />
         </button>
       </section>
-      <button
-        className="primary"
-        disabled={busy}
-        onClick={() => go("buySessions")}
-      >
-        {label("Buy sessions", "شراء حصص")}
-      </button>
+      <div className="member-actions">
+        <button
+          className="primary"
+          disabled={busy || loading}
+          onClick={() => go("buySessions")}
+        >
+          {label("Buy sessions", "شراء حصص")}
+        </button>
+        <button className="soft" onClick={() => go("accountBalance")}>
+          {label("View session history", "عرض سجل الحصص")}
+        </button>
+        <button className="soft" disabled={busy || loading} onClick={refresh}>
+          {label("Refresh session balance", "تحديث رصيد الحصص")}
+        </button>
+      </div>
       <div className="client-summary">
         <button className="panel" onClick={() => go("accountBalance")}>
           <BookOpen />
-          <strong>{data.creditBalance || 0}</strong>
+          <strong>{loading ? t.loading : data.creditBalance}</strong>
           <span>{t.sessionBalance}</span>
         </button>
         <div className="panel">
@@ -86,6 +101,12 @@ export function ClientHome({
           <span>{t.upcoming}</span>
         </div>
       </div>
+      <SessionTotals
+        ledger={data.creditLedger}
+        invoices={data.proformas}
+        ar={ar}
+        loading={loading}
+      />
       <div className="section-heading">
         <h2>{history ? t.myBookings : t.upcoming}</h2>
         <button className="text-button" onClick={() => setHistory(!history)}>

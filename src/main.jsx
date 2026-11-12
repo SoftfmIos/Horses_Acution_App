@@ -1,3 +1,4 @@
+import { SessionTotals } from "./SessionTotals";
 import { BookingCredits } from "./BookingCredits";
 import { paymentStatusTone } from "./paymentStatus";
 import { BuySessions, PackageCreditStatus } from "./SessionCredits";
@@ -695,6 +696,11 @@ function App() {
     setLoading(true);
     try {
       const a = await api("/auth/me");
+      setData(fresh);
+      setPage("overview");
+      setModal(null);
+      setMenu(false);
+      setQ("");
       setAuth(a);
       setStable(a.stables[0]);
       setFailure("");
@@ -812,7 +818,10 @@ function App() {
   const go = (p) => {
     if (p === "tasks") setTaskPlanFilter(null);
     setPage(p);
-    if (["accountBalance", "buySessions", "billing"].includes(p) && stable)
+    if (
+      ["overview", "accountBalance", "buySessions", "billing"].includes(p) &&
+      stable
+    )
       refresh(true);
     setQ("");
     setMenu(false);
@@ -2079,6 +2088,8 @@ function App() {
               key={stable.id}
               request={request}
               data={data}
+              loading={rawData === fresh}
+              refresh={() => refresh(true)}
               user={{ ...auth.user, name: localizedName(auth.user, ar) }}
               ar={ar}
               t={t}
@@ -2302,12 +2313,20 @@ function App() {
               <div className="balance-hero panel">
                 <div>
                   <p>{t.sessionBalance}</p>
-                  <div className="big-money">{data.creditBalance}</div>
+                  <div className="big-money">
+                    {rawData === fresh ? t.loading : data.creditBalance}
+                  </div>
                 </div>
                 <button className="primary" onClick={() => go("buySessions")}>
                   {t.buySessions}
                 </button>
               </div>
+              <SessionTotals
+                ledger={data.creditLedger}
+                invoices={data.proformas}
+                ar={ar}
+                loading={rawData === fresh}
+              />
               <p className="notice">{t.packageNotice}</p>
               <button
                 className="soft"

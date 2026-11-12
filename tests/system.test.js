@@ -1,3 +1,4 @@
+import { summarizeSessionCredits } from "../shared/session-credits.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openDatabase } from "../server/db.js";
@@ -736,6 +737,13 @@ test("lesson package balance, own-account access, atomic credit use, cancellatio
   d = await f.member.call("/data");
   assert.equal(d.creditBalance, 0);
   assert.equal(d.creditLedger.length, 4);
+  const totals = { balance: 0, credited: 1, used: 1, restored: 1, refunded: 1 };
+  assert.deepEqual(summarizeSessionCredits(d.creditLedger), totals);
+  const lookup = await f.member.call(
+    "/members/" + d.members[0].id + "/credits",
+  );
+  for (const [key, count] of Object.entries(totals))
+    assert.equal(lookup[key], count);
   assert.equal((await f.owner.call("/reports")).recordedPayments, 0);
 });
 

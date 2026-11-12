@@ -124,3 +124,13 @@ Deploy frontend and backend together and restart Node.js. Health should report v
 Pricing no longer silently discards session counts on regular class, private lesson, boarding or other non-package prices. The form retains entered values and explains that Category must be Lesson package; the API rejects inconsistent creates/updates before changing the saved record. Add session package opens the correct category directly, with a required whole-number count from 1 to 1000 and bilingual guidance on credit activation after full payment. Package session counts persist through create, edit and reload. Changing a current package count does not change an existing purchase's saved session snapshot.
 
 Deploy frontend and backend together and restart Node.js; health should report version 1.26.0. Previously discarded counts cannot be recovered from zero automatically. Confirm the intended quantity and edit the plan; already paid requests with missing historical snapshots still use the administrator's Review missing sessions workflow.
+
+## 1.27.0
+
+Successful sign-in resets the current page, search and open dialogs so members land on My account even after signing out from another page. My account displays the login email, remaining sessions, total purchased, used, restored after cancellation, refunded and awaiting-full-payment sessions. My balance uses the same totals. Used sessions show gross deductions; restored sessions are listed separately and the remaining-balance formula explains the relationship. Unpaid/partially paid packages are excluded from available credits, and paid packages with missing allocations show a review notice.
+
+Session totals and the staff booking-credit lookup share one ledger calculation. Opening My account refreshes its data; members can also refresh the balance or open the session history directly. Initial loading is labelled instead of briefly displaying a zero balance. The member navigation stays in a single horizontally scrollable row on narrow screens. Arabic and English labels, desktop layout and Arabic mobile layout are supported.
+
+Validation: `npm test` and, after `npm run build`, `CHROMIUM_PATH=/usr/bin/chromium node tests/member-account.mjs`. The browser scenario covers staff-to-member login, member relogin from invoices, actual paid packages, credit bookings, cancellation, refund, partial payment, matching account/balance totals, refresh, Arabic and mobile overflow.
+
+Deploy the frontend and backend together and restart Node.js. Health should report version 1.27.0. Historical missing paid-package counts still require administrator review; this change does not alter live production balances.

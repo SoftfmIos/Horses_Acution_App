@@ -1,3 +1,4 @@
+import { summarizeSessionCredits } from "../shared/session-credits.js";
 import {
   PERMISSION_PAGES,
   PERMISSION_ACTIONS,
@@ -1638,19 +1639,7 @@ export function createApp(
     );
     res.json({
       memberId,
-      balance: creditBalance(org, memberId),
-      credited: ledger
-        .filter((l) => l.reason === "package.paid")
-        .reduce((n, l) => n + l.delta, 0),
-      used: -ledger
-        .filter((l) => l.reason === "booking.used")
-        .reduce((n, l) => n + l.delta, 0),
-      restored: ledger
-        .filter((l) => l.reason === "booking.cancelled")
-        .reduce((n, l) => n + l.delta, 0),
-      refunded: -ledger
-        .filter((l) => l.reason === "package.refunded")
-        .reduce((n, l) => n + l.delta, 0),
+      ...summarizeSessionCredits(ledger),
       needsReview: [...missing, ...review].map((p) => ({
         id: p.id,
         description: p.description,

@@ -655,12 +655,15 @@ pre {
 }
 .client-layout .sidebar nav {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(80px, 1fr);
   gap: 0;
   margin: 0 auto;
   padding: 0;
   max-width: 1000px;
-  overflow: visible;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 .client-layout .sidebar nav button {
   display: flex;
@@ -2396,4 +2399,51 @@ pre {
 .credit-breakdown {
   font-size: 12px;
   color: var(--muted);
+}
+
+.session-totals {
+  margin-block: 24px;
+}
+.session-totals h2 {
+  font-size: 21px;
+  margin-bottom: 14px;
+}
+.session-total-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+.session-total-grid .panel {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.session-total-grid dt {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.session-total-grid dd {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--deep);
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+.session-total-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.member-login-email {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 450px) {
+  .session-total-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
