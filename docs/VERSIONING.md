@@ -58,3 +58,9 @@ Existing staff page grants migrate to their previous full actions and associated
 Task checklists now use Feeding, Medical and Other task groups with accurate period completion. Tasks → Print daily handout prints the selected date's filtered tasks, grouped by type, with assigned staff, instructions, completion checkbox, existing digital completion, and a blank actual-time/signature field beside every task. Supervisor review/signature and staff-name fields document handover. Print planner produces the same signed follow-up layout for the selected week/month. Paper signatures do not update electronic completion automatically.
 
 Classes & riding includes a separate Member & instructor booking calendar section. Staff can filter by member, instructor, status and daily/weekly/monthly period; members see only their own server-authorised bookings. Print booking calendar prints the exact selected schedule in a landscape calendar with rider, horse, instructor, location, time and booking status. Task handouts use portrait paper; printing a pro forma does not accidentally include the booking calendar.
+
+## 1.18.0
+
+Adds secure password generation and printable account details when creating users. Settings now includes outgoing SMTP configuration per stable, with notifications@riyadhpolohills.com as the default sender and support@riyadhpolohills.com as Reply-to. Passwords are encrypted server-side and retained when an edit leaves the password blank. The notification worker picks up saved configuration without restarting. SMTP settings respect existing Settings edit permissions. Database backups include the email encryption key when present; restore the matching `.email-key` file alongside the database.
+
+Deploy the same release to the frontend and backend; pull the repository and restart the backend. Schema changes apply automatically. Saving SMTP settings does not verify credentials or send a test message.
