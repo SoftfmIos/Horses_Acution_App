@@ -66,6 +66,16 @@ try {
       quantity: 20,
       reorderAt: 5,
     });
+    const teacher = await call("/records/instructors", {
+      name: "Trainer",
+      active: true,
+    });
+    const worker = await call("/members", {
+      name: "Staff worker",
+      email: "worker@test.com",
+      password: "123456",
+      role: "staff",
+    });
     const rider = await call("/members", {
       name: "Rider Member",
       email: "rider@test.com",
@@ -89,7 +99,17 @@ try {
       arena: "Lesson arena",
       planId: lessonPrice.id,
     });
-    return { horse, second, plan, inventory, actor: me.user.id, rider, slot };
+    return {
+      horse,
+      second,
+      plan,
+      inventory,
+      actor: me.user.id,
+      worker,
+      rider,
+      teacher,
+      slot,
+    };
   });
   const nav = (name) =>
     page.locator("nav").getByRole("button", { name, exact: true }).click();
@@ -97,6 +117,30 @@ try {
     page.getByRole("button", { name: "Refresh", exact: true }).click();
   const dialog = () => page.getByRole("dialog");
   await refresh();
+  await nav("Users & Permissions");
+  await page
+    .getByLabel("Permissions user", { exact: true })
+    .selectOption(seed.worker.id);
+  await page.getByLabel("Access level", { exact: true }).selectOption("staff");
+  await page
+    .getByRole("checkbox", { name: "Prices & discounts", exact: true })
+    .uncheck();
+  await page
+    .getByRole("button", { name: "Save permissions", exact: true })
+    .click();
+  await page.waitForFunction(
+    () =>
+      !document.querySelector(".permissions-page button[type=submit]")
+        ?.disabled,
+  );
+  assert.equal(
+    JSON.parse(
+      db
+        .prepare("SELECT modules FROM staff_permissions WHERE user_id=?")
+        .get(seed.worker.id).modules,
+    ).includes("pricing"),
+    false,
+  );
   await nav("Classes & riding");
   await page
     .getByRole("region", { name: "Booking calendar" })
@@ -169,6 +213,42 @@ try {
   await dialog()
     .getByRole("heading", { name: "Horse history", exact: true })
     .waitFor();
+  const imageContent = await page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 4;
+    c.height = 4;
+    const x = c.getContext("2d");
+    x.fillStyle = "#227744";
+    x.fillRect(0, 0, 4, 4);
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await dialog()
+    .getByLabel("Upload photo for Shams", { exact: true })
+    .setInputFiles({
+      name: "horse.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(imageContent, "base64"),
+    });
+  await dialog().locator(".profile-photo img").waitFor();
+  assert.ok(
+    db
+      .prepare("SELECT count(*) AS n FROM records WHERE kind='profilePhotos'")
+      .get().n > 0,
+  );
+  await dialog()
+    .getByRole("button", { name: "Ride history", exact: true })
+    .click();
+  await dialog()
+    .getByRole("heading", { name: "Ride history", exact: true })
+    .waitFor();
+  await dialog().getByText("Staff booked lesson", { exact: true }).waitFor();
+  await dialog().getByText("Rider Member", { exact: true }).waitFor();
+  assert.equal(await dialog().locator(".horse-master").isVisible(), true);
+  mkdirSync("test-results", { recursive: true });
+  await page.screenshot({
+    path: "test-results/horse-master-detail.png",
+    fullPage: true,
+  });
   await dialog()
     .getByRole("button", { name: "Documents", exact: true })
     .click();
@@ -193,6 +273,34 @@ try {
   await dialog().getByRole("button", { name: "Timeline", exact: true }).click();
   await dialog().getByText("Horse passport", { exact: true }).waitFor();
   await dialog().getByRole("button", { name: "Cancel", exact: true }).click();
+  await nav("Settings");
+  await page
+    .locator(".settings-card")
+    .filter({
+      has: page.getByRole("heading", { name: "Instructors", exact: true }),
+    })
+    .getByRole("button", { name: "Manage", exact: true })
+    .click();
+  await page
+    .getByLabel("Upload photo for Trainer", { exact: true })
+    .setInputFiles({
+      name: "trainer.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(imageContent, "base64"),
+    });
+  await page.locator(".record-card .profile-photo img").waitFor();
+  await nav("Members");
+  const riderRow = page
+    .locator(".member-row")
+    .filter({ hasText: "Rider Member" });
+  await riderRow
+    .getByLabel("Upload photo for Rider Member", { exact: true })
+    .setInputFiles({
+      name: "rider.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(imageContent, "base64"),
+    });
+  await riderRow.locator(".profile-photo img").waitFor();
   await nav("Medical care");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await dialog()
@@ -202,9 +310,21 @@ try {
   await dialog()
     .getByLabel("Notes", { exact: true })
     .fill("Annual vaccination review");
+  await dialog()
+    .getByLabel("Medication", { exact: true })
+    .fill("Daily supplement");
+  await dialog()
+    .getByLabel("Dose / route", { exact: true })
+    .fill("As prescribed");
+  await dialog().getByLabel("Dose interval (hours)", { exact: true }).fill("0");
+  await dialog()
+    .getByLabel("Treatment duration (days)", { exact: true })
+    .fill("3");
   await dialog().getByRole("button", { name: "Save", exact: true }).click();
   await dialog().waitFor({ state: "hidden" });
-  assert.equal(await page.locator(".record-card").count(), 2);
+  await page.waitForFunction(
+    () => document.querySelectorAll(".record-card").length === 2,
+  );
   await nav("Feeding plans");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await dialog()
@@ -232,8 +352,22 @@ try {
   const completedResponse = page.waitForResponse(
     (r) => r.url().includes("/toggle") && r.request().method() === "POST",
   );
-  await page.locator(".staff-workload input[type=checkbox]").first().check();
+  await page
+    .locator(".staff-workload .task-occurrence")
+    .filter({ hasText: "Hay" })
+    .locator("input[type=checkbox]")
+    .first()
+    .check();
   assert.equal((await completedResponse).status(), 200);
+  await page
+    .locator(".staff-workload .task-occurrence.done")
+    .filter({ hasText: "Hay" })
+    .locator(".completion-stamp")
+    .waitFor();
+  await page.screenshot({
+    path: "test-results/task-calendar.png",
+    fullPage: true,
+  });
   await page.emulateMedia({ media: "print" });
   assert.equal(await page.locator(".planner-print-sheet").isVisible(), true);
   mkdirSync("test-results", { recursive: true });

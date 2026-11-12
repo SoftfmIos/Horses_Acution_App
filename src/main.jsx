@@ -1,3 +1,7 @@
+import { UserPermissions } from "./UserPermissions";
+import { STAFF_MODULES, mayEditTaskDate } from "../shared/permissions";
+import { ProfilePhoto } from "./ProfilePhoto";
+import { DEFAULT_HOLD_HOURS } from "../shared/booking-policy";
 import { discountCodeForForm } from "../shared/discount-code";
 import { expectedClassSlots, verifyClassSlots } from "./classSchedule";
 import release from "../package.json";
@@ -50,6 +54,7 @@ import "./system.css";
 const dict = {
   en: {
     settings: "Settings",
+    permissions: "Users & Permissions",
     frequencyHours: "Dose interval (hours)",
     durationDays: "Treatment duration (days)",
     durationMinutes: "Feeding duration (minutes)",
@@ -160,7 +165,6 @@ const dict = {
     endsAt: "End",
     capacity: "Places",
     horseIds: "Available horses (select multiple)",
-    instructorId: "Instructor",
     instructorIds: "Instructors (select multiple)",
     instructor: "Instructor",
     arena: "Arena",
@@ -229,7 +233,7 @@ const dict = {
     open: "Pending payment",
     settled: "Paid",
     void: "Void",
-    pending_payment: "72-hour payment hold",
+    pending_payment: "Awaiting payment",
     expired: "Expired hold",
     refund_required: "Refund / reconciliation required",
     confirmed: "Confirmed",
@@ -288,6 +292,7 @@ const dict = {
   },
   ar: {
     settings: "الإعدادات",
+    permissions: "المستخدمون والصلاحيات",
     frequencyHours: "تكرار الجرعة كل (ساعة)",
     durationDays: "مدة العلاج (أيام)",
     durationMinutes: "مدة التغذية (دقائق)",
@@ -397,7 +402,6 @@ const dict = {
     endsAt: "النهاية",
     capacity: "الأماكن",
     horseIds: "الخيول المتاحة (اختيار متعدد)",
-    instructorId: "المدرب",
     instructorIds: "المدربون (اختيار متعدد)",
     instructor: "المدرب",
     arena: "الميدان",
@@ -466,7 +470,7 @@ const dict = {
     open: "بانتظار الدفع",
     settled: "مسدد",
     void: "ملغى",
-    pending_payment: "حجز مؤقت للسداد (72 ساعة)",
+    pending_payment: "بانتظار السداد",
     expired: "انتهت مهلة الحجز",
     refund_required: "تحتاج استرداداً أو تسوية",
     confirmed: "مؤكد",
@@ -567,6 +571,7 @@ function App() {
     [q, setQ] = useState(""),
     [reports, setReports] = useState(null),
     [calendarDate, setCalendarDate] = useState(""),
+    [taskPlanFilter, setTaskPlanFilter] = useState(null),
     [pendingVoucher, setPendingVoucher] = useState(() => {
       const url = new URL(window.location.href),
         code = url.searchParams.get("voucher");
@@ -584,10 +589,10 @@ function App() {
   const t = { ...dict[lang] },
     ar = lang === "ar",
     manager = ["owner", "staff", "instructor", "vet", "caregiver"].includes(
-      stable?.role,
+      rawData.userRole || stable?.role,
     ),
     staff = false,
-    client = stable?.role === "member";
+    client = (rawData.userRole || stable?.role) === "member";
   if (client) {
     t.classes = ar ? "حجز موعد" : "Book a slot";
     t.horses = ar ? "خيولي" : "My horses";
@@ -615,19 +620,27 @@ function App() {
         body: { done },
       }),
     );
+  const isSystemAdmin = rawData.isAdmin ?? stable?.isAdmin ?? false;
+  const allowedModules =
+    rawData.permissions || stable?.permissions || STAFF_MODULES;
+  const moduleFor = (kind) =>
+    ({
+      plans: "pricing",
+      discounts: "pricing",
+      vouchers: "billing",
+      instructors: "classes",
+      arenas: "classes",
+      breeds: "horses",
+      stalls: "horses",
+      boardingManagement: "horses",
+    })[kind] || kind;
+  const permitted = (kind) =>
+    isSystemAdmin || allowedModules.includes(moduleFor(kind));
   const canComplete = (task) =>
-    manager ||
-    stable?.role === "caregiver" ||
-    task.assigneeId === auth?.user.id;
-  const canManage = (kind) =>
-    manager ||
-    (
-      {
-        instructor: ["classes"],
-        vet: ["horses", "medical"],
-        caregiver: ["feeding", "tasks"],
-      }[stable?.role] || []
-    ).includes(kind);
+    manager &&
+    permitted("tasks") &&
+    mayEditTaskDate(task.dueAt, new Date().toISOString(), isSystemAdmin);
+  const canManage = (kind) => manager && permitted(kind);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = ar ? "rtl" : "ltr";
@@ -682,7 +695,10 @@ function App() {
             : "The backend is outdated or returned incomplete data. Update the cPanel repository to the latest commit and restart the Node.js app. New catalogues require the updated backend."
           : "",
       );
-      if (manager) {
+      if (
+        manager &&
+        (d.isAdmin || !d.permissions || d.permissions.includes("reports"))
+      ) {
         try {
           setReports(await request("/reports"));
         } catch (e) {
@@ -741,6 +757,7 @@ function App() {
   const labelHorse = (id) => data.horses.find((h) => h.id === id)?.name || "—";
   const memberName = (id) => data.members.find((m) => m.id === id)?.name || "—";
   const go = (p) => {
+    if (p === "tasks") setTaskPlanFilter(null);
     setPage(p);
     setQ("");
     setMenu(false);
@@ -773,6 +790,7 @@ function App() {
           ["reports", BarChart3],
           ["members", Users],
           ["settings", SettingsIcon],
+          ...(isSystemAdmin ? [["permissions", Users]] : []),
         ]
       : []),
     ["notifications", Bell],
@@ -802,6 +820,13 @@ function App() {
           }[stable?.role] || []),
         ].includes(key),
     );
+  for (let i = nav.length - 1; i >= 0; i--)
+    if (
+      manager &&
+      !["overview", "notifications", "permissions"].includes(nav[i][0]) &&
+      !permitted(nav[i][0])
+    )
+      nav.splice(i, 1);
   if (staff)
     for (const [key, icon] of [
       ["medical", HeartPulse],
@@ -1070,6 +1095,12 @@ function App() {
   async function saveRecord(e) {
     e.preventDefault();
     const b = { ...modal.form };
+    if (
+      modal.kind === "medical" &&
+      modal.record?.dailyDose &&
+      !modal.touched?.includes("frequencyHours")
+    )
+      b.frequencyHours = 0;
     if (modal.kind === "discounts") {
       b.code = discountCodeForForm(modal.form, modal.record?.code);
       b.autoCode = !modal.record;
@@ -1123,6 +1154,19 @@ function App() {
             ar
               ? "حدّث خادم cPanel وأعد تشغيل Node.js قبل حفظ مواعيد المدربين. لم يتم إرسال الحفظ."
               : "Update the cPanel backend and restart Node.js before saving instructor slots. Nothing has been submitted.",
+          );
+      }
+      if (
+        kind === "medical" &&
+        b.durationDays > 0 &&
+        (b.frequencyHours === 0 || (b.repeatMode && b.repeatMode !== "none"))
+      ) {
+        const health = await request("/health");
+        if (health.medicalScheduleVersion !== 2)
+          throw new Error(
+            ar
+              ? "حدّث خادم cPanel إلى 1.14.0 وأعد تشغيله لحفظ الجرعات اليومية مع الأيام المختارة."
+              : "Update the cPanel backend to 1.14.0 and restart it to save daily doses with selected weekdays.",
           );
       }
       const saved = await request(
@@ -1236,6 +1280,12 @@ function App() {
   }
 
   function editFormValue(key, type) {
+    if (
+      key === "frequencyHours" &&
+      modal.record?.dailyDose &&
+      !modal.touched?.includes(key)
+    )
+      return 0;
     const value = modal.form[key];
     if (type === "money")
       return value === undefined
@@ -1281,6 +1331,16 @@ function App() {
   function rowCard(kind, r) {
     return (
       <article className="panel record-card" key={r.id}>
+        {["horses", "instructors"].includes(kind) && (
+          <ProfilePhoto
+            kind={kind}
+            id={r.id}
+            name={r.name}
+            request={request}
+            editable={manager}
+            ar={ar}
+          />
+        )}
         <div className="section-heading">
           <h3>{r.name || r.title || r.code || labelHorse(r.horseId)}</h3>
           {canManage(kind) &&
@@ -1420,6 +1480,15 @@ function App() {
           </>
         ) : kind === "feeding" ? (
           <>
+            <button
+              className="primary"
+              onClick={() => {
+                go("tasks");
+                setTaskPlanFilter("feeding:" + r.id);
+              }}
+            >
+              {ar ? "متابعة التغذية اليومية" : "Daily feeding planner"}
+            </button>
             <p>
               <strong>{r.feed}</strong> · {r.quantity}
             </p>
@@ -1763,6 +1832,14 @@ function App() {
             )}
           </div>
 
+          {page === "permissions" && isSystemAdmin && (
+            <UserPermissions
+              key={stable.id}
+              request={request}
+              ar={ar}
+              onSaved={() => refresh()}
+            />
+          )}
           {page === "boardingManagement" && manager && (
             <Boarding
               data={data}
@@ -1793,6 +1870,8 @@ function App() {
           )}
           {page === "overview" && client && (
             <ClientHome
+              key={stable.id}
+              request={request}
               data={data}
               user={{ ...auth.user, name: localizedName(auth.user, ar) }}
               ar={ar}
@@ -2089,8 +2168,12 @@ function App() {
             <>
               <p className="notice">
                 {ar
-                  ? "احجز موعداً أخضر. الحجز الأصفر يحتفظ بالمقعد لمدة تصل إلى 72 ساعة لتأكيد السداد، ثم يحرر تلقائياً."
-                  : "Book a green opening. Yellow holds reserve a seat for up to 72 hours for full payment confirmation, then release automatically."}
+                  ? "احجز موعداً أخضر. الحجز الأصفر يحتفظ بالمقعد لمدة تصل إلى " +
+                    (data.settings?.bookingHoldHours ?? DEFAULT_HOLD_HOURS) +
+                    " ساعة لتأكيد السداد، ثم يحرر تلقائياً."
+                  : "Book a green opening. Yellow holds reserve a seat for up to " +
+                    (data.settings?.bookingHoldHours ?? DEFAULT_HOLD_HOURS) +
+                    " hours for full payment confirmation, then release automatically."}
               </p>
               <div className="slot-summary">
                 <strong>
@@ -2115,6 +2198,9 @@ function App() {
               >
                 <summary>{ar ? "عرض التقويم" : "Show calendar"}</summary>
                 <Schedule
+                  holdHours={
+                    data.settings?.bookingHoldHours ?? DEFAULT_HOLD_HOURS
+                  }
                   defaultView={data.settings?.calendarView || "month"}
                   initialDate={calendarDate.split("|")[0]}
                   key={
@@ -2400,8 +2486,17 @@ function App() {
               </div>
             </>
           )}
+          {page === "tasks" && manager && !isSystemAdmin && (
+            <p className="notice">
+              {ar
+                ? "يمكنك تحديث مهام الأمس وما بعده. تعديل المهام الأقدم متاح لمسؤول النظام فقط."
+                : "You can update yesterday’s and newer tasks. Older tasks require a system administrator."}
+            </p>
+          )}
           {page === "tasks" && manager && (
             <TaskPlanner
+              key={stable.id + "|" + (taskPlanFilter || "all")}
+              initialGroup={taskPlanFilter}
               tasks={data.tasks}
               history={data.taskHistory}
               members={data.members}
@@ -2566,6 +2661,8 @@ function App() {
           )}
           {page === "members" && manager && (
             <MemberTools
+              key={stable.id}
+              isAdmin={isSystemAdmin}
               members={data.members}
               busy={busy}
               request={request}
@@ -2646,11 +2743,13 @@ function App() {
           <section
             className={
               "modal " +
-              (modal.kind === "proforma"
-                ? "proforma-modal"
-                : modal.kind === "voucherPrint"
-                  ? "voucher-modal"
-                  : "")
+              (modal.kind === "horseProfile"
+                ? "horse-profile-modal"
+                : modal.kind === "proforma"
+                  ? "proforma-modal"
+                  : modal.kind === "voucherPrint"
+                    ? "voucher-modal"
+                    : "")
             }
             role="dialog"
             aria-modal="true"
@@ -3094,6 +3193,13 @@ function App() {
                     ) : (
                       <>
                         {key === "amount" ? t.price : t[key]}
+                        {key === "frequencyHours" && (
+                          <small>
+                            {ar
+                              ? "0 = مرة يومياً (كل 24 ساعة)"
+                              : "0 = once daily (every 24 hours)"}
+                          </small>
+                        )}
                         {type === "generated" ? (
                           <input
                             readOnly
@@ -3141,6 +3247,7 @@ function App() {
                         ) : (
                           <input
                             required={required}
+                            aria-label={key === "amount" ? t.price : t[key]}
                             readOnly={
                               modal.kind === "classes" &&
                               key === "capacity" &&

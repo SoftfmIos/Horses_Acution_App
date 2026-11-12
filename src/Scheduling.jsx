@@ -1,3 +1,5 @@
+import { ProfilePhoto } from "./ProfilePhoto";
+import { DEFAULT_HOLD_HOURS } from "../shared/booking-policy";
 import React, { useState } from "react";
 import {
   calendarDays,
@@ -12,6 +14,7 @@ export function Schedule({
   ar,
   defaultView = "month",
   initialDate = "",
+  holdHours = DEFAULT_HOLD_HOURS,
 }) {
   const [view, setView] = useState(defaultView),
     [anchor, setAnchor] = useState(
@@ -52,7 +55,9 @@ export function Schedule({
       <div className="slot-legend">
         <span className="slot-available">{ar ? "متاح" : "Available"}</span>
         <span className="slot-held">
-          {ar ? "حجز مؤقت 72 ساعة" : "72-hour payment hold"}
+          {ar
+            ? "حجز مؤقت " + holdHours + " ساعة"
+            : holdHours + "-hour payment hold"}
         </span>
         <span className="slot-booked">
           {ar ? "حجز مؤكد" : "Confirmed booking"}
@@ -225,7 +230,14 @@ export function Schedule({
     </section>
   );
 }
-export function MemberTools({ members, request, action, ar, busy = false }) {
+export function MemberTools({
+  members,
+  request,
+  action,
+  ar,
+  busy = false,
+  isAdmin = false,
+}) {
   const [form, setForm] = useState(null);
   const label = (en, arabic) => (ar ? arabic : en);
   return (
@@ -345,7 +357,9 @@ export function MemberTools({ members, request, action, ar, busy = false }) {
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
                   >
                     <option value="member">{label("Member", "عضو")}</option>
-                    <option value="staff">{label("Staff", "موظف")}</option>
+                    <option value="staff" disabled={!isAdmin}>
+                      {label("Staff", "موظف")}
+                    </option>
                   </select>
                 </label>
               )}
@@ -395,6 +409,14 @@ export function MemberTools({ members, request, action, ar, busy = false }) {
         .filter((m) => true)
         .map((m) => (
           <div className="task-row member-row" key={m.id}>
+            <ProfilePhoto
+              kind="members"
+              id={m.id}
+              name={m.name}
+              request={request}
+              editable
+              ar={ar}
+            />
             <strong>
               {m.name}
               <small className="record-id">
@@ -404,6 +426,7 @@ export function MemberTools({ members, request, action, ar, busy = false }) {
             <label>
               {label("Role", "الدور")}
               <select
+                disabled={!isAdmin}
                 aria-label={label("Role for ", "دور ") + m.name}
                 value={m.role}
                 onChange={(e) =>

@@ -1,3 +1,4 @@
+import { medicationSchedule } from "../shared/medication-schedule";
 import { classOpenings } from "../shared/class-openings";
 import React from "react";
 import { recurrenceSlots, instant } from "../shared/recurrence";
@@ -18,6 +19,10 @@ export function RecurrenceFields({ form, onChange, ar, medical = false }) {
         startsAt: start,
         endsAt: end,
       });
+      if (medical && Number(form.durationDays) > 0)
+        preview = medicationSchedule({ ...form, completed: false }).map(
+          (startsAt) => ({ startsAt }),
+        );
     } catch (e) {
       error = e.message;
     }
@@ -155,8 +160,8 @@ export function RecurrenceFields({ form, onChange, ar, medical = false }) {
       <p className="notice">
         {medical
           ? label(
-              "Choose an assignee above. Each appointment becomes a task with a completion checkbox. Use the medication interval fields for dose schedules instead.",
-              "اختر المسؤول أعلاه. تتحول كل جلسة إلى مهمة بعلامة إتمام. لجدول جرعات الدواء استخدم حقول التكرار بالساعات بدلاً من ذلك.",
+              "Each appointment or dose becomes a tracked task. For medication, duration limits the course; selected weekdays filter dose days. Interval 0 means once daily.",
+              "تتحول كل جلسة أو جرعة إلى مهمة. مدة العلاج تحدد نهاية الدورة، والأيام المختارة تحدد أيام الجرعات. القيمة 0 تعني مرة يومياً.",
             )
           : label(
               "Each selected date creates one single-seat slot per instructor, with a different available horse. The same instructor or horse cannot be booked twice at that time.",

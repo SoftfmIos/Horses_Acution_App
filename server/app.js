@@ -1,3 +1,8 @@
+import { STAFF_MODULES, mayEditTaskDate } from "../shared/permissions.js";
+import {
+  DEFAULT_HOLD_HOURS,
+  MAX_HOLD_HOURS,
+} from "../shared/booking-policy.js";
 import { discountPrefix } from "../shared/discount-code.js";
 import { classOpenings } from "../shared/class-openings.js";
 import release from "../package.json" with { type: "json" };
@@ -95,6 +100,7 @@ export function createApp(
     }),
   );
   app.use("/api/horses/:id/documents", express.json({ limit: "3mb" }));
+  app.use("/api/photos/:kind/:id", express.json({ limit: "1mb" }));
   app.use(express.json({ limit: "100kb" }));
   const now = () => clock().toISOString();
   const get = (sql, ...args) => db.prepare(sql).get(...args);
@@ -201,7 +207,13 @@ export function createApp(
     records(org, "feeding").some(
       (p) => p.horseId === horse && feedingConflict(p, start, end),
     );
-  function syncCareTasks(org, kind, plan, reschedule = false) {
+  function syncCareTasks(
+    org,
+    kind,
+    plan,
+    reschedule = false,
+    allowHistory = true,
+  ) {
     const dueDates =
       kind === "medical"
         ? medicationSchedule(plan)
@@ -221,10 +233,15 @@ export function createApp(
     for (const old of records(org, "tasks").filter(
       (t) => t[marker] === plan.id && !t.done,
     ))
-      if (!desired.has(old.id) && (reschedule || old.dueAt >= now()))
+      if (
+        mayEditTaskDate(old.dueAt, now(), allowHistory) &&
+        !desired.has(old.id) &&
+        (reschedule || old.dueAt >= now())
+      )
         put(org, "tasks", old.id, { ...old, cancelled: true });
     const horse = record(org, "horses", plan.horseId);
     for (const dueAt of dueDates) {
+      if (!mayEditTaskDate(dueAt, now(), allowHistory)) continue;
       const tid =
         prefix +
         ":" +
@@ -296,6 +313,15 @@ export function createApp(
       "SELECT user_id FROM memberships WHERE org_id=? AND role='owner'",
       org,
     ).map((x) => x.user_id);
+  const holdHours = (org) =>
+    records(org, "academySettings")[0]?.bookingHoldHours ?? DEFAULT_HOLD_HOURS;
+  const holdDeadline = (org, startsAt, createdAt = now()) =>
+    new Date(
+      Math.min(
+        Date.parse(createdAt) + holdHours(org) * 3600000,
+        Date.parse(startsAt),
+      ),
+    ).toISOString();
   function expireHolds(org) {
     const due = all(
       "SELECT * FROM reservations WHERE org_id=? AND status='pending_payment'",
@@ -304,8 +330,8 @@ export function createApp(
       const session = record(org, "classes", b.class_id);
       return (
         (b.hold_expires_at ||
-          new Date(Date.parse(b.created_at) + 72 * 3600000).toISOString()) <=
-          now() || session.startsAt <= now()
+          holdDeadline(org, session.startsAt, b.created_at)) <= now() ||
+        session.startsAt <= now()
       );
     });
     for (const b of due) {
@@ -393,6 +419,7 @@ export function createApp(
       version: release.version,
       schedulingVersion: 2,
       bookingVersion: 1,
+      medicalScheduleVersion: 2,
     }),
   );
   const authLimit = rateLimit({
@@ -442,6 +469,27 @@ export function createApp(
     req.user = { ...user, ...profileName(user.id, user.name) };
     next();
   }
+  const adminUser = (org, uid) =>
+    Boolean(
+      get(
+        "SELECT user_id FROM system_admins WHERE org_id=? AND user_id=?",
+        org,
+        uid,
+      ),
+    );
+  const userModules = (org, uid) => {
+    const row = get(
+      "SELECT modules FROM staff_permissions WHERE org_id=? AND user_id=?",
+      org,
+      uid,
+    );
+    return row ? JSON.parse(row.modules) : STAFF_MODULES;
+  };
+  function adminOnly(req, res, next) {
+    if (!adminUser(req.org.id, req.user.id))
+      fail("System administrator permission required", 403);
+    next();
+  }
   function scoped(req, res, next) {
     const orgId = req.get("x-stable-id");
     const org = get(
@@ -450,7 +498,11 @@ export function createApp(
       orgId || "",
     );
     if (!org) return res.status(403).json({ error: "Stable access denied" });
-    req.org = org;
+    req.org = {
+      ...org,
+      isAdmin: adminUser(org.id, req.user.id),
+      permissions: userModules(org.id, req.user.id),
+    };
     next();
   }
   function owner(req, res, next) {
@@ -516,6 +568,8 @@ export function createApp(
           oid,
           invite ? "member" : "owner",
         );
+        if (!invite)
+          run("INSERT OR IGNORE INTO system_admins VALUES(?,?)", oid, uid);
         if (invite)
           run("UPDATE invites SET used=1 WHERE token=?", hash(invite));
         notify(
@@ -569,6 +623,8 @@ export function createApp(
         const settings = records(o.id, "academySettings")[0];
         return {
           ...o,
+          isAdmin: adminUser(o.id, req.user.id),
+          permissions: userModules(o.id, req.user.id),
           nameEn: settings?.academyNameEn ?? o.name,
           nameAr: settings?.academyNameAr || "",
         };
@@ -608,6 +664,112 @@ export function createApp(
   app.use("/api", (req, res, next) => {
     transaction(() => expireHolds(req.org.id));
     next();
+  });
+  app.use("/api", (req, res, next) => {
+    if (req.org.role !== "owner" || req.org.isAdmin) return next();
+    const path = req.path;
+    if (path === "/photos/members/" + req.user.id) return next();
+    let module = path.startsWith("/records/")
+      ? path.split("/")[2]
+      : path.startsWith("/photos/")
+        ? path.split("/")[2]
+        : null;
+    module =
+      {
+        plans: "pricing",
+        discounts: "pricing",
+        vouchers: "billing",
+        instructors: "classes",
+        arenas: "classes",
+        breeds: "horses",
+        stalls: "horses",
+      }[module] || module;
+    if (!module)
+      module = /^\/(quote|bookings|class-series|attendance|waitlist)/.test(path)
+        ? "classes"
+        : /^\/(proformas|packages)/.test(path)
+          ? "billing"
+          : /^\/(horses|horse-documents|boarding)/.test(path)
+            ? "horses"
+            : /^\/tasks/.test(path)
+              ? "tasks"
+              : /^\/inventory/.test(path)
+                ? "inventory"
+                : /^\/(members|invites)/.test(path)
+                  ? "members"
+                  : /^\/(settings|stables)/.test(path)
+                    ? "settings"
+                    : /^\/reports/.test(path)
+                      ? "reports"
+                      : null;
+    if (
+      module &&
+      STAFF_MODULES.includes(module) &&
+      !req.org.permissions.includes(module)
+    )
+      fail("You do not have permission for this module", 403);
+    next();
+  });
+  app.get("/api/permissions", adminOnly, (req, res) =>
+    res.json({
+      modules: STAFF_MODULES,
+      users: all(
+        "SELECT u.id,u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.org_id=?",
+        req.org.id,
+      ).map((u) => ({
+        ...u,
+        isAdmin: adminUser(req.org.id, u.id),
+        permissions: userModules(req.org.id, u.id),
+      })),
+    }),
+  );
+  app.put("/api/permissions/:id", adminOnly, (req, res) => {
+    const uid = req.params.id,
+      b = req.body;
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        req.org.id,
+        uid,
+      )
+    )
+      fail("Member not found", 404);
+    if (
+      !["admin", "staff", "member"].includes(b.role) ||
+      !Array.isArray(b.permissions) ||
+      b.permissions.some((p) => !STAFF_MODULES.includes(p))
+    )
+      fail("Invalid permissions");
+    if (
+      b.role !== "admin" &&
+      adminUser(req.org.id, uid) &&
+      get("SELECT count(*) n FROM system_admins WHERE org_id=?", req.org.id)
+        .n <= 1
+    )
+      fail("Keep at least one system administrator", 409);
+    transaction(() => {
+      run(
+        "UPDATE memberships SET role=? WHERE org_id=? AND user_id=?",
+        b.role === "member" ? "member" : "owner",
+        req.org.id,
+        uid,
+      );
+      run(
+        "DELETE FROM system_admins WHERE org_id=? AND user_id=?",
+        req.org.id,
+        uid,
+      );
+      if (b.role === "admin")
+        run("INSERT INTO system_admins VALUES(?,?)", req.org.id, uid);
+      run(
+        "INSERT INTO staff_permissions VALUES(?,?,?) ON CONFLICT(org_id,user_id) DO UPDATE SET modules=excluded.modules",
+        req.org.id,
+        uid,
+        JSON.stringify([...new Set(b.permissions)]),
+      );
+      audit(req, "permissions.update", uid);
+    });
+    res.json({ ok: true });
   });
   app.post("/api/invites", owner, (req, res) => {
     const code = randomBytes(18).toString("base64url");
@@ -913,12 +1075,15 @@ export function createApp(
     }
     if (kind === "medical") {
       const horse = record(org, "horses", b.horseId);
-      const frequencyHours = b.frequencyHours
-        ? integer(b.frequencyHours, "dose interval hours", 1, 168)
-        : 0;
       const durationDays = b.durationDays
         ? integer(b.durationDays, "treatment days", 1, 90)
         : 0;
+      const dailyDose = b.frequencyHours === 0 && durationDays > 0;
+      const frequencyHours = dailyDose
+        ? 24
+        : b.frequencyHours
+          ? integer(b.frequencyHours, "dose interval hours", 1, 168)
+          : 0;
       if (Boolean(frequencyHours) !== Boolean(durationDays))
         fail("Set both dose interval and treatment duration");
       if (
@@ -927,11 +1092,23 @@ export function createApp(
       )
         fail("Treatment schedule exceeds 1000 doses");
       const repeatMode = b.repeatMode || "none";
-      if (frequencyHours && repeatMode !== "none")
-        fail(
-          "Choose either appointment repetition or medication dose intervals, not both",
-        );
       treatmentSlots({ ...b, repeatMode, date: iso(b.date), completed: false });
+      const plannedDoses = medicationSchedule({
+        ...b,
+        date: iso(b.date),
+        frequencyHours,
+        durationDays,
+        repeatMode,
+        completed: false,
+      });
+      if (
+        !rid &&
+        plannedDoses.some((d) => !mayEditTaskDate(d, now(), req.org.isAdmin))
+      )
+        fail(
+          "Only a system administrator can create historical care tasks",
+          403,
+        );
       const assigneeId = b.assigneeId || req.user.id;
       if (
         !get(
@@ -945,6 +1122,7 @@ export function createApp(
         fail("Medication and prescribed dose required for scheduled treatment");
       return {
         frequencyHours,
+        dailyDose,
         durationDays,
         assigneeId,
         repeatMode,
@@ -1040,6 +1218,14 @@ export function createApp(
       )
         fail("Assignee must belong to stable");
       const previous = rid ? record(org, "tasks", rid) : {};
+      if (
+        !mayEditTaskDate(b.dueAt, now(), req.org.isAdmin) ||
+        (rid && !mayEditTaskDate(previous.dueAt, now(), req.org.isAdmin))
+      )
+        fail(
+          "Only a system administrator can edit tasks older than yesterday",
+          403,
+        );
       if (previous.medicalId || previous.feedingPlanId)
         fail(
           "Edit the care plan to change generated tasks; use the completion checkbox for each dose",
@@ -1143,6 +1329,7 @@ export function createApp(
       lessonDuration: 60,
       defaultCapacity: 1,
       defaultCreditCost: 1,
+      bookingHoldHours: DEFAULT_HOLD_HOURS,
       ...savedSettings,
       currency: "SAR",
       timeZone: "Asia/Riyadh",
@@ -1280,6 +1467,53 @@ export function createApp(
       : [];
     result.stockMovements = manager ? records(org, "stockMovements") : [];
     if (!manager) result.stalls = [];
+    result.userRole = req.org.role;
+    result.isAdmin = req.org.isAdmin;
+    result.permissions = req.org.permissions;
+    if (manager && !req.org.isAdmin) {
+      const allowed = (p) => req.org.permissions.includes(p);
+      for (const [module, collections] of Object.entries({
+        medical: ["medical"],
+        feeding: ["feeding"],
+        tasks: ["tasks", "taskHistory"],
+        inventory: ["inventory", "stockMovements"],
+        billing: ["proformas", "payments", "creditLedger", "vouchers"],
+        pricing: ["discounts"],
+        horses: ["boarding", "stalls", "breeds"],
+      }))
+        if (!allowed(module))
+          for (const collection of collections) result[collection] = [];
+      if (!allowed("classes")) {
+        result.classes = [];
+        result.bookings = [];
+        result.attendance = [];
+        result.waitlist = [];
+        result.instructors = [];
+        result.arenas = [];
+      }
+      if (!allowed("horses"))
+        result.horses = result.horses.map((h) => ({
+          id: h.id,
+          name: h.name,
+          nameEn: h.nameEn,
+          nameAr: h.nameAr,
+          status: h.status,
+        }));
+      if (!allowed("members"))
+        result.members = result.members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          role: m.role,
+          creditBalance: allowed("classes") ? m.creditBalance : 0,
+        }));
+      if (!allowed("settings"))
+        result.settings = {
+          bookingHoldHours: result.settings.bookingHoldHours,
+          calendarView: result.settings.calendarView,
+          currency: "SAR",
+          timeZone: "Asia/Riyadh",
+        };
+    }
     result.backendVersion = release.version;
     result.emailConfigured = emailEnabled;
     res.json(result);
@@ -1428,7 +1662,13 @@ export function createApp(
         put(req.org.id, kind, rid, data);
         if (kind === "medical") restrictHorse(req, data, rid);
         if (["medical", "feeding"].includes(kind))
-          syncCareTasks(req.org.id, kind, { id: rid, ...data }, true);
+          syncCareTasks(
+            req.org.id,
+            kind,
+            { id: rid, ...data },
+            true,
+            req.org.isAdmin,
+          );
         audit(req, kind + ".create", rid);
         return { id: rid, ...data };
       });
@@ -1473,7 +1713,13 @@ export function createApp(
       put(req.org.id, kind, rid, data);
       if (kind === "medical") restrictHorse(req, data, rid);
       if (["medical", "feeding"].includes(kind))
-        syncCareTasks(req.org.id, kind, { id: rid, ...data }, true);
+        syncCareTasks(
+          req.org.id,
+          kind,
+          { id: rid, ...data },
+          true,
+          req.org.isAdmin,
+        );
       if (kind === "classes")
         for (const b of all(
           "SELECT member_id FROM reservations WHERE org_id=? AND class_id=? AND status IN ('confirmed','pending_payment')",
@@ -1499,6 +1745,11 @@ export function createApp(
         task.assigneeId !== req.user.id
       )
         fail("Not assigned to you", 403);
+      if (!mayEditTaskDate(task.dueAt, now(), req.org.isAdmin))
+        fail(
+          "Only a system administrator can update tasks older than yesterday",
+          403,
+        );
       if (task.cancelled) fail("Task was cancelled", 409);
       const done = req.body.done === undefined ? !task.done : req.body.done;
       if (typeof done !== "boolean") fail("Invalid completion state");
@@ -1696,14 +1947,7 @@ export function createApp(
         horseId,
         q.due > 0 ? "pending_payment" : "confirmed",
         now(),
-        q.due > 0
-          ? new Date(
-              Math.min(
-                clock().getTime() + 72 * 3600000,
-                Date.parse(c.startsAt),
-              ),
-            ).toISOString()
-          : null,
+        q.due > 0 ? holdDeadline(org, c.startsAt) : null,
       );
       run(
         "INSERT INTO proformas(id,org_id,member_id,reservation_id,description,gross,discount,voucher,due,status,discount_id,voucher_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -1768,15 +2012,10 @@ export function createApp(
         memberId: uid,
         due: q.due,
         status: q.due > 0 ? "pending_payment" : "confirmed",
-        holdExpiresAt:
-          q.due > 0
-            ? new Date(
-                Math.min(
-                  clock().getTime() + 72 * 3600000,
-                  Date.parse(c.startsAt),
-                ),
-              ).toISOString()
-            : null,
+        holdExpiresAt: get(
+          "SELECT hold_expires_at FROM reservations WHERE id=?",
+          bid,
+        ).hold_expires_at,
       };
     });
     res.status(201).json(result);
@@ -1968,7 +2207,18 @@ export function createApp(
       if (p.reservation_id)
         run(
           "UPDATE reservations SET status='pending_payment',hold_expires_at=? WHERE id=? AND status='confirmed'",
-          new Date(clock().getTime() + 72 * 3600000).toISOString(),
+          holdDeadline(
+            req.org.id,
+            record(
+              req.org.id,
+              "classes",
+              get(
+                "SELECT class_id FROM reservations WHERE id=? AND org_id=?",
+                p.reservation_id,
+                req.org.id,
+              ).class_id,
+            ).startsAt,
+          ),
           p.reservation_id,
         );
       notify(
@@ -2118,6 +2368,7 @@ export function createApp(
     transaction(() => {
       run("INSERT INTO organizations VALUES(?,?)", oid, name);
       run("INSERT INTO memberships VALUES(?,?,?)", req.user.id, oid, "owner");
+      run("INSERT OR IGNORE INTO system_admins VALUES(?,?)", oid, req.user.id);
       put(oid, "academySettings", oid + ":settings", {
         academyName: name,
         academyNameEn: nameEn,
@@ -2155,6 +2406,12 @@ export function createApp(
     if (!["day", "week", "month", "quarter"].includes(b.calendarView))
       fail("Invalid calendar view");
     const settings = {
+      bookingHoldHours: integer(
+        b.bookingHoldHours ?? holdHours(req.org.id),
+        "booking hold hours",
+        1,
+        MAX_HOLD_HOURS,
+      ),
       academyName: text(
         b.academyNameEn || b.academyNameAr || b.academyName,
         "academy name",
@@ -2279,6 +2536,8 @@ export function createApp(
         now(),
       );
       saveProfileName(uid, req.body, name);
+      if (req.body.role === "staff" && !req.org.isAdmin)
+        fail("Only system administrators can create staff accounts", 403);
       if (req.body.role && !["member", "staff"].includes(req.body.role))
         fail("Invalid user type");
       run(
@@ -2291,7 +2550,7 @@ export function createApp(
     });
     res.status(201).json({ id: uid });
   });
-  app.put("/api/members/:id/role", owner, (req, res) => {
+  app.put("/api/members/:id/role", owner, adminOnly, (req, res) => {
     const uid = req.params.id,
       input = req.body.role;
     if (
@@ -2301,6 +2560,8 @@ export function createApp(
     )
       fail("Invalid user type");
     const role = input === "member" ? "member" : "owner";
+    if (role === "member" && adminUser(req.org.id, uid))
+      fail("Change administrator access on Users & Permissions first", 409);
     transaction(() => {
       const old = get(
         "SELECT role FROM memberships WHERE org_id=? AND user_id=?",
@@ -2358,6 +2619,8 @@ export function createApp(
   });
   app.delete("/api/members/:id", owner, (req, res) => {
     const uid = req.params.id;
+    if (adminUser(req.org.id, uid))
+      fail("Remove administrator access on Users & Permissions first", 409);
     transaction(() => {
       if (
         !get(

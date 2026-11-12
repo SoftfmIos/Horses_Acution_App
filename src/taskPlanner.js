@@ -41,3 +41,13 @@ export const inPeriod = (task, range) => {
   const day = riyadhDay(task.dueAt);
   return day >= range.start && day <= range.end;
 };
+
+export function completionSummary(tasks, range) {
+  const selected = tasks.filter((t) => !t.cancelled && inPeriod(t, range)),
+    done = selected.filter((t) => t.done).length;
+  return {
+    done,
+    total: selected.length,
+    percent: selected.length ? Math.round((done / selected.length) * 100) : 0,
+  };
+}

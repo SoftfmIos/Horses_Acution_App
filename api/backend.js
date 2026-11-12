@@ -71,9 +71,12 @@ export default async function handler(req, res) {
   ]) {
     if (typeof req.headers[key] === "string") headers[key] = req.headers[key];
   }
-  const bodyLimit = /^\/api\/horses\/[^/]+\/documents$/.test(incoming.pathname)
-    ? 3 * 1024 * 1024
-    : 100 * 1024;
+  const bodyLimit =
+    /^(?:\/api\/horses\/[^/]+\/documents|\/api\/photos\/(?:horses|instructors|members)\/[^/]+)$/.test(
+      incoming.pathname,
+    )
+      ? 3 * 1024 * 1024
+      : 100 * 1024;
   let body;
   if (!["GET", "HEAD"].includes(req.method)) {
     if (req.body !== undefined)

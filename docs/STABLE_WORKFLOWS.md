@@ -37,3 +37,21 @@ Inventory displays planned daily use, estimated remaining days and purchasing ne
 Deploy both the frontend and backend from the same commit. In cPanel pull the latest code, run npm install and edit/save lowercase tmp/restart.txt. Keep DATABASE_PATH outside the repository. New data uses the existing records table; no database replacement or destructive migration is needed. The API proxy accepts up to 3 MB only on the protected document-upload path, retaining the normal 100 KB limit elsewhere.
 
 Run npm test, npm run build, CHROMIUM_PATH=/usr/bin/chromium npm run test:browser and CHROMIUM_PATH=/usr/bin/chromium npm run test:stable-browser. The latter exercises boarding invoices, document upload/download, multiple-horse care, planner printing and stock movements in the real UI.
+
+## Hold policy and photos (1.14.0)
+
+Settings → Booking hold duration (hours) accepts 1–720 hours. New bookings use that duration or class start, whichever is earlier. Existing held reservations retain their displayed deadlines. Saving settings from an older UI preserves the configured duration if the field is omitted.
+
+Use Change photo on horse/instructor cards, horse details, member management or the member's own home. Photos are optional and removable. JPEG/PNG uploads are resized in the browser; the protected API also checks type and size. Mobile apps can read/write `/api/photos/horses/:id`, `/api/photos/instructors/:id` and `/api/photos/members/:id` with the normal authentication and stable context. GET returns MIME type, base64 content and update time, or null content when no photo is present. PUT accepts base64 content; DELETE removes it.
+
+For medication, 0 hours is an alias for every 24 hours. With selected weekdays, only doses on those days are generated, within the treatment's calendar-day duration and repeat end date. For example, a four-day course starting Sunday with Sunday/Tuesday/Wednesday selected produces three daily doses. Remove the weekday filter for a dose every day. The preview lists the actual dates before saving.
+
+Tasks default to a practical calendar. Choose day, week or month, filter the employee and tick a feeding or medication occurrence. A completed occurrence turns green and shows the operator and timestamp; unticking reopens it and reverses linked feed stock consumption. Use Checklist for a table, Print planner for paper, or Daily feeding planner on a feeding plan for that horse's own dates and progress.
+
+## Completion periods and permissions
+
+Tasks show daily, weekly and monthly completion for the selected anchor date. Employee and plan filters apply to all three summaries. Cancelled occurrences are excluded; a period with no scheduled tasks displays 0/0 and 0%.
+
+Task-date locks use Riyadh civil dates, not a rolling 24-hour period. On Thursday, ordinary staff may update Wednesday, Thursday and future occurrences. Tuesday and earlier require a system administrator. The same rule protects direct API completion, reopening, generic task edits and rescheduling of generated historical tasks. Administrator corrections record the actor/time in the existing task history.
+
+Only system administrators see Users & Permissions. Select a user and choose System administrator, Staff or Member. Staff module checkboxes grant access to classes/bookings, horse profiles/history, medical, feeding, tasks, pricing, billing, inventory, reports, members and settings. Member access remains limited to their own portal. Modules represent both screen and API access; general class-booking catalogues may still provide minimal horse/member names for authorised booking operations. Horse profile permission includes the horse's history and documents. Keep at least one administrator; remove administrator status before removing an administrator's membership.

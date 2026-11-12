@@ -21,19 +21,7 @@ export function feedingConflict(plan, startsAt, endsAt) {
   }
   return false;
 }
-export function medicationSchedule(plan) {
-  if (plan.completed) return [];
-  if (plan.repeatMode && plan.repeatMode !== "none")
-    return treatmentSlots(plan);
-  if (!plan.frequencyHours || !plan.durationDays) return [];
-  const count = Math.ceil((plan.durationDays * 24) / plan.frequencyHours);
-  if (count > 1000) throw new Error("Treatment schedule exceeds 1000 doses");
-  return Array.from({ length: count }, (_, i) =>
-    new Date(
-      Date.parse(plan.date) + i * plan.frequencyHours * 3600000,
-    ).toISOString(),
-  );
-}
+export { medicationSchedule } from "../shared/medication-schedule.js";
 export function feedingSchedule(plan, now, days = 28) {
   if (plan.active === false) return [];
   const start = new Date(riyadhDate(now) + "T12:00:00Z").getTime();

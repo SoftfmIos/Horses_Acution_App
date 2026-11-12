@@ -1,3 +1,4 @@
+import { DEFAULT_HOLD_HOURS, MAX_HOLD_HOURS } from "../shared/booking-policy";
 import React, { useState } from "react";
 import {
   Users,
@@ -38,11 +39,17 @@ export function SettingsHub({
     lessonDuration: 60,
     defaultCapacity: 1,
     defaultCreditCost: 1,
+    bookingHoldHours: DEFAULT_HOLD_HOURS,
     ...settings,
     ...draft,
   };
   const label = (en, arabic) => (ar ? arabic : en);
   const fields = [
+    [
+      "bookingHoldHours",
+      label("Booking hold duration (hours)", "مدة الحجز المؤقت (بالساعات)"),
+      "number",
+    ],
     [
       "academyNameAr",
       label("Academy name (Arabic)", "اسم الأكاديمية بالعربية"),
@@ -107,9 +114,19 @@ export function SettingsHub({
           onSubmit={async (e) => {
             e.preventDefault();
             if (
-              await action(() =>
-                request("/settings", { method: "PUT", body: form }),
-              )
+              await action(async () => {
+                const saved = await request("/settings", {
+                  method: "PUT",
+                  body: form,
+                });
+                if (saved.bookingHoldHours !== form.bookingHoldHours)
+                  throw new Error(
+                    label(
+                      "Update the cPanel backend to save booking hold hours.",
+                      "حدّث خادم cPanel لحفظ مدة الحجز المؤقت.",
+                    ),
+                  );
+              })
             ) {
               setDraft(null);
               onSaved(
@@ -119,6 +136,12 @@ export function SettingsHub({
             }
           }}
         >
+          <p className="notice">
+            {label(
+              "Hold hours apply to new reservations. Existing holds keep their displayed deadline. A hold always ends by the class start time.",
+              "تطبق المدة على الحجوزات الجديدة. تحتفظ الحجوزات الحالية بموعد انتهائها المعروض، ولا تتجاوز بداية الحصة.",
+            )}
+          </p>
           {fields.map(([key, title, type]) => (
             <label key={key}>
               {title}
@@ -128,11 +151,13 @@ export function SettingsHub({
                 required={key === "academyNameEn" || type === "number"}
                 min={key === "lessonDuration" ? 15 : 1}
                 max={
-                  key === "lessonDuration"
-                    ? 480
-                    : type === "number"
-                      ? 100
-                      : undefined
+                  key === "bookingHoldHours"
+                    ? MAX_HOLD_HOURS
+                    : key === "lessonDuration"
+                      ? 480
+                      : type === "number"
+                        ? 100
+                        : undefined
                 }
                 value={form[key]}
                 onChange={(e) =>

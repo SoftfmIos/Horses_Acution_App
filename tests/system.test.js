@@ -972,7 +972,7 @@ test("direct members, staff access and removal preserve access boundaries", asyn
         role: "instructor",
       })
     ).httpStatus,
-    200,
+    403,
   );
   assert.equal((await staff.call("/reports")).httpStatus, 200);
   assert.equal((await staff.call("/data")).proformas.length, 0);
@@ -1434,7 +1434,7 @@ test("recurring medical appointments create tasks without medication and retain 
         dose: "Prescribed",
       })
     ).httpStatus,
-    400,
+    201,
   );
 });
 test("saved open areas and indoor arenas are retained as class locations", async (t) => {
@@ -2055,4 +2055,300 @@ test("staff booking uses the selected member lesson balance and member self book
   });
   assert.equal(own.httpStatus, 201);
   assert.equal(own.memberId, member);
+});
+
+test("stable hold hours are configurable and existing holds keep their expiry", async (t) => {
+  const f = await fixture(t),
+    { cls, horse, plan } = await setup(f);
+  let settings = (await f.owner.call("/data")).settings;
+  assert.equal(settings.bookingHoldHours, 72);
+  assert.equal(
+    (
+      await f.owner.call("/settings", "PUT", {
+        ...settings,
+        bookingHoldHours: 6,
+      })
+    ).httpStatus,
+    200,
+  );
+  const one = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(one.holdExpiresAt, "2026-11-11T13:00:00.000Z");
+  settings = (await f.owner.call("/data")).settings;
+  await f.owner.call("/settings", "PUT", { ...settings, bookingHoldHours: 24 });
+  assert.equal(
+    (await f.member.call("/data")).bookings[0].hold_expires_at,
+    one.holdExpiresAt,
+  );
+  const second = await f.create("classes", {
+    ...cls,
+    title: "Later",
+    startsAt: "2026-11-13T10:00:00Z",
+    endsAt: "2026-11-13T11:00:00Z",
+  });
+  const two = await f.member.call("/bookings", "POST", { classId: second.id });
+  assert.equal(two.holdExpiresAt, "2026-11-12T07:00:00.000Z");
+  assert.equal((await f.other.call("/data")).settings.bookingHoldHours, 72);
+  for (const hours of [0, -1, 721, 1.5])
+    assert.equal(
+      (
+        await f.owner.call("/settings", "PUT", {
+          ...settings,
+          bookingHoldHours: hours,
+        })
+      ).httpStatus,
+      400,
+    );
+  await f.owner.call("/settings", "PUT", {
+    ...settings,
+    bookingHoldHours: 720,
+  });
+  const third = await f.create("classes", {
+    ...cls,
+    title: "Class boundary",
+    startsAt: "2026-11-14T10:00:00Z",
+    endsAt: "2026-11-14T11:00:00Z",
+  });
+  assert.equal(
+    (await f.member.call("/bookings", "POST", { classId: third.id }))
+      .holdExpiresAt,
+    third.startsAt,
+  );
+  assert.equal(
+    (
+      await f.member.call("/settings", "PUT", {
+        ...settings,
+        bookingHoldHours: 1,
+      })
+    ).httpStatus,
+    403,
+  );
+});
+
+test("photos are optional, persistent, scoped and members may update only their own profile", async (t) => {
+  const f = await fixture(t),
+    { horse } = await setup(f),
+    member = (await f.member.call("/auth/me")).user.id,
+    staff = (await f.owner.call("/auth/me")).user.id;
+  const teacher = await f.create("instructors", {
+    name: "Photo trainer",
+    active: true,
+  });
+  await f.owner.call("/records/horses/" + horse.id, "PUT", {
+    ...horse,
+    ownerId: member,
+    instructorId: teacher.id,
+  });
+  const content =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF1cAAAAASUVORK5CYII=";
+  assert.equal(
+    (await f.member.call("/photos/members/" + member)).content,
+    null,
+  );
+  assert.equal(
+    (await f.member.call("/photos/members/" + member, "PUT", { content }))
+      .httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.owner.call("/photos/members/" + member)).content,
+    content,
+  );
+  assert.equal(
+    (await f.member.call("/photos/members/" + staff, "PUT", { content }))
+      .httpStatus,
+    403,
+  );
+  for (const [kind, id] of [
+    ["horses", horse.id],
+    ["instructors", teacher.id],
+  ]) {
+    assert.equal(
+      (await f.member.call("/photos/" + kind + "/" + id, "PUT", { content }))
+        .httpStatus,
+      403,
+    );
+    assert.equal(
+      (await f.owner.call("/photos/" + kind + "/" + id, "PUT", { content }))
+        .httpStatus,
+      200,
+    );
+    assert.equal(
+      (await f.member.call("/photos/" + kind + "/" + id)).content,
+      content,
+    );
+    assert.equal(
+      (await f.other.call("/photos/" + kind + "/" + id)).httpStatus,
+      404,
+    );
+  }
+  assert.equal(
+    (
+      await f.owner.call("/photos/horses/" + horse.id, "PUT", {
+        content: Buffer.from('<svg onload="alert(1)"></svg>').toString(
+          "base64",
+        ),
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    JSON.stringify(await f.owner.call("/data")).includes(content),
+    false,
+  );
+  assert.equal(
+    (await f.member.call("/photos/members/" + member, "DELETE")).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/photos/members/" + member)).content,
+    null,
+  );
+});
+
+test("zero medication interval means one dose per day for the treatment duration", async (t) => {
+  const f = await fixture(t),
+    { horse } = await setup(f);
+  const med = await f.create("medical", {
+    horseId: horse.id,
+    type: "Daily pills",
+    notes: "Prescribed",
+    medication: "Pill",
+    dose: "One tablet",
+    date: "2026-11-12T06:00:00Z",
+    frequencyHours: 0,
+    durationDays: 3,
+  });
+  assert.equal(med.frequencyHours, 24);
+  assert.equal(med.dailyDose, true);
+  const tasks = (await f.owner.call("/data")).tasks.filter(
+    (t) => t.medicalId === med.id,
+  );
+  assert.equal(tasks.length, 3);
+  assert.deepEqual(
+    tasks.map((t) => t.dueAt),
+    [
+      "2026-11-12T06:00:00.000Z",
+      "2026-11-13T06:00:00.000Z",
+      "2026-11-14T06:00:00.000Z",
+    ],
+  );
+  assert.equal(
+    (
+      await f.owner.call("/records/medical", "POST", {
+        horseId: horse.id,
+        type: "Invalid",
+        notes: "Missing dose",
+        date: "2026-11-12T06:00:00Z",
+        frequencyHours: 0,
+        durationDays: 3,
+      })
+    ).httpStatus,
+    400,
+  );
+});
+
+test("system admins manage module permissions and staff cannot change tasks before yesterday", async (t) => {
+  const f = await fixture(t),
+    actor = (await f.member.call("/auth/me")).user.id,
+    admin = (await f.owner.call("/auth/me")).user.id;
+  await f.owner.call("/members/" + actor + "/role", "PUT", { role: "staff" });
+  assert.equal((await f.member.call("/permissions")).httpStatus, 403);
+  const old = await f.create("tasks", {
+    title: "Old task",
+    dueAt: "2026-11-09T21:00:00Z",
+    assigneeId: actor,
+  });
+  // Riyadh Nov 10 begins at Nov 9 21:00Z; this is yesterday and remains editable.
+  assert.equal(
+    (
+      await f.member.call("/tasks/" + old.id + "/toggle", "POST", {
+        done: true,
+      })
+    ).httpStatus,
+    200,
+  );
+  const locked = await f.create("tasks", {
+    title: "Historical task",
+    dueAt: "2026-11-09T20:59:59Z",
+    assigneeId: actor,
+  });
+  assert.equal(
+    (
+      await f.member.call("/tasks/" + locked.id + "/toggle", "POST", {
+        done: true,
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.member.call("/records/tasks/" + locked.id, "PUT", {
+        ...locked,
+        dueAt: "2026-11-11T08:00:00Z",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/tasks/" + locked.id + "/toggle", "POST", {
+        done: true,
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/permissions/" + actor, "PUT", {
+        role: "staff",
+        permissions: ["tasks"],
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/records/horses", "POST", { name: "Forbidden" }))
+      .httpStatus,
+    403,
+  );
+  assert.equal((await f.member.call("/reports")).httpStatus, 403);
+  assert.equal(
+    (
+      await f.member.call("/permissions/" + actor, "PUT", {
+        role: "admin",
+        permissions: [],
+      })
+    ).httpStatus,
+    403,
+  );
+  const data = await f.member.call("/data");
+  assert.deepEqual(data.permissions, ["tasks"]);
+  assert.equal(data.isAdmin, false);
+  assert.deepEqual(data.proformas, []);
+  assert.equal(
+    (
+      await f.owner.call("/permissions/" + admin, "PUT", {
+        role: "member",
+        permissions: [],
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/permissions/" + actor, "PUT", {
+        role: "admin",
+        permissions: ["tasks"],
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.member.call("/tasks/" + locked.id + "/toggle", "POST", {
+        done: false,
+      })
+    ).httpStatus,
+    200,
+  );
 });

@@ -23,3 +23,20 @@ The footer displays frontend and backend versions, links to health and labels ve
 Staff select **Book for member** when booking from a pre-created class card or calendar slot. Selection is required. The selected member owns the booking and pro forma, receives the booking notification and supplies lesson credits if used. Changing the selected member clears the quote and credit-payment choice. The actual staff operator remains the audit actor.
 
 Members have no booker dropdown: the server uses the signed-in member and rejects attempts to book for another account. Both quotes and booking confirmation validate stable membership; confirmation checks that the quoted member has not changed. Staff cannot submit a booking with an omitted member. Health includes `bookingVersion: 1`; the frontend checks this before staff quotes to prevent old backends silently booking the logged-in staff account. Update both deployments and restart the cPanel app.
+
+## 1.14.0
+
+- Stable Settings configure booking hold hours (1–720, default 72). New reservations and refund-created holds use this policy, capped at class start. Existing reservations retain their stored deadline. Calendar labels show the configured policy; member bookings show their actual expiry.
+- Horse, instructor and optional member profile photos upload through authenticated, stable-scoped endpoints. Staff manage horse/instructor photos and member photos; members can manage only their own. Browser uploads resize to 512 pixels and JPEG; backend accepts JPEG/PNG up to 512 KB. Photos are stored in SQLite and included in database backups, not Git or bulk data responses.
+- Medication interval 0 means once daily. Medication intervals can combine with selected weekdays: treatment duration limits the course and the weekday schedule filters dose days. Preview and persistence share one scheduler. No matching dose dates produces a clear validation error. Backend capability checks prevent new medication semantics from being sent to older deployments.
+- Horse profiles use a master-detail layout with persistent identity, photo, owner and instructor, plus history, dated care completion, feeding, boarding, ride bookings/attendance and documents. Shared-school-horse access continues to hide private care/documents from unrelated riders.
+- Daily feeding plans continue to generate dated tasks automatically over a rolling 28-day horizon, respecting plan start/end dates. Each plan has a Daily feeding planner shortcut. Tasks open a day/week/month calendar with one-click checkboxes, staff assignments and completion stamps. A checklist layout and printable planners remain available.
+
+Deploy frontend and backend together, pull in cPanel, run npm install and update lowercase tmp/restart.txt. Health should report version 1.14.0 and medicalScheduleVersion 2. No database replacement is required.
+
+Additional 1.14.0 workflow controls:
+
+- Task calendar and checklist show daily, weekly and monthly completion percentages for the selected date, employee and care plan. Cancelled tasks are excluded. Individual day cells also show completion percentages.
+- Ordinary staff can update task occurrences dated yesterday or later in Riyadh time. Older occurrences are locked in the UI and API, including attempts to move an old task to a newer date. Staff care-plan edits preserve locked historical occurrences. System administrators can correct historical completion with the normal audit trail.
+- System administrators have a dedicated Users & Permissions page to grant administrator/staff/member access and staff module permissions. The API enforces modules and filters protected bulk data. Staff cannot elevate themselves or remove administrators. At least one administrator must remain.
+- Migration grants administrator status to the initial existing staff owner for each stable and accounts recorded through the administrator bootstrap command. New stable creators become administrators; other staff promotions do not. Administrator assignments and module grants persist in new SQLite tables. No existing business records are replaced.

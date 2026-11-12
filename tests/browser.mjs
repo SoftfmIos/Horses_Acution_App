@@ -55,6 +55,9 @@ let browser;
   await page
     .getByLabel("Academy name (Arabic)", { exact: true })
     .fill("أكاديمية الاختبار");
+  await page
+    .getByLabel("Booking hold duration (hours)", { exact: true })
+    .fill("6");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   const settingsAdd = async (title) => {
     await nav("Settings");
@@ -266,6 +269,7 @@ let browser;
   await save();
   await page.getByRole("heading", { name: "Browser private class" }).waitFor();
   const calendar = page.getByRole("region", { name: "Booking calendar" });
+  await calendar.getByText("6-hour payment hold", { exact: true }).waitFor();
   if (
     (await calendar.getByLabel("View", { exact: true }).inputValue()) !==
     "month"

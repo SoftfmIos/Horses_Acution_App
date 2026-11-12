@@ -1309,3 +1309,329 @@ pre {
 .schedule-dates li {
   padding: 4px 0;
 }
+.profile-photo {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+.profile-photo-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--stone);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.profile-photo-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-photo-actions {
+  display: grid;
+  gap: 6px;
+  max-width: 100%;
+}
+.profile-photo-actions input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.photo-upload-label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.photo-upload-label:focus-within {
+  outline: 2px solid var(--gold);
+}
+.photo-error {
+  color: #a63329;
+  font-size: 13px;
+  width: 100%;
+}
+.member-row .profile-photo {
+  margin: 0;
+}
+.member-row {
+  flex-wrap: wrap;
+}
+.horse-profile-modal {
+  width: min(1180px, 96vw);
+  max-width: 1180px;
+}
+.horse-master-detail {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.horse-master {
+  background: var(--stone);
+  padding: 18px;
+  border: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+}
+.horse-master .horse-facts {
+  grid-template-columns: 1fr 1fr;
+}
+.horse-master p {
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.horse-master .profile-photo-image {
+  width: 140px;
+  height: 140px;
+}
+.horse-detail {
+  min-width: 0;
+}
+.horse-detail table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.horse-detail th,
+.horse-detail td {
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  text-align: start;
+  font-size: 13px;
+}
+.horse-summary {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.profile-photo-actions:focus-within .photo-upload-label {
+  outline: 2px solid var(--gold-text);
+}
+@media (max-width: 760px) {
+  .horse-master-detail {
+    grid-template-columns: 1fr;
+  }
+  .horse-master {
+    position: static;
+  }
+  .horse-profile-modal {
+    padding: 22px;
+  }
+  .horse-master .profile-photo-image {
+    width: 95px;
+    height: 95px;
+  }
+}
+.task-calendar-filter {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+}
+.task-calendar-filter select {
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: white;
+}
+.task-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(140px, 1fr));
+  gap: 8px;
+  overflow: auto;
+  padding-bottom: 10px;
+}
+.task-calendar-day {
+  border: 1px solid var(--line);
+  padding: 10px;
+  background: white;
+  min-width: 0;
+}
+.task-calendar-day.today {
+  border-top: 3px solid var(--gold-text);
+}
+.task-calendar-items {
+  max-height: 430px;
+  overflow: auto;
+  margin-top: 8px;
+}
+.task-calendar-day h4 {
+  margin: 0 0 5px;
+}
+.task-calendar-day .empty {
+  font-size: 12px;
+  padding: 14px 0;
+}
+.task-occurrence {
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #fff8dd;
+  border: 1px solid #e7d58c;
+  color: var(--ink);
+}
+.task-occurrence.done {
+  background: #e1f2e6;
+  border-color: #84bc93;
+}
+.task-occurrence.overdue {
+  border-color: #b15a4a;
+}
+.task-occurrence label {
+  display: flex;
+  gap: 8px;
+  cursor: pointer;
+}
+.task-occurrence input {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  accent-color: #246544;
+}
+.task-occurrence strong,
+.task-occurrence time {
+  display: block;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.task-occurrence small,
+.completion-stamp {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.task-occurrence details {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.task-calendar-day .task-occurrence p {
+  margin: 5px 0 0;
+}
+.task-calendar-day .task-occurrence.overdue strong {
+  color: #9a3028;
+}
+.task-calendar-day .task-occurrence.done strong {
+  color: #1b592e;
+}
+.task-calendar-day .task-occurrence small {
+  display: block;
+}
+.task-calendar-day .task-occurrence label span {
+  min-width: 0;
+}
+.task-calendar-day .task-occurrence:focus-within {
+  outline: 2px solid var(--gold-text);
+}
+.task-calendar-day .task-occurrence input:disabled {
+  cursor: wait;
+}
+.task-calendar-day .task-occurrence .completion-stamp {
+  color: #1b592e;
+}
+.task-calendar-day .task-occurrence summary {
+  cursor: pointer;
+}
+.task-calendar-day .task-occurrence time {
+  font-weight: 700;
+}
+.task-calendar-day .task-occurrence strong {
+  margin-top: 4px;
+}
+.task-calendar-day .task-occurrence label {
+  align-items: flex-start;
+}
+.task-calendar-day .task-occurrence input {
+  margin-top: 2px;
+}
+.task-calendar-day .task-occurrence input:checked {
+  opacity: 1;
+}
+.task-calendar-day .task-occurrence {
+  font-weight: 400;
+}
+.task-calendar-day .task-occurrence small {
+  color: var(--muted);
+}
+.task-calendar-day .task-occurrence .completion-stamp {
+  overflow-wrap: anywhere;
+}
+.task-calendar-day .task-occurrence details p {
+  font-size: 12px;
+}
+.task-calendar-day .task-occurrence details summary {
+  font-size: 12px;
+}
+.task-calendar-day .task-occurrence input:focus-visible {
+  outline: 2px solid var(--gold-text);
+}
+.task-calendar-day .task-occurrence.done {
+  opacity: 1;
+}
+.task-calendar-day .task-occurrence .completion-stamp {
+  display: block;
+}
+.task-calendar-day .task-occurrence .completion-stamp:empty {
+  display: none;
+}
+.task-calendar-grid.task-calendar-view-day {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 760px) {
+  .task-calendar-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+  .task-calendar-padding {
+    display: none;
+  }
+  .task-calendar-items {
+    max-height: none;
+  }
+}
+.permissions-page label {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.permissions-page label.check-label {
+  display: flex;
+  margin: 10px 0;
+}
+.permissions-page input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+.permissions-page select {
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+  max-width: 100%;
+  width: 100%;
+}
+.permissions-page form {
+  max-width: 680px;
+}
+.permissions-page fieldset {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+}
+.period-completion {
+  margin: 18px 0;
+}
+.period-completion progress {
+  width: 100%;
+  accent-color: #246544;
+}
+.period-completion p {
+  font-size: 24px;
+  margin: 10px 0;
+}

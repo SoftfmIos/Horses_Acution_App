@@ -73,5 +73,11 @@ CREATE TABLE IF NOT EXISTS attendance(reservation_id TEXT PRIMARY KEY,org_id TEX
   db.exec(`UPDATE reservations SET hold_expires_at=strftime('%Y-%m-%dT%H:%M:%fZ',created_at,'+72 hours') WHERE status='pending_payment' AND hold_expires_at IS NULL;
 UPDATE memberships SET role='owner' WHERE EXISTS(SELECT 1 FROM staff_roles s WHERE s.org_id=memberships.org_id AND s.user_id=memberships.user_id);
 DELETE FROM staff_roles;`);
+  db.exec(`CREATE TABLE IF NOT EXISTS system_admins(org_id TEXT NOT NULL,user_id TEXT NOT NULL,PRIMARY KEY(org_id,user_id));
+CREATE TABLE IF NOT EXISTS staff_permissions(org_id TEXT NOT NULL,user_id TEXT NOT NULL,modules TEXT NOT NULL,PRIMARY KEY(org_id,user_id));
+INSERT OR IGNORE INTO system_admins SELECT m.org_id,m.user_id FROM memberships m WHERE m.role='owner' AND NOT EXISTS(SELECT 1 FROM system_admins a WHERE a.org_id=m.org_id) AND m.rowid=(SELECT min(x.rowid) FROM memberships x WHERE x.org_id=m.org_id AND x.role='owner');`);
+  db.exec(
+    "INSERT OR IGNORE INTO system_admins SELECT a.org_id,a.actor_id FROM audit a JOIN memberships m ON m.org_id=a.org_id AND m.user_id=a.actor_id WHERE a.action='admin.bootstrap' AND m.role='owner'",
+  );
   return db;
 }

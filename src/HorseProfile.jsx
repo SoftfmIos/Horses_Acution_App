@@ -1,3 +1,4 @@
+import { ProfilePhoto } from "./ProfilePhoto";
 import React, { useEffect, useState } from "react";
 import { localizedName } from "./localization";
 export function HorseProfile({
@@ -89,184 +90,311 @@ export function HorseProfile({
           {error}
         </p>
       )}
-      <h3>{localizedName(h, ar)}</h3>
-      <dl className="horse-facts">
-        <div>
-          <dt>{l("Breed", "السلالة")}</dt>
-          <dd>{h.breed || "—"}</dd>
-        </div>
-        <div>
-          <dt>{l("Microchip", "الشريحة")}</dt>
-          <dd>{h.microchip || "—"}</dd>
-        </div>
-        <div>
-          <dt>{l("Born", "تاريخ الميلاد")}</dt>
-          <dd>{h.birthDate ? when(h.birthDate) : "—"}</dd>
-        </div>
-        <div>
-          <dt>{l("Status", "الحالة")}</dt>
-          <dd>
-            {
-              {
-                ready: l("Ready", "جاهز"),
-                rest: l("Medical rest", "راحة طبية"),
-                retired: l("Retired", "متقاعد"),
-              }[h.status]
-            }
-          </dd>
-        </div>
-      </dl>
-      <p>
-        {l("Owner", "المالك")}: {profile.ownerName || "—"} ·{" "}
-        {l("Instructor", "المدرب")}:{" "}
-        {localizedName(profile.instructor || {}, ar) || "—"}
-      </p>
-      <div className="profile-tabs">
-        {[
-          ["timeline", "Timeline", "السجل الزمني"],
-          ["care", "Care & feeding", "الرعاية والتغذية"],
-          ["documents", "Documents", "الوثائق"],
-        ].map(([key, en, a]) => (
-          <button
-            key={key}
-            className={tab === key ? "primary" : "soft"}
-            onClick={() => setTab(key)}
-          >
-            {l(en, a)}
-          </button>
-        ))}
-      </div>
-      {tab === "timeline" && (
-        <>
-          <h3>{l("Horse history", "سجل الحصان")}</h3>
-          <ol className="horse-timeline">
-            {profile.events.map((e) => (
-              <li key={e.type + e.id}>
-                <time>{when(e.date)}</time>
-                <strong>{e.title}</strong>
-                <p>{e.details}</p>
-              </li>
-            ))}
-          </ol>
-          {!profile.events.length && (
-            <p>{l("No history yet.", "لا يوجد سجل بعد.")}</p>
-          )}
-        </>
-      )}
-      {tab === "care" && (
-        <>
-          <h3>{l("Medical records", "السجل الطبي")}</h3>
-          {profile.medical.map((m) => (
-            <article className="panel" key={m.id}>
-              <strong>{m.type}</strong>
-              <p>
-                {when(m.date)} · {m.notes}
-              </p>
-              {m.dueAt && (
-                <p>
-                  {l("Next due", "الموعد القادم")}: {when(m.dueAt)}
-                </p>
-              )}
-              <p>
-                {m.medication} {m.dose}
-              </p>
-            </article>
-          ))}
-          <h3>{l("Feeding plans", "خطط التغذية")}</h3>
-          {profile.feeding.map((f) => (
-            <p key={f.id}>
-              {f.time} · {f.feed} · {f.quantity}
-            </p>
-          ))}
-          <h3>{l("Boarding", "الإيواء")}</h3>
-          {profile.boarding.map((b) => (
-            <p key={b.id}>
-              {b.stall} · {b.startDate} – {b.endDate}
-            </p>
-          ))}
-        </>
-      )}
-      {tab === "documents" && (
-        <>
+      <div className="horse-master-detail">
+        <aside className="horse-master">
+          <ProfilePhoto
+            kind="horses"
+            id={h.id}
+            name={localizedName(h, ar)}
+            request={request}
+            editable={staff}
+            ar={ar}
+          />
+          <h3>{localizedName(h, ar)}</h3>
+          <dl className="horse-facts">
+            <div>
+              <dt>{l("Breed", "السلالة")}</dt>
+              <dd>{h.breed || "—"}</dd>
+            </div>
+            <div>
+              <dt>{l("Microchip", "الشريحة")}</dt>
+              <dd>{h.microchip || "—"}</dd>
+            </div>
+            <div>
+              <dt>{l("Born", "تاريخ الميلاد")}</dt>
+              <dd>{h.birthDate ? when(h.birthDate) : "—"}</dd>
+            </div>
+            <div>
+              <dt>{l("Status", "الحالة")}</dt>
+              <dd>
+                {
+                  {
+                    ready: l("Ready", "جاهز"),
+                    rest: l("Medical rest", "راحة طبية"),
+                    retired: l("Retired", "متقاعد"),
+                  }[h.status]
+                }
+              </dd>
+            </div>
+          </dl>
           <p>
-            {l(
-              "Passports, certificates, medical reports and ownership documents. PDF, PNG or JPEG, maximum 2 MB.",
-              "جوازات وشهادات وتقارير طبية ووثائق ملكية. PDF أو PNG أو JPEG بحد أقصى 2 MB.",
-            )}
+            {l("Owner", "المالك")}: {profile.ownerName || "—"} ·{" "}
+            {l("Instructor", "المدرب")}:{" "}
+            {localizedName(profile.instructor || {}, ar) || "—"}
           </p>
-          {staff && (
-            <form className="panel profile-upload" onSubmit={upload}>
-              <label>
-                {l("Document title (English)", "عنوان الوثيقة بالإنجليزية")}
-                <input name="titleEn" required maxLength={100} />
-              </label>
-              <label>
-                {l("Document title (Arabic)", "عنوان الوثيقة بالعربية")}
-                <input name="titleAr" maxLength={100} />
-              </label>
-              <label>
-                {l("Category", "التصنيف")}
-                <select name="category">
-                  {[
-                    ["passport", "Passport", "جواز"],
-                    ["vaccination", "Vaccination certificate", "شهادة تطعيم"],
-                    ["medical", "Medical report", "تقرير طبي"],
-                    ["ownership", "Ownership", "ملكية"],
-                    ["other", "Other", "أخرى"],
-                  ].map(([v, en, a]) => (
-                    <option key={v} value={v}>
-                      {l(en, a)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {l("File", "الملف")}
-                <input
-                  type="file"
-                  name="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  required
-                />
-              </label>
-              <button className="primary" disabled={uploading}>
-                {uploading
-                  ? l("Uploading…", "جار الرفع…")
-                  : l("Upload document", "رفع الوثيقة")}
-              </button>
-            </form>
-          )}
-          {profile.documents.map((d) => (
-            <article className="panel" key={d.id}>
-              <strong>{localizedName(d, ar, "title")}</strong>
-              <p>
-                {d.filename} · {Math.ceil(d.size / 1024)} KB ·{" "}
-                {when(d.createdAt)}
-              </p>
+          {h.notes && <p>{h.notes}</p>}
+          <div className="horse-summary">
+            <p>
+              {l("Care records", "سجلات الرعاية")}: {profile.medical.length}
+            </p>
+            <p>
+              {l("Ride bookings", "حجوزات الركوب")}: {profile.bookings.length}
+            </p>
+            <p>
+              {l("Completed care tasks", "مهام الرعاية المنجزة")}:{" "}
+              {profile.tasks.filter((t) => t.done).length}/
+              {profile.tasks.length}
+            </p>
+          </div>
+        </aside>
+        <div className="horse-detail">
+          <div className="profile-tabs">
+            {[
+              ["timeline", "Timeline", "السجل الزمني"],
+              ["care", "Care & feeding", "الرعاية والتغذية"],
+              ["rides", "Ride history", "سجل الركوب"],
+              ["documents", "Documents", "الوثائق"],
+            ].map(([key, en, a]) => (
               <button
-                className="soft"
-                disabled={busy}
-                onClick={() => download(d)}
+                key={key}
+                className={tab === key ? "primary" : "soft"}
+                onClick={() => setTab(key)}
               >
-                {l("Download", "تنزيل")}
+                {l(en, a)}
               </button>
-              {staff && (
-                <button
-                  disabled={busy}
-                  onClick={async () => {
-                    const ok = await action(() =>
-                      request("/horse-documents/" + d.id, { method: "DELETE" }),
-                    );
-                    if (ok) load();
-                  }}
-                >
-                  {l("Remove document", "حذف الوثيقة")}
-                </button>
+            ))}
+          </div>
+          {tab === "timeline" && (
+            <>
+              <h3>{l("Horse history", "سجل الحصان")}</h3>
+              <ol className="horse-timeline">
+                {profile.events.map((e) => (
+                  <li key={e.type + e.id}>
+                    <time>{when(e.date)}</time>
+                    <strong>{e.title}</strong>
+                    <p>{e.details}</p>
+                  </li>
+                ))}
+              </ol>
+              {!profile.events.length && (
+                <p>{l("No history yet.", "لا يوجد سجل بعد.")}</p>
               )}
-            </article>
-          ))}
-        </>
-      )}
+            </>
+          )}
+          {tab === "rides" && (
+            <section>
+              <h3>{l("Ride history", "سجل الركوب")}</h3>
+              <p>
+                {l(
+                  "All ride bookings, including pending, cancelled and past sessions. Attendance is shown only when recorded.",
+                  "كل حجوزات الركوب بما فيها المعلقة والملغاة والسابقة. يظهر الحضور عند تسجيله فقط.",
+                )}
+              </p>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      {[
+                        l("Date", "التاريخ"),
+                        l("Class", "الحصة"),
+                        l("Rider", "الفارس"),
+                        l("Instructor", "المدرب"),
+                        l("Location", "الموقع"),
+                        l("Status", "الحالة"),
+                        l("Attendance", "الحضور"),
+                      ].map((t) => (
+                        <th key={t}>{t}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profile.bookings
+                      .slice()
+                      .sort((a, b) =>
+                        b.session.startsAt.localeCompare(a.session.startsAt),
+                      )
+                      .map((b) => (
+                        <tr key={b.id}>
+                          <td>{when(b.session.startsAt)}</td>
+                          <td>{localizedName(b.session, ar, "title")}</td>
+                          <td>{b.memberName || "—"}</td>
+                          <td>{localizedName(b.session, ar, "instructor")}</td>
+                          <td>{localizedName(b.session, ar, "arena")}</td>
+                          <td>
+                            {{
+                              confirmed: l("Confirmed", "مؤكد"),
+                              pending_payment: l(
+                                "Awaiting payment",
+                                "بانتظار السداد",
+                              ),
+                              cancelled: l("Cancelled", "ملغى"),
+                              expired: l("Expired", "منتهي"),
+                            }[b.status] || b.status}
+                          </td>
+                          <td>{b.attendance || "—"}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              {!profile.bookings.length && (
+                <p>{l("No ride bookings yet.", "لا توجد حجوزات ركوب بعد.")}</p>
+              )}
+            </section>
+          )}
+          {tab === "care" && (
+            <>
+              <h3>{l("Medical records", "السجل الطبي")}</h3>
+              {profile.medical.map((m) => (
+                <article className="panel" key={m.id}>
+                  <strong>{m.type}</strong>
+                  <p>
+                    {when(m.date)} · {m.notes}
+                  </p>
+                  {m.dueAt && (
+                    <p>
+                      {l("Next due", "الموعد القادم")}: {when(m.dueAt)}
+                    </p>
+                  )}
+                  <p>
+                    {m.medication} {m.dose}
+                  </p>
+                </article>
+              ))}
+              <h3>{l("Care task history", "سجل مهام الرعاية")}</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{l("Task", "المهمة")}</th>
+                      <th>{l("Scheduled", "الموعد")}</th>
+                      <th>{l("Completion", "الإنجاز")}</th>
+                      <th>{l("Completed by / at", "المنفذ / الوقت")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profile.tasks
+                      .filter((t) => !t.cancelled)
+                      .map((t) => (
+                        <tr key={t.id}>
+                          <td>{t.title}</td>
+                          <td>{when(t.dueAt)}</td>
+                          <td>{t.done ? "✓" : l("Pending", "معلق")}</td>
+                          <td>
+                            {t.done
+                              ? (t.completedByName || "—") +
+                                " · " +
+                                when(t.completedAt)
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              <h3>{l("Feeding plans", "خطط التغذية")}</h3>
+              {profile.feeding.map((f) => (
+                <p key={f.id}>
+                  {f.time} · {f.feed} · {f.quantity}
+                </p>
+              ))}
+              <h3>{l("Boarding", "الإيواء")}</h3>
+              {profile.boarding.map((b) => (
+                <p key={b.id}>
+                  {b.stall} · {b.startDate} – {b.endDate}
+                </p>
+              ))}
+            </>
+          )}
+          {tab === "documents" && (
+            <>
+              <p>
+                {l(
+                  "Passports, certificates, medical reports and ownership documents. PDF, PNG or JPEG, maximum 2 MB.",
+                  "جوازات وشهادات وتقارير طبية ووثائق ملكية. PDF أو PNG أو JPEG بحد أقصى 2 MB.",
+                )}
+              </p>
+              {staff && (
+                <form className="panel profile-upload" onSubmit={upload}>
+                  <label>
+                    {l("Document title (English)", "عنوان الوثيقة بالإنجليزية")}
+                    <input name="titleEn" required maxLength={100} />
+                  </label>
+                  <label>
+                    {l("Document title (Arabic)", "عنوان الوثيقة بالعربية")}
+                    <input name="titleAr" maxLength={100} />
+                  </label>
+                  <label>
+                    {l("Category", "التصنيف")}
+                    <select name="category">
+                      {[
+                        ["passport", "Passport", "جواز"],
+                        [
+                          "vaccination",
+                          "Vaccination certificate",
+                          "شهادة تطعيم",
+                        ],
+                        ["medical", "Medical report", "تقرير طبي"],
+                        ["ownership", "Ownership", "ملكية"],
+                        ["other", "Other", "أخرى"],
+                      ].map(([v, en, a]) => (
+                        <option key={v} value={v}>
+                          {l(en, a)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {l("File", "الملف")}
+                    <input
+                      type="file"
+                      name="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      required
+                    />
+                  </label>
+                  <button className="primary" disabled={uploading}>
+                    {uploading
+                      ? l("Uploading…", "جار الرفع…")
+                      : l("Upload document", "رفع الوثيقة")}
+                  </button>
+                </form>
+              )}
+              {profile.documents.map((d) => (
+                <article className="panel" key={d.id}>
+                  <strong>{localizedName(d, ar, "title")}</strong>
+                  <p>
+                    {d.filename} · {Math.ceil(d.size / 1024)} KB ·{" "}
+                    {when(d.createdAt)}
+                  </p>
+                  <button
+                    className="soft"
+                    disabled={busy}
+                    onClick={() => download(d)}
+                  >
+                    {l("Download", "تنزيل")}
+                  </button>
+                  {staff && (
+                    <button
+                      disabled={busy}
+                      onClick={async () => {
+                        const ok = await action(() =>
+                          request("/horse-documents/" + d.id, {
+                            method: "DELETE",
+                          }),
+                        );
+                        if (ok) load();
+                      }}
+                    >
+                      {l("Remove document", "حذف الوثيقة")}
+                    </button>
+                  )}
+                </article>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { TaskCalendar } from "./TaskCalendar";
 import React, { useState } from "react";
 import {
   ChevronLeft,
@@ -6,7 +7,12 @@ import {
   ArrowLeft,
   ClipboardList,
 } from "lucide-react";
-import { taskGroups, plannerRange, inPeriod } from "./taskPlanner";
+import {
+  taskGroups,
+  plannerRange,
+  inPeriod,
+  completionSummary,
+} from "./taskPlanner";
 import { riyadhDay, movePeriod } from "./calendar";
 import { CareTasks } from "./CareTasks";
 export function TaskPlanner({
@@ -19,9 +25,11 @@ export function TaskPlanner({
   busy,
   canComplete,
   stableName,
+  initialGroup = null,
 }) {
-  const [selected, setSelected] = useState(null),
+  const [selected, setSelected] = useState(initialGroup),
     [view, setView] = useState("week"),
+    [layout, setLayout] = useState("calendar"),
     [date, setDate] = useState(riyadhDay(new Date())),
     [assignee, setAssignee] = useState(""),
     [search, setSearch] = useState("");
@@ -52,6 +60,17 @@ export function TaskPlanner({
             {label("All tasks", "كل المهام")}
           </button>
         )}
+        <label>
+          {label("Layout", "التنسيق")}
+          <select
+            aria-label={label("Task layout", "تنسيق المهام")}
+            value={layout}
+            onChange={(e) => setLayout(e.target.value)}
+          >
+            <option value="calendar">{label("Calendar", "تقويم")}</option>
+            <option value="list">{label("Checklist", "قائمة تحقق")}</option>
+          </select>
+        </label>
         <label>
           {label("View", "العرض")}
           <select
@@ -117,6 +136,27 @@ export function TaskPlanner({
           {label("Print planner", "طباعة المخطط")}
         </button>
       </div>
+      <div className="period-completion record-grid">
+        {[
+          ["day", "Daily completion", "إنجاز اليوم"],
+          ["week", "Weekly completion", "إنجاز الأسبوع"],
+          ["month", "Monthly completion", "إنجاز الشهر"],
+        ].map(([mode, en, a]) => {
+          const s = completionSummary(
+            group ? group.tasks : all,
+            plannerRange(date, mode),
+          );
+          return (
+            <div className="panel" key={mode}>
+              <strong>{label(en, a)}</strong>
+              <p>
+                {s.done}/{s.total} · {s.percent}%
+              </p>
+              <progress value={s.done} max={s.total || 1} />
+            </div>
+          );
+        })}
+      </div>
       {!group && (
         <section className="panel staff-workload">
           <h3>{label("Staff work planner", "مخطط عمل الموظفين")}</h3>
@@ -150,17 +190,31 @@ export function TaskPlanner({
                 );
               })}
           </div>
-          <CareTasks
-            tasks={all}
-            period={range}
-            history={history}
-            members={members}
-            ar={ar}
-            when={when}
-            toggle={toggle}
-            busy={busy}
-            canComplete={canComplete}
-          />
+          {layout === "calendar" ? (
+            <TaskCalendar
+              tasks={all}
+              range={range}
+              view={view}
+              ar={ar}
+              members={members}
+              when={when}
+              toggle={toggle}
+              busy={busy}
+              canComplete={canComplete}
+            />
+          ) : (
+            <CareTasks
+              tasks={all}
+              period={range}
+              history={history}
+              members={members}
+              ar={ar}
+              when={when}
+              toggle={toggle}
+              busy={busy}
+              canComplete={canComplete}
+            />
+          )}
         </section>
       )}
       {!group ? (
@@ -211,17 +265,34 @@ export function TaskPlanner({
           <p>
             {range.start} – {range.end}
           </p>
-          <CareTasks
-            tasks={group.tasks}
-            period={range}
-            history={history}
-            members={members}
-            ar={ar}
-            when={when}
-            toggle={toggle}
-            busy={busy}
-            canComplete={canComplete}
-          />
+          <p>
+            {group.completed}/{group.tasks.length} · {group.percent}%
+          </p>
+          {layout === "calendar" ? (
+            <TaskCalendar
+              tasks={group.tasks}
+              range={range}
+              view={view}
+              ar={ar}
+              members={members}
+              when={when}
+              toggle={toggle}
+              busy={busy}
+              canComplete={canComplete}
+            />
+          ) : (
+            <CareTasks
+              tasks={group.tasks}
+              period={range}
+              history={history}
+              members={members}
+              ar={ar}
+              when={when}
+              toggle={toggle}
+              busy={busy}
+              canComplete={canComplete}
+            />
+          )}
         </>
       )}
       <section className="planner-print-sheet">

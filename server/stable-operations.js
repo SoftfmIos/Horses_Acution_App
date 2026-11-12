@@ -80,6 +80,106 @@ export function stableOperations(c) {
       fail("Horse access denied", 403);
     return { horse, staff, owned };
   }
+  function photoAccess(req, write = false) {
+    const { kind, id: target } = req.params,
+      org = req.org.id;
+    if (!["horses", "instructors", "members"].includes(kind))
+      fail("Invalid photo profile", 404);
+    if (kind === "members") {
+      if (
+        !get(
+          "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+          org,
+          target,
+        )
+      )
+        fail("Member not found", 404);
+      if (req.org.role !== "owner" && req.user.id !== target)
+        fail("Photo access denied", 403);
+    } else {
+      const profile = record(org, kind, target);
+      if (req.org.role !== "owner") {
+        if (write) fail("Staff permission required", 403);
+        if (kind === "horses") horseAccess(req, target);
+        else {
+          const assigned =
+            records(org, "horses").some(
+              (h) => h.ownerId === req.user.id && h.instructorId === target,
+            ) ||
+            all(
+              "SELECT class_id FROM reservations WHERE org_id=? AND member_id=? AND status IN ('confirmed','pending_payment')",
+              org,
+              req.user.id,
+            ).some((b) => {
+              const c = record(org, "classes", b.class_id);
+              return c.instructorId === target || c.instructor === profile.name;
+            });
+          if (!assigned) fail("Instructor photo access denied", 403);
+        }
+      }
+    }
+    return "photo:" + org + ":" + kind + ":" + target;
+  }
+  app.get("/api/photos/:kind/:id", (req, res) => {
+    const key = photoAccess(req),
+      photoRow = get(
+        "SELECT data FROM records WHERE org_id=? AND kind='profilePhotos' AND id=?",
+        req.org.id,
+        key,
+      ),
+      photo = photoRow ? JSON.parse(photoRow.data) : null;
+    res.json(
+      photo
+        ? {
+            mime: photo.mime,
+            content: photo.content,
+            updatedAt: photo.updatedAt,
+          }
+        : { content: null },
+    );
+  });
+  app.put("/api/photos/:kind/:id", (req, res) => {
+    const key = photoAccess(req, true),
+      b = req.body;
+    if (
+      typeof b.content !== "string" ||
+      b.content.length > 700000 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(b.content)
+    )
+      fail("Choose a JPEG or PNG photo up to 512 KB");
+    const bytes = Buffer.from(b.content, "base64"),
+      mime = bytes
+        .subarray(0, 8)
+        .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+        ? "image/png"
+        : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+          ? "image/jpeg"
+          : "";
+    if (!mime || bytes.length > 512 * 1024)
+      fail("Choose a JPEG or PNG photo up to 512 KB");
+    transaction(() => {
+      put(req.org.id, "profilePhotos", key, {
+        mime,
+        content: bytes.toString("base64"),
+        updatedAt: now(),
+        updatedBy: req.user.id,
+      });
+      audit(req, "photo.update", req.params.id);
+    });
+    res.json({ mime, content: bytes.toString("base64"), updatedAt: now() });
+  });
+  app.delete("/api/photos/:kind/:id", (req, res) => {
+    const key = photoAccess(req, true);
+    transaction(() => {
+      run(
+        "DELETE FROM records WHERE org_id=? AND kind='profilePhotos' AND id=?",
+        req.org.id,
+        key,
+      );
+      audit(req, "photo.remove", req.params.id);
+    });
+    res.json({ ok: true });
+  });
   app.get("/api/horses/:id/profile", (req, res) => {
     const { horse, staff, owned } = horseAccess(req, req.params.id),
       org = req.org.id;
@@ -109,7 +209,18 @@ export function stableOperations(c) {
       "SELECT * FROM reservations WHERE org_id=? AND horse_id=?" +
         (staff ? "" : " AND member_id=?"),
       ...[org, horse.id, ...(staff ? [] : [req.user.id])],
-    ).map((b) => ({ ...b, session: record(org, "classes", b.class_id) }));
+    ).map((b) => ({
+      ...b,
+      session: record(org, "classes", b.class_id),
+      memberName:
+        get("SELECT name FROM users WHERE id=?", b.member_id)?.name || "",
+      attendance:
+        get(
+          "SELECT status FROM attendance WHERE org_id=? AND reservation_id=?",
+          org,
+          b.id,
+        )?.status || "",
+    }));
     const events = [
       ...medical.map((x) => ({
         id: x.id,
@@ -173,7 +284,12 @@ export function stableOperations(c) {
             },
       medical,
       feeding,
-      tasks,
+      tasks: tasks.map((t) => ({
+        ...t,
+        completedByName: t.completedBy
+          ? get("SELECT name FROM users WHERE id=?", t.completedBy)?.name || ""
+          : "",
+      })),
       documents,
       boarding,
       bookings,

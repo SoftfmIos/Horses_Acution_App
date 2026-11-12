@@ -59,6 +59,10 @@ export async function createAdmin(
         throw new Error(
           "This email already belongs to an account. No roles or password were changed; choose a new admin email.",
         );
+      db.prepare("INSERT OR IGNORE INTO system_admins VALUES(?,?)").run(
+        academy.id,
+        existing.id,
+      );
       db.exec("COMMIT");
       return { created: false, email, stableId: academy.id };
     }
@@ -82,6 +86,10 @@ export async function createAdmin(
       uid,
       academy.id,
       "owner",
+    );
+    db.prepare("INSERT OR IGNORE INTO system_admins VALUES(?,?)").run(
+      academy.id,
+      uid,
     );
     db.prepare(
       "INSERT INTO audit(org_id,actor_id,action,record_id,created_at) VALUES(?,?,?,?,?)",

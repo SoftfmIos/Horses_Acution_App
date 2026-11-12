@@ -1,3 +1,4 @@
+import { ProfilePhoto } from "./ProfilePhoto";
 import React, { useState } from "react";
 import {
   CalendarDays,
@@ -8,6 +9,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 export function ClientHome({
+  request,
   data,
   user,
   ar,
@@ -36,6 +38,14 @@ export function ClientHome({
   return (
     <>
       <section className="client-welcome">
+        <ProfilePhoto
+          kind="members"
+          id={user.id}
+          name={user.name}
+          request={request}
+          editable
+          ar={ar}
+        />
         <div>
           <span className="eyebrow">
             {label("YOUR RIDING JOURNEY", "رحلتك مع الفروسية")}
