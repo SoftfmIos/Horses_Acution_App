@@ -1579,6 +1579,18 @@ export function createApp(
       places: Math.max(0, Math.min(c.capacity - total, usable - total)),
     };
   }
+  function boardingView(org, stay) {
+    const invoice = get(
+      "SELECT status,gross FROM proformas WHERE org_id=? AND id=?",
+      org,
+      stay.invoiceId,
+    );
+    return {
+      ...stay,
+      paymentStatus: invoice?.status || "open",
+      priceAmount: invoice?.gross ?? null,
+    };
+  }
   function reconcilePackageCredits(org, memberId = null) {
     transaction(() => {
       for (const p of all(
@@ -1839,15 +1851,7 @@ export function createApp(
     );
     if (!manager) result.taskHistory = [];
     result.boarding = manager
-      ? records(org, "boarding").map((b) => ({
-          ...b,
-          paymentStatus:
-            get(
-              "SELECT status FROM proformas WHERE org_id=? AND id=?",
-              org,
-              b.invoiceId,
-            )?.status || "open",
-        }))
+      ? records(org, "boarding").map((stay) => boardingView(org, stay))
       : [];
     result.stallOccupancy =
       manager &&
@@ -2004,6 +2008,7 @@ export function createApp(
     mailDetails,
     createPaymentRequest,
     ownsInstructor,
+    boardingView,
   });
   app.get("/api/class-series/:id", owner, (req, res) => {
     const slots = records(req.org.id, "classes")
@@ -2546,7 +2551,7 @@ export function createApp(
     )
       fail("Member not in stable");
     const plan = record(org, "plans", planId);
-    if (!plan.active) fail("Price inactive");
+    if (plan.active === false) fail("Price inactive");
     if (packageOnly && !(plan.kind === "package" && plan.credits > 0))
       fail("Select a lesson package");
     const pid = id();

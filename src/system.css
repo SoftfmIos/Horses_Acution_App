@@ -2447,3 +2447,21 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.boarding-availability-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.boarding-price-total {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.boarding-price-total strong {
+  font-size: 25px;
+  color: var(--navy);
+}
+.boarding-price-total small {
+  color: var(--muted);
+  line-height: 1.6;
+}

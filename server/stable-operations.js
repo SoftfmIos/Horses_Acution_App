@@ -1,3 +1,4 @@
+import { isBoardingPrice } from "../shared/boarding.js";
 // Stable-scoped operations use the same transactions, permissions and audit log as core records.
 export function stableOperations(c) {
   const {
@@ -21,6 +22,7 @@ export function stableOperations(c) {
     mailDetails,
     createPaymentRequest,
     ownsInstructor,
+    boardingView,
   } = c;
   const day = (value) =>
     new Intl.DateTimeFormat("en-CA", {
@@ -403,16 +405,8 @@ export function stableOperations(c) {
     const startDate = iso(b.startDate).slice(0, 10),
       endDate = iso(b.endDate).slice(0, 10);
     if (startDate > endDate) fail("End date precedes start date");
-    if (!stall.active) fail("Stall is inactive");
-    if (
-      ![
-        "boarding",
-        "boarding_food",
-        "boarding_full",
-        "boarding_medical",
-      ].includes(plan.kind)
-    )
-      fail("Choose a boarding price");
+    if (!active(stall)) fail("Stall is inactive");
+    if (!isBoardingPrice(plan)) fail("Choose a boarding price");
     const rows = records(org, "boarding").filter(
       (x) =>
         x.id !== previous?.id &&
@@ -442,7 +436,7 @@ export function stableOperations(c) {
       )
     )
       fail("Billed member must belong to this stable");
-    if (!plan.active && plan.id !== previous?.planId)
+    if (!active(plan) && plan.id !== previous?.planId)
       fail("Boarding price is inactive");
     return { org, b, horse, stall, plan, startDate, endDate, memberId };
   }
@@ -484,7 +478,7 @@ export function stableOperations(c) {
       );
       audit(req, "boarding.create", bid);
     });
-    res.status(201).json(record(org, "boarding", bid));
+    res.status(201).json(boardingView(org, record(org, "boarding", bid)));
   });
   app.put("/api/boarding/:id", owner, (req, res) => {
     const previous = record(req.org.id, "boarding", req.params.id);
@@ -552,7 +546,7 @@ export function stableOperations(c) {
       );
       audit(req, "boarding.update", previous.id);
     });
-    res.json(record(org, "boarding", previous.id));
+    res.json(boardingView(org, record(org, "boarding", previous.id)));
   });
   app.post("/api/boarding/:id/end", owner, (req, res) => {
     const b = record(req.org.id, "boarding", req.params.id);

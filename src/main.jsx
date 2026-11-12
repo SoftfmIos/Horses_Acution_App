@@ -826,6 +826,32 @@ function App() {
     setQ("");
     setMenu(false);
   };
+  const applyBoardingUpdate = (stay) => {
+    if (stableRef.current !== stable?.id) return;
+    refreshSequence.current++;
+    setData((current) => {
+      const existing = current.boarding.find((row) => row.id === stay.id);
+      const occupancy = (current.stallOccupancy ?? current.boarding).filter(
+        (row) => row.id !== stay.id,
+      );
+      if (stay.status === "active")
+        occupancy.push({
+          id: stay.id,
+          stallId: stay.stallId,
+          status: stay.status,
+          startDate: stay.startDate,
+          endDate: stay.endDate,
+        });
+      return {
+        ...current,
+        boarding: [
+          ...current.boarding.filter((row) => row.id !== stay.id),
+          { ...existing, ...stay },
+        ],
+        stallOccupancy: occupancy,
+      };
+    });
+  };
   const nav = [
     ["overview", LayoutDashboard],
     ["classes", CalendarDays],
@@ -1173,13 +1199,13 @@ function App() {
         : {}),
     };
   }
-  function openForm(kind, row) {
+  function openForm(kind, row, initial = {}) {
     setModal({
       kind,
       record: row || null,
-      form: { ...defaults(kind), ...row },
+      form: { ...defaults(kind), ...initial, ...row },
       returnPage:
-        page === "boardingManagement" && kind === "stalls"
+        page === "boardingManagement" && ["stalls", "plans"].includes(kind)
           ? "boardingManagement"
           : null,
     });
@@ -2062,7 +2088,9 @@ function App() {
           )}
           {page === "boardingManagement" && manager && (
             <Boarding
+              key={stable.id}
               data={data}
+              onSaved={applyBoardingUpdate}
               ar={ar}
               request={request}
               action={action}

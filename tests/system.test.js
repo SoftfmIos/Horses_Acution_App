@@ -3460,3 +3460,167 @@ test("pricing persists package session edits and rejects credit counts on non-pa
   });
   assert.equal(regular.credits, 0);
 });
+
+test("boarding assignments update period occupancy on create, move and end, and accept legacy active catalogues", async (t) => {
+  const f = await fixture(t),
+    member = (await f.member.call("/auth/me")).user.id;
+  const horse = await f.create("horses", {
+    name: "First horse",
+    ownerId: member,
+  });
+  const second = await f.create("horses", {
+    name: "Second horse",
+    ownerId: member,
+  });
+  const third = await f.create("horses", {
+    name: "Third horse",
+    ownerId: member,
+  });
+  const stall = await f.create("stalls", { name: "North", capacity: 2 });
+  const other = await f.create("stalls", { name: "South", capacity: 1 });
+  const plan = await f.create("plans", {
+    name: "Boarding with food",
+    kind: "boarding_food",
+    amount: 30000,
+  });
+  for (const id of [stall.id, plan.id])
+    f.db
+      .prepare(
+        "UPDATE records SET data=json_remove(data,'$.active') WHERE id=?",
+      )
+      .run(id);
+  const body = {
+    horseId: horse.id,
+    stallId: stall.id,
+    memberId: member,
+    planId: plan.id,
+    startDate: "2026-11-11",
+    endDate: "2026-11-20",
+  };
+  const one = await f.owner.call("/boarding", "POST", body);
+  assert.equal(one.httpStatus, 201, JSON.stringify(one));
+  assert.equal(one.priceAmount, 30000);
+  assert.equal(one.paymentStatus, "open");
+  let data = await f.owner.call("/data");
+  assert.equal(
+    data.stallOccupancy.filter((b) => b.stallId === stall.id).length,
+    1,
+  );
+  const two = await f.owner.call("/boarding", "POST", {
+    ...body,
+    horseId: second.id,
+  });
+  assert.equal(two.httpStatus, 201);
+  assert.equal(
+    (await f.owner.call("/boarding", "POST", { ...body, horseId: third.id }))
+      .httpStatus,
+    409,
+  );
+  const moved = await f.owner.call("/boarding/" + one.id, "PUT", {
+    ...body,
+    stallId: other.id,
+  });
+  assert.equal(moved.httpStatus, 200);
+  data = await f.owner.call("/data");
+  assert.equal(
+    data.stallOccupancy.filter((b) => b.stallId === stall.id).length,
+    1,
+  );
+  assert.equal(
+    data.stallOccupancy.filter((b) => b.stallId === other.id).length,
+    1,
+  );
+  await f.owner.call("/boarding/" + two.id + "/end", "POST");
+  data = await f.owner.call("/data");
+  assert.equal(
+    data.stallOccupancy.filter((b) => b.stallId === stall.id).length,
+    0,
+  );
+  assert.equal(
+    data.stallOccupancy.filter((b) => b.stallId === other.id).length,
+    1,
+  );
+  assert.equal(data.boarding.find((b) => b.id === moved.id).priceAmount, 30000);
+  const inactive = await f.create("plans", {
+    name: "Closed price",
+    kind: "boarding",
+    amount: 10000,
+    active: false,
+  });
+  assert.equal(
+    (
+      await f.owner.call("/boarding", "POST", {
+        ...body,
+        horseId: third.id,
+        planId: inactive.id,
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.deepEqual((await f.member.call("/data")).stallOccupancy, []);
+});
+
+test("boarding price snapshots survive catalogue rate changes and scoped staff can see stay prices", async (t) => {
+  const f = await fixture(t),
+    member = (await f.member.call("/auth/me")).user.id;
+  const horse = await f.create("horses", {
+    name: "Snapshot horse",
+    ownerId: member,
+  });
+  const stall = await f.create("stalls", {
+    name: "Snapshot stall",
+    capacity: 1,
+  });
+  const plan = await f.create("plans", {
+    name: "Original boarding",
+    kind: "boarding",
+    amount: 30000,
+  });
+  const stay = await f.owner.call("/boarding", "POST", {
+    horseId: horse.id,
+    stallId: stall.id,
+    memberId: member,
+    planId: plan.id,
+    startDate: "2026-11-11",
+    endDate: "2026-11-20",
+  });
+  await f.owner.call("/records/plans/" + plan.id, "PUT", {
+    name: "New rate",
+    kind: "boarding",
+    amount: 50000,
+  });
+  const edited = await f.owner.call("/boarding/" + stay.id, "PUT", {
+    endDate: "2026-11-21",
+  });
+  assert.equal(edited.httpStatus, 200);
+  assert.equal(edited.priceAmount, 30000);
+  const staff = await f.owner.call("/members", "POST", {
+    name: "Boarding staff",
+    email: "boarding-price@test.com",
+    password: "123456",
+    role: "staff",
+  });
+  await f.owner.call("/permissions/" + staff.id, "PUT", {
+    role: "staff",
+    permissions: ["boarding", "stalls"],
+    actionPermissions: { boarding: [], stalls: [] },
+  });
+  const actor = f.client();
+  await actor.call("/auth/login", "POST", {
+    email: "boarding-price@test.com",
+    password: "123456",
+  });
+  actor.stable = f.owner.stable;
+  let data = await actor.call("/data");
+  assert.equal(data.boarding[0].priceAmount, 30000);
+  assert.equal(data.stallOccupancy.length, 1);
+  assert.deepEqual(data.proformas, []);
+  await f.owner.call("/permissions/" + staff.id, "PUT", {
+    role: "staff",
+    permissions: ["tasks"],
+    actionPermissions: { tasks: [] },
+  });
+  data = await actor.call("/data");
+  assert.deepEqual(data.boarding, []);
+  assert.deepEqual(data.stallOccupancy, []);
+});
