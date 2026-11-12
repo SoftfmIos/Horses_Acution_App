@@ -78,3 +78,7 @@ The workflow allows 30 minutes for the uploaded build to become discoverable and
 Refresh the Codemagic workflow list on `iOSApp`, then start **Riyadh Polo Hills - App Store build status**. This manual workflow uses the named Apple integration to read the app and all build states, including expired builds, without signing, archiving, uploading or submitting anything. Open **Read Apple build processing states** or download `app-store-status.json`.
 
 The report lists app version, build number, processing state and upload date for the latest 20 visible builds. Compare the exact version/build with the earlier Publishing log. An empty successful response confirms that the API has no build record; it cannot determine whether the upload is delayed or failed before a build was created. Authentication/API failures stop the workflow rather than being labelled no builds. If Apple still has no record and no processing email, collect the upload receipt/request ID and completion time from the original Publishing log for Apple Developer Support.
+
+### Validate before uploading
+
+The signed TestFlight workflow runs **Validate the signed IPA with Apple** after exporting the IPA. It uses Apple's `altool --validate-app` through the Codemagic CLI with `--enable-package-validation --skip-package-upload`; this step validates and does not upload or submit the app. Normal publishing runs afterward only if validation succeeds. If it fails, copy Apple's validation/ITMS details from that step. Validation acceptance is separate from Apple's processing of the eventual upload.

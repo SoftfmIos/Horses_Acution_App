@@ -57,6 +57,12 @@ workflows:
             --project ios/RiyadhPoloHills.xcodeproj \
             --scheme RiyadhPoloHills \
             --config Release
+      - name: Validate the signed IPA with Apple
+        script: |
+          app-store-connect publish \
+            --path "build/ios/ipa/*.ipa" \
+            --enable-package-validation \
+            --skip-package-upload
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/xcarchive/*.xcarchive/dSYMs/*.dSYM
