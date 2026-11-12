@@ -1,3 +1,4 @@
+import release from "../package.json" with { type: "json" };
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -66,7 +67,11 @@ for (const passenger of [false, true]) {
     });
     const response = await fetch("http://127.0.0.1:" + port + "/api/health");
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { status: "ok", database: true });
+    assert.deepEqual(await response.json(), {
+      status: "ok",
+      database: true,
+      version: release.version,
+    });
     assert.ok(!stderr.includes("ERR_REQUIRE_ASYNC_MODULE"));
   });
 }

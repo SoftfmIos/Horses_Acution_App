@@ -1,6 +1,6 @@
 {
   "name": "riyadh-polo-club-academy",
-  "version": "0.1.0",
+  "version": "1.10.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "db:backup": "node --env-file-if-exists=.env scripts/backup.mjs",
     "admin:create": "node --env-file-if-exists=.env scripts/create-admin.mjs",
     "test:save-race": "node tests/save-race.mjs",
-    "test:stable-browser": "node tests/stable-features.mjs"
+    "test:stable-browser": "node tests/stable-features.mjs",
+    "version:next": "npm version minor --no-git-tag-version"
   },
   "dependencies": {
     "express": "^5.3.0",

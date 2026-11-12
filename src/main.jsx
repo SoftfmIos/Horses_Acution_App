@@ -1,3 +1,4 @@
+import release from "../package.json";
 import { HorseProfile, CareReminders } from "./HorseProfile";
 import { Boarding, FeedStock } from "./Boarding";
 import React, { useEffect, useState, useRef } from "react";
@@ -2458,7 +2459,9 @@ function App() {
             <span>
               © {new Date().getFullYear()} {t.brand}
             </span>
-            <span>{t.purpose}</span>
+            <span>
+              {t.purpose} · <bdi>v{release.version}</bdi>
+            </span>
           </footer>
         </main>
       </div>

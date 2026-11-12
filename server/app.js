@@ -1,3 +1,4 @@
+import release from "../package.json" with { type: "json" };
 import { stableOperations } from "./stable-operations.js";
 import { recurrenceSlots, treatmentSlots } from "../shared/recurrence.js";
 import {
@@ -391,7 +392,11 @@ export function createApp(
     next();
   });
   app.get("/api/health", (req, res) =>
-    res.json({ status: "ok", database: get("SELECT 1 AS ok").ok === 1 }),
+    res.json({
+      status: "ok",
+      database: get("SELECT 1 AS ok").ok === 1,
+      version: release.version,
+    }),
   );
   const authLimit = rateLimit({
     windowMs: 15 * 60 * 1000,
