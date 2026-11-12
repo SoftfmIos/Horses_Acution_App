@@ -1,3 +1,4 @@
+import { expectedClassSlots, verifyClassSlots } from "./classSchedule";
 import release from "../package.json";
 import { HorseProfile, CareReminders } from "./HorseProfile";
 import { Boarding, FeedStock } from "./Boarding";
@@ -1054,6 +1055,15 @@ function App() {
     }
     if (modal.kind === "discounts" && b.mode === "fixed")
       b.value = Math.round(b.value * 100);
+    let expected = null,
+      scheduleSubmitted = false;
+    try {
+      if (modal.kind === "classes" && !modal.record)
+        expected = expectedClassSlots(b);
+    } catch (e) {
+      notify(e.message);
+      return;
+    }
     setBusy(true);
     try {
       const kind = modal.kind,
@@ -1063,6 +1073,44 @@ function App() {
         { method: modal.record ? "PUT" : "POST", body: b },
       );
       if (stableRef.current !== savedStable) return;
+      if (expected) {
+        scheduleSubmitted = true;
+        setModal((m) => (m ? { ...m, saveSubmitted: true } : m));
+        // Confirm all dates, not just the first class returned by an older backend.
+        const persisted = saved.seriesId
+          ? (
+              await request(
+                "/class-series/" + encodeURIComponent(saved.seriesId),
+              )
+            ).slots
+          : [await request("/records/classes/" + encodeURIComponent(saved.id))];
+        verifyClassSlots(expected, persisted);
+        const loaded = await refresh();
+        if (stableRef.current !== savedStable) return;
+        refreshSequence.current++;
+        setData((previous) => ({
+          ...previous,
+          classes: [
+            ...(loaded?.classes || previous.classes || []).filter(
+              (c) => !persisted.some((p) => p.id === c.id),
+            ),
+            ...persisted,
+          ],
+        }));
+        setFailure("");
+        setModal(null);
+        go("classes");
+        setInstructorFilter("");
+        setCalendarDate(
+          riyadhDay(persisted[0].startsAt) + "|" + crypto.randomUUID(),
+        );
+        notify(
+          ar
+            ? "تم تأكيد " + persisted.length + " مواعيد في التقويم."
+            : persisted.length + " calendar slots saved and verified.",
+        );
+        return;
+      }
       // A successful write must not be hidden by an old search filter.
       setModal(null);
       go(kind === "plans" ? "pricing" : kind);
@@ -1112,6 +1160,7 @@ function App() {
         }
       }
     } catch (e) {
+      if (scheduleSubmitted) setFailure(e.message);
       if (e.code === "BACKEND_UPDATE_REQUIRED") setFailure(e.message);
       notify(e.message);
     } finally {
@@ -2000,7 +2049,7 @@ function App() {
                 <summary>{ar ? "عرض التقويم" : "Show calendar"}</summary>
                 <Schedule
                   defaultView={data.settings?.calendarView || "month"}
-                  initialDate={calendarDate}
+                  initialDate={calendarDate.split("|")[0]}
                   key={
                     (data.settings?.calendarView || "month") +
                     "|" +
@@ -2127,6 +2176,37 @@ function App() {
                                   : "Join waitlist"
                                 : t.book}
                           </button>
+                          {manager && !c.seriesId && (
+                            <button
+                              className="soft"
+                              onClick={() =>
+                                setModal({
+                                  kind: "classes",
+                                  form: {
+                                    ...defaults("classes"),
+                                    ...c,
+                                    id: undefined,
+                                    sourceClassId: c.id,
+                                    repeatMode: "weekdays",
+                                    repeatDays: [
+                                      new Date(
+                                        riyadhDay(c.startsAt) + "T12:00:00Z",
+                                      ).getUTCDay(),
+                                    ],
+                                    repeatUntil: riyadhDay(
+                                      new Date(
+                                        Date.parse(c.startsAt) + 28 * 86400000,
+                                      ),
+                                    ),
+                                  },
+                                })
+                              }
+                            >
+                              {ar
+                                ? "جدولة أيام إضافية"
+                                : "Schedule selected days"}
+                            </button>
+                          )}
                           {canManage("classes") && (
                             <button
                               className="text-button"
@@ -2956,6 +3036,13 @@ function App() {
                     )}
                   </label>
                 ))}
+                {modal.saveSubmitted && (
+                  <p role="alert" className="notice">
+                    {ar
+                      ? "تم إرسال الحفظ. أغلق هذه النافذة وحدّث البيانات قبل إعادة المحاولة لتجنب التكرار."
+                      : "Save submitted. Close this window and refresh before retrying to avoid duplicate slots."}
+                  </p>
+                )}
                 {modal.kind === "classes" && !modal.record && (
                   <RecurrenceFields
                     form={modal.form}
@@ -2998,7 +3085,10 @@ function App() {
                     </datalist>
                   </>
                 )}
-                <button className="primary" disabled={busy}>
+                <button
+                  className="primary"
+                  disabled={busy || modal.saveSubmitted}
+                >
                   {busy ? t.loading : t.save}
                 </button>
               </form>

@@ -1294,3 +1294,18 @@ pre {
 .horse-profile .panel button {
   margin-inline-end: 8px;
 }
+.schedule-dates {
+  grid-column: 1/-1;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: white;
+}
+.schedule-dates ol {
+  max-height: 180px;
+  overflow: auto;
+  padding-inline-start: 24px;
+  margin: 8px 0;
+}
+.schedule-dates li {
+  padding: 4px 0;
+}

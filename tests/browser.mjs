@@ -298,7 +298,9 @@ let browser;
     .click();
   await nav("Medical care");
   await add();
-  await field("Available horses (select multiple)").selectOption({ label: "Browser Shams" });
+  await field("Available horses (select multiple)").selectOption({
+    label: "Browser Shams",
+  });
   await field("Care type").fill("Recovery");
   await field("Notes").fill("No riding until vet clearance");
   await field("Restrict horse from riding").check();
@@ -348,7 +350,9 @@ let browser;
   );
   await field("Assigned to").selectOption({ index: 1 });
   await save();
-  await page.getByRole("heading", {name:"Inspect tack",exact:true}).waitFor();
+  await page
+    .getByRole("heading", { name: "Inspect tack", exact: true })
+    .waitFor();
   await nav("Inventory");
   await add();
   await field("Name (English)").fill("Hay bales");
@@ -649,6 +653,19 @@ let browser;
     .getByRole("dialog")
     .getByText("5 bookable sessions will be generated.", { exact: true })
     .waitFor();
+  // Reproduce a delayed collection that contains only the first date.
+  await page.route("**/api/data*", async (route) => {
+    const response = await route.fetch(),
+      payload = await response.json();
+    let seen = false;
+    payload.classes = payload.classes.filter((c) => {
+      if (c.title !== "Morning ride") return true;
+      if (seen) return false;
+      seen = true;
+      return true;
+    });
+    await route.fulfill({ response, json: payload });
+  });
   await save();
   await page.waitForFunction(
     () =>
@@ -656,10 +673,31 @@ let browser;
         (h) => h.textContent === "Morning ride",
       ).length === 5,
   );
+  await calendar.getByLabel("View", { exact: true }).selectOption("day");
+  for (const offset of [0, 2, 7, 9, 14]) {
+    const date = new Date(firstDay.getTime() + offset * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    await calendar.locator('input[type="date"]').fill(date);
+    await calendar
+      .locator(".calendar-event")
+      .filter({ hasText: "Morning ride" })
+      .waitFor();
+    if (
+      (await calendar
+        .locator(".calendar-event")
+        .filter({ hasText: "Morning ride" })
+        .count()) !== 1
+    )
+      throw Error("Expected exactly one saved slot on " + date);
+  }
+  await page.unroute("**/api/data*");
   // A repeated follow-up creates individual tasks and displays completed/total progress.
   await nav("Medical care");
   await add();
-  await field("Available horses (select multiple)").selectOption({ label: "Browser Shams" });
+  await field("Available horses (select multiple)").selectOption({
+    label: "Browser Shams",
+  });
   await field("Care type").fill("Follow-up appointments");
   await field("Notes").fill("Appointment schedule test");
   await field("Recorded at").fill(firstDate + "T08:00");

@@ -1305,9 +1305,20 @@ export function createApp(
     audit,
     createPaymentRequest,
   });
+  app.get("/api/class-series/:id", owner, (req, res) => {
+    const slots = records(req.org.id, "classes")
+      .filter((c) => c.seriesId === req.params.id)
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    if (!slots.length) fail("Class series not found", 404);
+    res.json({
+      slots: slots.map((c) => safeClass(req, c)),
+      count: slots.length,
+    });
+  });
   app.get("/api/records/:kind/:id", owner, (req, res) => {
     if (!kinds.includes(req.params.kind)) fail("Unknown module", 404);
-    res.json(record(req.org.id, req.params.kind, req.params.id));
+    const row = record(req.org.id, req.params.kind, req.params.id);
+    res.json(req.params.kind === "classes" ? safeClass(req, row) : row);
   });
   app.post("/api/records/:kind", owner, (req, res) => {
     const { kind } = req.params;
@@ -1325,12 +1336,22 @@ export function createApp(
         (!slots.length || slots.length > 100)
       )
         fail("Choose between 1 and 100 horses");
+      const source =
+        kind === "classes" && req.body.sourceClassId
+          ? record(req.org.id, "classes", req.body.sourceClassId)
+          : null;
+      if (source?.seriesId)
+        fail("This class already belongs to a recurring schedule", 409);
       const seriesId = slots.length > 1 ? id() : null;
       return slots.map((slot) => {
-        const rid = id();
+        const reuse =
+          source &&
+          slot.startsAt === source.startsAt &&
+          slot.endsAt === source.endsAt;
+        const rid = reuse ? source.id : id();
         const body = { ...req.body, ...(slot || {}) };
         const data = {
-          ...validate(req, kind, body),
+          ...validate(req, kind, body, reuse ? rid : undefined),
           ...(seriesId
             ? {
                 seriesId,
@@ -1357,7 +1378,11 @@ export function createApp(
       });
     });
     app.locals.remind();
-    res.status(201).json({ ...created[0], created });
+    const rows =
+      kind === "classes" ? created.map((c) => safeClass(req, c)) : created;
+    res
+      .status(201)
+      .json({ ...rows[0], created: rows, createdCount: rows.length });
   });
 
   app.put("/api/records/:kind/:id", owner, (req, res) => {

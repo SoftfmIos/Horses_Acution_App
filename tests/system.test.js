@@ -1780,3 +1780,32 @@ test("completed feeding consumes stock once, reopening reverses it and shortages
   );
   assert.deepEqual((await f.member.call("/data")).stockMovements, []);
 });
+
+test("existing one-day class expands into selected weekdays without duplicating the original", async (t) => {
+  const f = await fixture(t),
+    { cls } = await setup(f);
+  const result = await f.owner.call("/records/classes", "POST", {
+    ...cls,
+    sourceClassId: cls.id,
+    repeatMode: "weekdays",
+    repeatEvery: 1,
+    repeatDays: [4, 6],
+    repeatUntil: "2026-11-26",
+  });
+  assert.equal(result.httpStatus, 201, JSON.stringify(result));
+  assert.equal(result.createdCount, 5);
+  const series = await f.owner.call("/class-series/" + result.seriesId);
+  assert.equal(series.count, 5);
+  assert.ok(
+    series.slots.every((s) =>
+      [4, 6].includes(new Date(s.startsAt).getUTCDay()),
+    ),
+  );
+  assert.equal(series.slots.filter((s) => s.id === cls.id).length, 1);
+  assert.equal((await f.owner.call("/data")).classes.length, 5);
+  assert.ok(series.slots.every((s) => s.places === 1));
+  assert.equal(
+    (await f.member.call("/class-series/" + result.seriesId)).httpStatus,
+    403,
+  );
+});

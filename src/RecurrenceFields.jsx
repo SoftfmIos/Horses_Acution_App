@@ -119,6 +119,32 @@ export function RecurrenceFields({ form, onChange, ar, medical = false }) {
               )}
         </p>
       )}
+      {preview.length > 1 && (
+        <details className="schedule-dates" open>
+          <summary>
+            {label("Dates to publish", "المواعيد التي سيتم نشرها")} ·{" "}
+            {preview.length}
+          </summary>
+          <ol>
+            {preview.map((slot) => (
+              <li key={slot.startsAt}>
+                {new Date(slot.startsAt).toLocaleString(
+                  ar ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB",
+                  {
+                    timeZone: "Asia/Riyadh",
+                    weekday: "short",
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  },
+                )}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
       {error && mode !== "none" && (
         <p className="notice">
           {label("Complete the schedule: ", "أكمل بيانات الجدول: ")}
