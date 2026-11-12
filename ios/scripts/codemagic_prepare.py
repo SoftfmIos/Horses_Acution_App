@@ -18,11 +18,20 @@ def choose_build_number(latest, current, ci_number):
     return max(int(current), int(ci_number or 0) + 1, int(latest or 0) + 1)
 
 
-def cli_json(*arguments):
+def cli_text(*arguments):
     # Preserve authentication injected by the named Codemagic integration.
-    # Failed authentication/network calls stop deployment; never treat them as an empty app.
-    output = subprocess.check_output(["app-store-connect", "--json", *arguments], text=True)
-    return json.loads(output) if output.strip() else None
+    # JSON is a command option, not a top-level CLI option. Keep diagnostics on
+    # stderr so stdout contains only the requested app data or build number.
+    output = subprocess.check_output(
+        ["app-store-connect", "--no-color", "--log-stream", "stderr", *arguments],
+        text=True,
+    )
+    return output.strip()
+
+
+def cli_json(*arguments):
+    output = cli_text(*arguments, "--json")
+    return json.loads(output) if output else None
 
 
 def main():
@@ -35,7 +44,9 @@ def main():
     app = cli_json("apps", "get", app_id)
     if not isinstance(app, dict) or app.get("attributes", {}).get("bundleId") != bundle_id:
         raise SystemExit("The App Store Apple ID does not match " + bundle_id + ". Check the app record before publishing.")
-    latest = cli_json("get-latest-testflight-build-number", app_id)
+    # This command returns a plain build number. Empty successful output means
+    # the app has no TestFlight builds yet; failed API calls still stop the build.
+    latest = cli_text("get-latest-testflight-build-number", app_id) or None
     current = re.search(r"^CURRENT_PROJECT_VERSION\s*=\s*([0-9]+)\s*$", config, re.M).group(1)
     number = choose_build_number(latest, current, os.environ.get("PROJECT_BUILD_NUMBER") or os.environ.get("BUILD_NUMBER"))
     config_path.write_text(re.sub(r"^CURRENT_PROJECT_VERSION\s*=.*$", "CURRENT_PROJECT_VERSION = " + str(number), config, flags=re.M))
