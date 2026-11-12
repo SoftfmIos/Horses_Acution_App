@@ -203,6 +203,19 @@ let browser;
   await nav("Discount codes");
   await add();
   await field("Title (English)").fill("Summer");
+  const displayedDiscountCode = await field("Code").inputValue();
+  if (!/^SUM\d{3}$/.test(displayedDiscountCode))
+    throw Error("Discount code is still a placeholder");
+  await page.route("**/api/records/discounts", async (route) => {
+    const body = route.request().postDataJSON();
+    if (!/^[A-Z]{3}\d{3}$/.test(body.code || ""))
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Invalid code" }),
+      });
+    await route.continue();
+  });
   await field("Discount type").selectOption("percent");
   await field("Value (% or SAR)").fill("10");
   await field("Maximum redemptions").fill("5");
@@ -211,6 +224,7 @@ let browser;
     .slice(0, 16);
   await field("Expiry").fill(expiry);
   await save();
+  await page.unroute("**/api/records/discounts");
   const discountCode = (await page.locator(".record-card").innerText()).match(
     /SUM\d{3}/,
   )[0];
@@ -226,9 +240,29 @@ let browser;
   await field("Available horses (select multiple)").selectOption({
     label: "Browser Shams",
   });
-  await field("Instructor").fill("Layla");
+  await field("Instructors (select multiple)").selectOption({ label: "Layla" });
   await field("Arena").selectOption({ label: "Main arena" });
   await field("Price plan").selectOption({ index: 1 });
+  await page.route("**/api/health*", async (route) => {
+    const response = await route.fetch(),
+      payload = await response.json();
+    delete payload.schedulingVersion;
+    await route.fulfill({ response, json: payload });
+  });
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  await page
+    .locator(".toast")
+    .filter({ hasText: "Update the cPanel backend" })
+    .waitFor();
+  if (
+    db.prepare("SELECT count(*) AS n FROM records WHERE kind='classes'").get()
+      .n !== 0
+  )
+    throw Error("Old backend preflight allowed a write");
+  await page.unroute("**/api/health*");
   await save();
   await page.getByRole("heading", { name: "Browser private class" }).waitFor();
   const calendar = page.getByRole("region", { name: "Booking calendar" });
@@ -621,6 +655,26 @@ let browser;
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "English", exact: true }).click();
   // Generate a named offering on selected weekdays using saved location choices.
+  await page.evaluate(async () => {
+    const me = await (await fetch("/api/auth/me")).json(),
+      headers = {
+        "Content-Type": "application/json",
+        "X-Requested-With": "RiyadhAcademy",
+        "X-Stable-Id": me.stables[0].id,
+      };
+    for (const [kind, body] of [
+      ["horses", { name: "Browser Qamar" }],
+      ["instructors", { name: "Omar", active: true }],
+    ]) {
+      const r = await fetch("/api/records/" + kind, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw Error(await r.text());
+    }
+  });
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await nav("Classes & riding");
   await add();
   await field("Title (English)").fill("Morning ride");
@@ -633,10 +687,14 @@ let browser;
       .slice(0, 10);
   await field("Start").fill(firstDate + "T06:00");
   await field("End").fill(firstDate + "T06:45");
-  await field("Available horses (select multiple)").selectOption({
-    label: "Browser Shams",
-  });
-  await field("Instructor").fill("Layla");
+  await field("Available horses (select multiple)").selectOption([
+    { label: "Browser Shams" },
+    { label: "Browser Qamar" },
+  ]);
+  await field("Instructors (select multiple)").selectOption([
+    { label: "Layla" },
+    { label: "Omar" },
+  ]);
   await field("Arena").selectOption({ label: "Main arena" });
   await field("Price plan").selectOption({ index: 1 });
   await field("Repeat").selectOption("weekdays");
@@ -651,7 +709,7 @@ let browser;
   await field("Repeat until").fill(until);
   await page
     .getByRole("dialog")
-    .getByText("5 bookable sessions will be generated.", { exact: true })
+    .getByText("10 bookable sessions will be generated.", { exact: true })
     .waitFor();
   // Reproduce a delayed collection that contains only the first date.
   await page.route("**/api/data*", async (route) => {
@@ -671,7 +729,7 @@ let browser;
     () =>
       [...document.querySelectorAll(".session h3")].filter(
         (h) => h.textContent === "Morning ride",
-      ).length === 5,
+      ).length === 10,
   );
   await calendar.getByLabel("View", { exact: true }).selectOption("day");
   for (const offset of [0, 2, 7, 9, 14]) {
@@ -682,14 +740,15 @@ let browser;
     await calendar
       .locator(".calendar-event")
       .filter({ hasText: "Morning ride" })
+      .first()
       .waitFor();
     if (
       (await calendar
         .locator(".calendar-event")
         .filter({ hasText: "Morning ride" })
-        .count()) !== 1
+        .count()) !== 2
     )
-      throw Error("Expected exactly one saved slot on " + date);
+      throw Error("Expected two instructor slots on " + date);
   }
   await page.unroute("**/api/data*");
   // A repeated follow-up creates individual tasks and displays completed/total progress.

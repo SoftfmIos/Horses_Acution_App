@@ -23,7 +23,8 @@ export async function api(path, { method = "GET", body, stableId } = {}) {
     throw new Error("Server unavailable / الخادم غير متاح");
   }
   if (!response.ok) {
-    const outdated = data.error === "Unknown module";
+    const outdated =
+      data.error === "Unknown module" || data.error === "Endpoint not found";
     const e = new Error(
       outdated
         ? "Backend update required: update the cPanel repository and restart Node.js. / يلزم تحديث الخادم: حدّث مستودع cPanel وأعد تشغيل Node.js."

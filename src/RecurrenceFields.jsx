@@ -1,3 +1,4 @@
+import { classOpenings } from "../shared/class-openings";
 import React from "react";
 import { recurrenceSlots, instant } from "../shared/recurrence";
 export function RecurrenceFields({ form, onChange, ar, medical = false }) {
@@ -11,7 +12,7 @@ export function RecurrenceFields({ form, onChange, ar, medical = false }) {
       const end = medical
         ? new Date(instant(start) + 1800000).toISOString()
         : form.endsAt;
-      preview = recurrenceSlots({
+      preview = (medical ? recurrenceSlots : classOpenings)({
         ...form,
         repeatMode: mode,
         startsAt: start,
@@ -127,7 +128,7 @@ export function RecurrenceFields({ form, onChange, ar, medical = false }) {
           </summary>
           <ol>
             {preview.map((slot) => (
-              <li key={slot.startsAt}>
+              <li key={slot.startsAt + "|" + (slot.instructorId || "")}>
                 {new Date(slot.startsAt).toLocaleString(
                   ar ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB",
                   {
@@ -158,8 +159,8 @@ export function RecurrenceFields({ form, onChange, ar, medical = false }) {
               "اختر المسؤول أعلاه. تتحول كل جلسة إلى مهمة بعلامة إتمام. لجدول جرعات الدواء استخدم حقول التكرار بالساعات بدلاً من ذلك.",
             )
           : label(
-              "Each session has its own seats and horse assignment. Registered students can book available places.",
-              "لكل موعد سعة وخيول مخصصة، ويمكن للطلاب المسجلين حجز المقاعد المتاحة.",
+              "Each selected date creates one single-seat slot per instructor, with a different available horse. The same instructor or horse cannot be booked twice at that time.",
+              "لكل تاريخ موعد مستقل بمقعد واحد لكل مدرب وحصان مختلف متاح. لا يمكن حجز المدرب أو الحصان مرتين في الوقت نفسه.",
             )}
       </p>
     </fieldset>

@@ -1,3 +1,4 @@
+import { discountCodeForForm } from "../shared/discount-code";
 import { expectedClassSlots, verifyClassSlots } from "./classSchedule";
 import release from "../package.json";
 import { HorseProfile, CareReminders } from "./HorseProfile";
@@ -159,6 +160,8 @@ const dict = {
     endsAt: "End",
     capacity: "Places",
     horseIds: "Available horses (select multiple)",
+    instructorId: "Instructor",
+    instructorIds: "Instructors (select multiple)",
     instructor: "Instructor",
     arena: "Arena",
     planId: "Price plan",
@@ -394,6 +397,8 @@ const dict = {
     endsAt: "النهاية",
     capacity: "الأماكن",
     horseIds: "الخيول المتاحة (اختيار متعدد)",
+    instructorId: "المدرب",
+    instructorIds: "المدربون (اختيار متعدد)",
     instructor: "المدرب",
     arena: "الميدان",
     planId: "خطة السعر",
@@ -550,6 +555,7 @@ function App() {
     [auth, setAuth] = useState(null),
     [stable, setStable] = useState(null),
     [rawData, setData] = useState(fresh),
+    [backendVersion, setBackendVersion] = useState(""),
     [page, setPage] = useState("overview"),
     [loading, setLoading] = useState(true),
     [failure, setFailure] = useState(""),
@@ -645,6 +651,18 @@ function App() {
   useEffect(() => {
     init();
   }, []);
+  useEffect(() => {
+    let active = true;
+    setBackendVersion("");
+    api("/health")
+      .then((health) => {
+        if (active) setBackendVersion(health.version || "");
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [stable?.id]);
   const request = (path, opts = {}) =>
     api(path, { stableId: stable?.id, ...opts });
   async function refresh(silent = false) {
@@ -887,7 +905,25 @@ function App() {
           ["capacity", "number", true],
           ["creditCost", "number", true],
           ["horseIds", "multi", true, horses],
-          ["instructor", "text", true],
+          modal?.record?.instructorId
+            ? [
+                "instructorId",
+                "select",
+                true,
+                data.instructors
+                  .filter((i) => i.active)
+                  .map((i) => [i.id, i.name]),
+              ]
+            : modal?.record
+              ? ["instructor", "text", true]
+              : [
+                  "instructorIds",
+                  "multi",
+                  true,
+                  data.instructors
+                    .filter((i) => i.active)
+                    .map((i) => [i.id, i.name]),
+                ],
           [
             "arena",
             "select",
@@ -994,6 +1030,13 @@ function App() {
             code: "RP-" + crypto.randomUUID().replaceAll("-", "").toUpperCase(),
           }
         : {}),
+      ...(kind === "discounts"
+        ? {
+            discountDigits: String(
+              crypto.getRandomValues(new Uint32Array(1))[0] % 1000,
+            ).padStart(3, "0"),
+          }
+        : {}),
       active: true,
       repeatWeeks: 1,
       repeatMode: "none",
@@ -1001,7 +1044,7 @@ function App() {
       repeatDays: [],
       repeatUntil: "",
       placeType: "arena",
-      capacity: data.settings?.defaultCapacity || 1,
+      capacity: kind === "classes" ? 1 : data.settings?.defaultCapacity || 1,
       creditCost: data.settings?.defaultCreditCost || 1,
       credits: 0,
       status: "ready",
@@ -1027,6 +1070,11 @@ function App() {
   async function saveRecord(e) {
     e.preventDefault();
     const b = { ...modal.form };
+    if (modal.kind === "discounts") {
+      b.code = discountCodeForForm(modal.form, modal.record?.code);
+      b.autoCode = !modal.record;
+      delete b.discountDigits;
+    }
     if (b.nameEn !== undefined || b.nameAr !== undefined)
       b.name = b.nameEn || b.nameAr || "";
     if (b.titleEn !== undefined || b.titleAr !== undefined)
@@ -1068,6 +1116,15 @@ function App() {
     try {
       const kind = modal.kind,
         savedStable = stable?.id;
+      if (expected && b.instructorIds) {
+        const health = await request("/health");
+        if (health.schedulingVersion !== 2)
+          throw new Error(
+            ar
+              ? "حدّث خادم cPanel وأعد تشغيل Node.js قبل حفظ مواعيد المدربين. لم يتم إرسال الحفظ."
+              : "Update the cPanel backend and restart Node.js before saving instructor slots. Nothing has been submitted.",
+          );
+      }
       const saved = await request(
         "/records/" + kind + (modal.record ? "/" + modal.record.id : ""),
         { method: modal.record ? "PUT" : "POST", body: b },
@@ -1077,15 +1134,25 @@ function App() {
         scheduleSubmitted = true;
         setModal((m) => (m ? { ...m, saveSubmitted: true } : m));
         // Confirm all dates, not just the first class returned by an older backend.
-        const persisted = saved.seriesId
-          ? (
-              await request(
-                "/class-series/" + encodeURIComponent(saved.seriesId),
-              )
-            ).slots
-          : [await request("/records/classes/" + encodeURIComponent(saved.id))];
-        verifyClassSlots(expected, persisted);
+        const rows = Array.isArray(saved.created) ? saved.created : [saved];
+        verifyClassSlots(expected, rows);
         const loaded = await refresh();
+        const byId = new Map(
+          (loaded?.classes || []).map((row) => [row.id, row]),
+        );
+        const missing = rows.filter((row) => !byId.has(row.id));
+        for (let offset = 0; offset < missing.length; offset += 4) {
+          const verified = await Promise.all(
+            missing
+              .slice(offset, offset + 4)
+              .map((row) =>
+                request("/records/classes/" + encodeURIComponent(row.id)),
+              ),
+          );
+          for (const row of verified) byId.set(row.id, row);
+        }
+        const persisted = rows.map((row) => byId.get(row.id));
+        verifyClassSlots(expected, persisted);
         if (stableRef.current !== savedStable) return;
         refreshSequence.current++;
         setData((previous) => ({
@@ -2187,6 +2254,15 @@ function App() {
                                     ...c,
                                     id: undefined,
                                     sourceClassId: c.id,
+                                    instructorIds: c.instructorId
+                                      ? [c.instructorId]
+                                      : data.instructors
+                                          .filter(
+                                            (i) =>
+                                              i.nameEn === c.instructorEn ||
+                                              i.name === c.instructor,
+                                          )
+                                          .map((i) => i.id),
                                     repeatMode: "weekdays",
                                     repeatDays: [
                                       new Date(
@@ -2540,7 +2616,31 @@ function App() {
               © {new Date().getFullYear()} {t.brand}
             </span>
             <span>
-              {t.purpose} · <bdi>v{release.version}</bdi>
+              {t.purpose} ·{" "}
+              <bdi>
+                {ar ? "الواجهة" : "Frontend"} v{release.version}
+              </bdi>{" "}
+              ·{" "}
+              <a href="/api/health" target="_blank" rel="noreferrer">
+                <bdi>
+                  {ar ? "الخادم" : "Backend"}{" "}
+                  {data.backendVersion || backendVersion
+                    ? "v" + (data.backendVersion || backendVersion)
+                    : ar
+                      ? "الإصدار غير متاح"
+                      : "version unavailable"}
+                </bdi>
+              </a>
+              {(data.backendVersion || backendVersion) &&
+                (data.backendVersion || backendVersion) !== release.version && (
+                  <strong className="version-mismatch">
+                    {" "}
+                    ·{" "}
+                    {ar
+                      ? "الإصدارات غير متطابقة — حدّث النشر الأقدم"
+                      : "Versions differ — update the older deployment"}
+                  </strong>
+                )}
             </span>
           </footer>
         </main>
@@ -2948,14 +3048,10 @@ function App() {
                           <input
                             readOnly
                             aria-label={t[key]}
-                            value={
-                              modal.record?.code ||
-                              (modal.form.titleEn || "Offer")
-                                .replace(/[^a-z]/gi, "")
-                                .slice(0, 3)
-                                .toUpperCase()
-                                .padEnd(3, "X") + "###"
-                            }
+                            value={discountCodeForForm(
+                              modal.form,
+                              modal.record?.code,
+                            )}
                           />
                         ) : type === "select" || type === "multi" ? (
                           <select
@@ -2995,6 +3091,11 @@ function App() {
                         ) : (
                           <input
                             required={required}
+                            readOnly={
+                              modal.kind === "classes" &&
+                              key === "capacity" &&
+                              !modal.record
+                            }
                             list={
                               modal.kind === "classes" &&
                               ["instructor", "arena"].includes(key)

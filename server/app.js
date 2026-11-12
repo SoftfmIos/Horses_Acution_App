@@ -1,3 +1,5 @@
+import { discountPrefix } from "../shared/discount-code.js";
+import { classOpenings } from "../shared/class-openings.js";
 import release from "../package.json" with { type: "json" };
 import { stableOperations } from "./stable-operations.js";
 import { recurrenceSlots, treatmentSlots } from "../shared/recurrence.js";
@@ -352,13 +354,6 @@ export function createApp(
         notify(org, w.member_id, "Place available / مقعد متاح", p.description);
     }
   }
-  const discountPrefix = (title) =>
-    (
-      title
-        .replace(/[^a-z]/gi, "")
-        .slice(0, 3)
-        .toUpperCase() || "OFF"
-    ).padEnd(3, "X");
   function discountCode(org, title) {
     const prefix = discountPrefix(title),
       used = new Set(records(org, "discounts").map((d) => d.code));
@@ -396,6 +391,7 @@ export function createApp(
       status: "ok",
       database: get("SELECT 1 AS ok").ok === 1,
       version: release.version,
+      schedulingVersion: 2,
     }),
   );
   const authLimit = rateLimit({
@@ -623,7 +619,7 @@ export function createApp(
     audit(req, "invite.create", "");
     res.status(201).json({ code, expiresInDays: 7 });
   });
-  function validate(req, kind, b, rid) {
+  function validate(req, kind, b, rid, context = {}) {
     const names = [
         "horses",
         "plans",
@@ -639,9 +635,11 @@ export function createApp(
     if (titles) body.title = b.title || b.titleEn || b.titleAr;
     let instructor, arena;
     if (kind === "classes") {
-      instructor = records(req.org.id, "instructors").find((r) =>
-        [r.name, r.nameEn, r.nameAr].filter(Boolean).includes(b.instructor),
-      );
+      instructor = b.instructorId
+        ? record(req.org.id, "instructors", b.instructorId)
+        : records(req.org.id, "instructors").find((r) =>
+            [r.name, r.nameEn, r.nameAr].filter(Boolean).includes(b.instructor),
+          );
       arena = records(req.org.id, "arenas").find((r) =>
         [r.name, r.nameEn, r.nameAr].filter(Boolean).includes(b.arena),
       );
@@ -655,7 +653,7 @@ export function createApp(
           )
         : null;
     if (breed) body.breed = breed.name;
-    const result = validateBase(req, kind, body, rid);
+    const result = validateBase(req, kind, body, rid, context);
     if (kind === "horses")
       Object.assign(result, {
         breedEn: breed?.nameEn || breed?.name || b.breedEn || result.breed,
@@ -691,7 +689,13 @@ export function createApp(
       });
     return result;
   }
-  function validateBase(req, kind, b, rid) {
+  function instructorIdForClass(org, b) {
+    if (!b.instructorId) return "";
+    const teacher = record(org, "instructors", b.instructorId);
+    if (!teacher.active) fail("Instructor is inactive", 409);
+    return teacher.id;
+  }
+  function validateBase(req, kind, b, rid, context = {}) {
     if (kind === "stalls") return operations.validate(req, kind, b, rid);
     const org = req.org.id;
     const optional = (v) =>
@@ -769,6 +773,14 @@ export function createApp(
       };
     if (kind === "discounts") {
       if (rid) b.code = record(org, kind, rid).code;
+      else if (
+        b.autoCode === true &&
+        records(org, kind).some((d) => d.code === b.code)
+      )
+        b.code = discountCode(
+          org,
+          b.titleEn || b.titleAr || b.title || "Offer",
+        );
       if (!b.code)
         b.code = discountCode(
           org,
@@ -808,6 +820,8 @@ export function createApp(
       if (Date.parse(endsAt) - Date.parse(startsAt) > 86400000)
         fail("A class cannot exceed 24 hours");
       const capacity = integer(b.capacity, "capacity", 1, 100);
+      if (b.instructorId && capacity !== 1)
+        fail("An instructor slot has exactly one place");
       const horseIds = [
         ...new Set(Array.isArray(b.horseIds) ? b.horseIds : []),
       ];
@@ -832,6 +846,7 @@ export function createApp(
         endsAt,
         capacity,
         horseIds,
+        instructorId: instructorIdForClass(org, b),
         instructor: text(b.instructor, "instructor", 100),
         arena: text(b.arena, "arena", 100),
         planId: plan.id,
@@ -842,8 +857,18 @@ export function createApp(
           (c) =>
             c.id !== rid &&
             overlap(c, data) &&
-            (c.instructor.toLowerCase() === data.instructor.toLowerCase() ||
-              c.arena.toLowerCase() === data.arena.toLowerCase() ||
+            ((c.instructorId && data.instructorId
+              ? c.instructorId === data.instructorId
+              : c.instructor.toLowerCase() === data.instructor.toLowerCase()) ||
+              (c.arena.toLowerCase() === data.arena.toLowerCase() &&
+                !(
+                  c.seriesId &&
+                  c.seriesId ===
+                    (context.seriesId ||
+                      (rid ? record(org, "classes", rid).seriesId : null)) &&
+                  c.startsAt === data.startsAt &&
+                  c.endsAt === data.endsAt
+                )) ||
               c.horseIds.some((h) => horseIds.includes(h))),
         )
       )
@@ -1254,6 +1279,7 @@ export function createApp(
       : [];
     result.stockMovements = manager ? records(org, "stockMovements") : [];
     if (!manager) result.stalls = [];
+    result.backendVersion = release.version;
     result.emailConfigured = emailEnabled;
     res.json(result);
   });
@@ -1326,7 +1352,7 @@ export function createApp(
     const created = transaction(() => {
       const slots =
         kind === "classes"
-          ? recurrenceSlots(req.body)
+          ? classOpenings(req.body)
           : ["feeding", "medical"].includes(kind) &&
               Array.isArray(req.body.horseIds)
             ? [...new Set(req.body.horseIds)].map((horseId) => ({ horseId }))
@@ -1347,11 +1373,40 @@ export function createApp(
         const reuse =
           source &&
           slot.startsAt === source.startsAt &&
-          slot.endsAt === source.endsAt;
+          slot.endsAt === source.endsAt &&
+          (!slot.instructorId ||
+            (source.instructorId
+              ? source.instructorId === slot.instructorId
+              : source.instructor ===
+                record(req.org.id, "instructors", slot.instructorId).name));
         const rid = reuse ? source.id : id();
         const body = { ...req.body, ...(slot || {}) };
+        if (kind === "classes" && slot.instructorId) {
+          const teacher = record(req.org.id, "instructors", slot.instructorId);
+          if (!teacher.active) fail("Instructor is inactive", 409);
+          const horseId = req.body.horseIds.find(
+            (h) =>
+              record(req.org.id, "horses", h).status === "ready" &&
+              !feedingBlocked(req.org.id, h, slot.startsAt, slot.endsAt) &&
+              !records(req.org.id, "classes").some(
+                (c) =>
+                  c.id !== (reuse ? rid : null) &&
+                  overlap(c, slot) &&
+                  c.horseIds.includes(h),
+              ),
+          );
+          if (!horseId)
+            fail(
+              "Not enough available horses for all instructors at " +
+                slot.startsAt,
+              409,
+            );
+          body.instructor = teacher.name;
+          body.horseIds = [horseId];
+          body.capacity = 1;
+        }
         const data = {
-          ...validate(req, kind, body, reuse ? rid : undefined),
+          ...validate(req, kind, body, reuse ? rid : undefined, { seriesId }),
           ...(seriesId
             ? {
                 seriesId,
@@ -1582,6 +1637,18 @@ export function createApp(
         )
       )
         fail("You have an overlapping booking", 409);
+      if (
+        c.instructorId &&
+        active.some((b) => {
+          const other = record(org, "classes", b.class_id);
+          return (
+            overlap(other, c) &&
+            (other.instructorId === c.instructorId ||
+              other.instructor.toLowerCase() === c.instructor.toLowerCase())
+          );
+        })
+      )
+        fail("Instructor is already booked for this time", 409);
       const horseId = c.horseIds.find(
         (h) =>
           record(org, "horses", h).status === "ready" &&

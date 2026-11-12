@@ -1809,3 +1809,118 @@ test("existing one-day class expands into selected weekdays without duplicating 
     403,
   );
 });
+
+test("multiple instructors create separate single-seat slots per date with distinct horses and no double booking", async (t) => {
+  const f = await fixture(t),
+    { horse, plan } = await setup(f);
+  const second = await f.create("horses", { name: "Second slot horse" });
+  const a = await f.create("instructors", {
+      nameEn: "Layla",
+      nameAr: "ليلى",
+      active: true,
+    }),
+    b = await f.create("instructors", { name: "Khalid", active: true });
+  const body = {
+    title: "Morning ride",
+    startsAt: "2026-11-15T06:00:00+03:00",
+    endsAt: "2026-11-15T07:00:00+03:00",
+    horseIds: [horse.id, second.id],
+    instructorIds: [a.id, b.id],
+    arena: "Shared training arena",
+    planId: plan.id,
+    capacity: 20,
+    repeatMode: "weekdays",
+    repeatEvery: 1,
+    repeatDays: [0, 2],
+    repeatUntil: "2026-11-29",
+  };
+  const made = await f.owner.call("/records/classes", "POST", body);
+  assert.equal(made.httpStatus, 201, JSON.stringify(made));
+  assert.equal(made.created.length, 10);
+  for (const time of new Set(made.created.map((c) => c.startsAt))) {
+    const slots = made.created.filter((c) => c.startsAt === time);
+    assert.equal(slots.length, 2);
+    assert.equal(new Set(slots.map((c) => c.instructorId)).size, 2);
+    assert.equal(new Set(slots.map((c) => c.horseIds[0])).size, 2);
+    assert.ok(slots.every((c) => c.capacity === 1 && c.places === 1));
+  }
+  const first = made.created[0];
+  assert.equal(
+    (await f.member.call("/bookings", "POST", { classId: first.id }))
+      .httpStatus,
+    201,
+  );
+  const invite = await f.owner.call("/invites", "POST"),
+    other = f.client();
+  await other.register("slot-member@test.com", invite.code);
+  assert.equal(
+    (await other.call("/bookings", "POST", { classId: first.id })).httpStatus,
+    409,
+  );
+  const peer = made.created.find(
+    (c) =>
+      c.startsAt === first.startsAt && c.instructorId !== first.instructorId,
+  );
+  assert.equal(
+    (await other.call("/bookings", "POST", { classId: peer.id })).httpStatus,
+    201,
+  );
+  assert.equal(
+    (await f.owner.call("/records/classes", "POST", body)).httpStatus,
+    409,
+  );
+  assert.equal((await f.owner.call("/data")).classes.length, 11);
+});
+
+test("instructor schedules reject shortages and conflicting days atomically", async (t) => {
+  const f = await fixture(t),
+    { horse, plan } = await setup(f);
+  const a = await f.create("instructors", { name: "A", active: true }),
+    b = await f.create("instructors", { name: "B", active: true }),
+    second = await f.create("horses", { name: "Second" });
+  const body = {
+    title: "Slots",
+    startsAt: "2026-11-15T06:00:00Z",
+    endsAt: "2026-11-15T07:00:00Z",
+    instructorIds: [a.id, b.id],
+    horseIds: [horse.id],
+    arena: "Shared",
+    planId: plan.id,
+    repeatMode: "daily",
+    repeatUntil: "2026-11-17",
+  };
+  assert.equal(
+    (await f.owner.call("/records/classes", "POST", body)).httpStatus,
+    400,
+  );
+  await f.create("classes", {
+    title: "Conflict",
+    startsAt: "2026-11-17T06:00:00Z",
+    endsAt: "2026-11-17T07:00:00Z",
+    horseIds: [second.id],
+    capacity: 1,
+    instructor: "B",
+    arena: "Elsewhere",
+    planId: plan.id,
+  });
+  assert.equal(
+    (
+      await f.owner.call("/records/classes", "POST", {
+        ...body,
+        horseIds: [horse.id, second.id],
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal((await f.owner.call("/data")).classes.length, 2);
+  assert.equal(
+    (
+      await f.owner.call("/records/classes", "POST", {
+        ...body,
+        horseIds: [horse.id, second.id],
+        instructorIds: ["missing"],
+      })
+    ).httpStatus,
+    404,
+  );
+});

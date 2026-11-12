@@ -1,6 +1,6 @@
-import { recurrenceSlots } from "../shared/recurrence.js";
+import { classOpenings } from "../shared/class-openings.js";
 export function expectedClassSlots(form) {
-  return recurrenceSlots(form);
+  return classOpenings(form);
 }
 export function verifyClassSlots(expected, saved) {
   if (
@@ -11,8 +11,24 @@ export function verifyClassSlots(expected, saved) {
     throw new Error(
       "The backend did not save the complete schedule. Refresh before trying again; do not add duplicate classes.",
     );
-  const actual = saved.map((c) => c.startsAt + "|" + c.endsAt).sort();
-  const requested = expected.map((c) => c.startsAt + "|" + c.endsAt).sort();
+  const actual = saved
+    .map(
+      (c) =>
+        c.startsAt +
+        "|" +
+        c.endsAt +
+        (expected[0]?.instructorId ? "|" + c.instructorId : ""),
+    )
+    .sort();
+  const requested = expected
+    .map(
+      (c) =>
+        c.startsAt +
+        "|" +
+        c.endsAt +
+        (expected[0]?.instructorId ? "|" + c.instructorId : ""),
+    )
+    .sort();
   if (actual.some((s, i) => s !== requested[i]))
     throw new Error(
       "Saved class dates do not match the selected weekdays. Refresh before trying again.",

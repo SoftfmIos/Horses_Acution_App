@@ -71,6 +71,7 @@ for (const passenger of [false, true]) {
       status: "ok",
       database: true,
       version: release.version,
+      schedulingVersion: 2,
     });
     assert.ok(!stderr.includes("ERR_REQUIRE_ASYNC_MODULE"));
   });

@@ -9,3 +9,11 @@ Before preparing the next release, run `npm run version:next` once. This updates
 ## 1.11.0
 
 Recurring-class saves verify every generated date through a stable-scoped series read-back, merge the complete schedule into the calendar even when a collection read is delayed, and reset calendar filters after publishing. The form lists the exact dates before saving. A one-off class can be expanded with **Schedule selected days** without duplicating its original date. A partial save from an outdated backend is reported as incomplete and cannot be silently retried from the same form. Existing production classes are not automatically duplicated or repaired.
+
+## 1.12.0
+
+Class creation selects multiple instructor catalogue records. Each selected date generates one single-seat slot per instructor with a distinct available horse. The whole batch is atomic; shortages, instructor conflicts and horse conflicts reject it. The chosen arena may be shared by slots in this same simultaneous schedule; unrelated overlapping schedules remain blocked. Existing group classes are retained; new instructor slots have one seat each.
+
+Saving no longer requires the class-series endpoint: the normal data response and existing record-read endpoint verify every date/instructor pair. A health capability check blocks multi-instructor writes against an outdated backend before any class is submitted. Discounts display and submit real three-letter/three-digit codes instead of a placeholder; issued codes remain unchanged and the backend handles generated-code collisions.
+
+The footer displays frontend and backend versions, links to health and labels version mismatches. The health response for this release includes `version: "1.12.0"` and `schedulingVersion: 2`. Pull in cPanel and restart Passenger before using the new instructor workflow; deploy the same commit in Vercel. Merely redeploying Vercel does not update cPanel.
