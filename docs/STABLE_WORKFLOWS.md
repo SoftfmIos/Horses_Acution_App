@@ -18,6 +18,10 @@ Create bilingual stalls with a capacity from **Settings → Stalls** or **Stalls
 
 Assignment reserves the physical stall. Its linked invoice remains pending until the existing payment-voucher workflow records full payment. Ending a stay releases the stall but does not erase or refund its invoice; reconcile payments in billing. Today's occupancy excludes future and ended stays. Disabled stalls cannot accept new stays, and occupied/reserved stalls cannot be disabled or reduced below capacity.
 
+## Booking ownership
+
+Staff click an available calendar slot or Book on a class card, select Book for member, calculate the quote and confirm. The member owns the booking and pro forma; the staff account is recorded as the operator. Payment stays pending until the payment-voucher workflow settles the invoice. Members book under their own signed-in identity and have no member selector.
+
 ## Staff planner
 
 The Tasks screen includes staff workload and scheduled checkboxes for the selected day, week or month. Filter by employee to hand over a personal planner. Each plan's card still shows its own completion percentage. The printable planner lists scheduled dates, assignee, completion and actor/time. Print using the planner's Print button.

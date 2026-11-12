@@ -392,6 +392,7 @@ export function createApp(
       database: get("SELECT 1 AS ok").ok === 1,
       version: release.version,
       schedulingVersion: 2,
+      bookingVersion: 1,
     }),
   );
   const authLimit = rateLimit({
@@ -1523,7 +1524,26 @@ export function createApp(
     res.json({ ok: true });
   });
 
+  function bookingMember(req) {
+    const selected = req.body.memberId;
+    if (req.org.role !== "owner") {
+      if (selected && selected !== req.user.id)
+        fail("Members can book only for themselves", 403);
+      return req.user.id;
+    }
+    const memberId = text(selected, "booking member");
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        req.org.id,
+        memberId,
+      )
+    )
+      fail("Member not found in this stable", 404);
+    return memberId;
+  }
   function quote(req) {
+    const memberId = bookingMember(req);
     const org = req.org.id,
       c = record(org, "classes", req.body.classId),
       plan = record(org, "plans", c.planId);
@@ -1532,9 +1552,10 @@ export function createApp(
       if (req.body.discountCode || req.body.voucherCode)
         fail("Discounts and vouchers cannot be combined with lesson credits");
       const credits = c.creditCost || 1;
-      if (creditBalance(org, req.user.id) < credits)
+      if (creditBalance(org, memberId) < credits)
         fail("Not enough lesson credits", 409);
       return {
+        memberId,
         class: c,
         description: c.title,
         gross: 0,
@@ -1586,6 +1607,7 @@ export function createApp(
       plan.amount - discount,
     );
     return {
+      memberId,
       class: c,
       description: c.title,
       gross: plan.amount,
@@ -1605,11 +1627,12 @@ export function createApp(
       due: q.due,
       currency: "SAR",
       credits: q.credits || 0,
+      memberId: q.memberId,
     });
   });
   app.post("/api/bookings", (req, res) => {
     const org = req.org.id,
-      uid = req.user.id;
+      uid = bookingMember(req);
     const result = transaction(() => {
       const q = quote(req),
         c = q.class;
@@ -1620,6 +1643,8 @@ export function createApp(
           (req.body.expectedCredits || 0) !== (q.credits || 0))
       )
         fail("Price changed; calculate the total again", 409);
+      if (req.body.expectedMemberId && req.body.expectedMemberId !== uid)
+        fail("Member changed; calculate the total again", 409);
       if (c.startsAt <= now()) fail("Class has already started");
       const active = all(
         "SELECT * FROM reservations WHERE org_id=? AND status IN ('confirmed','pending_payment')",
@@ -1725,7 +1750,9 @@ export function createApp(
             org,
             u,
             "New booking / حجز جديد",
-            req.user.name + " · " + c.title,
+            (get("SELECT name FROM users WHERE id=?", uid)?.name || "") +
+              " · " +
+              c.title,
           ),
         );
       run(
@@ -1738,6 +1765,7 @@ export function createApp(
       return {
         id: bid,
         proformaId: pid,
+        memberId: uid,
         due: q.due,
         status: q.due > 0 ? "pending_payment" : "confirmed",
         holdExpiresAt:

@@ -66,7 +66,30 @@ try {
       quantity: 20,
       reorderAt: 5,
     });
-    return { horse, second, plan, inventory, actor: me.user.id };
+    const rider = await call("/members", {
+      name: "Rider Member",
+      email: "rider@test.com",
+      password: "123456",
+    });
+    const lessonPrice = await call("/records/plans", {
+      name: "Lesson",
+      amount: 10000,
+      kind: "class",
+      active: true,
+    });
+    const starts = new Date(Date.now() + 2 * 86400000);
+    starts.setUTCHours(9, 0, 0, 0);
+    const slot = await call("/records/classes", {
+      title: "Staff booked lesson",
+      startsAt: starts.toISOString(),
+      endsAt: new Date(starts.getTime() + 3600000).toISOString(),
+      capacity: 1,
+      horseIds: [horse.id],
+      instructor: "Trainer",
+      arena: "Lesson arena",
+      planId: lessonPrice.id,
+    });
+    return { horse, second, plan, inventory, actor: me.user.id, rider, slot };
   });
   const nav = (name) =>
     page.locator("nav").getByRole("button", { name, exact: true }).click();
@@ -74,6 +97,37 @@ try {
     page.getByRole("button", { name: "Refresh", exact: true }).click();
   const dialog = () => page.getByRole("dialog");
   await refresh();
+  await nav("Classes & riding");
+  await page
+    .getByRole("region", { name: "Booking calendar" })
+    .locator(".calendar-event")
+    .filter({ hasText: "Staff booked lesson" })
+    .first()
+    .click();
+  await dialog()
+    .getByLabel("Book for member", { exact: true })
+    .selectOption(seed.rider.id);
+  await dialog()
+    .getByRole("button", { name: "Calculate total", exact: true })
+    .click();
+  await dialog()
+    .getByRole("button", { name: "Confirm booking", exact: true })
+    .click();
+  await dialog().waitFor({ state: "hidden" });
+  assert.equal(
+    db
+      .prepare("SELECT member_id FROM reservations WHERE class_id=?")
+      .get(seed.slot.id).member_id,
+    seed.rider.id,
+  );
+  assert.equal(
+    db
+      .prepare(
+        "SELECT member_id FROM proformas WHERE reservation_id IS NOT NULL",
+      )
+      .get().member_id,
+    seed.rider.id,
+  );
   await nav("Stalls & boarding");
   await page.getByRole("button", { name: "Add stall", exact: true }).click();
   await dialog()

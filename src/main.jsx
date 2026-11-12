@@ -2129,16 +2129,12 @@ function App() {
                   horses={data.horses}
                   ar={ar}
                   onSelect={(c) => {
-                    if (manager) {
-                      openForm("classes", c);
-                      return;
-                    }
                     const existing = data.bookings.find(
                       (b) =>
                         b.class_id === c.id &&
                         ["confirmed", "pending_payment"].includes(b.status),
                     );
-                    if (existing) {
+                    if (existing && !manager) {
                       go("overview");
                       return;
                     }
@@ -2733,6 +2729,15 @@ function App() {
                   if (!modal.quote) {
                     setBusy(true);
                     try {
+                      if (manager) {
+                        const health = await request("/health");
+                        if (health.bookingVersion !== 1)
+                          throw new Error(
+                            ar
+                              ? "حدّث خادم cPanel وأعد تشغيله قبل الحجز لعضو."
+                              : "Update and restart the cPanel backend before booking for a member.",
+                          );
+                      }
                       const quote = await request("/quote", {
                         method: "POST",
                         body: { classId: modal.classId, ...modal.form },
@@ -2753,6 +2758,7 @@ function App() {
                           expectedDue: modal.quote.due,
                           expectedGross: modal.quote.gross,
                           expectedCredits: modal.quote.credits || 0,
+                          expectedMemberId: modal.quote.memberId,
                         },
                       }),
                     )
@@ -2764,14 +2770,57 @@ function App() {
                   }
                 }}
               >
+                {manager && (
+                  <label>
+                    {ar ? "الحجز للعضو" : "Book for member"}
+                    <select
+                      aria-label={ar ? "الحجز للعضو" : "Book for member"}
+                      required
+                      value={modal.form.memberId || ""}
+                      onChange={(e) =>
+                        setModal((m) => ({
+                          ...m,
+                          form: {
+                            ...m.form,
+                            memberId: e.target.value,
+                            useCredits: false,
+                          },
+                          quote: null,
+                        }))
+                      }
+                    >
+                      <option value="">{t.select}</option>
+                      {data.members.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {!manager && (
+                  <p>
+                    {ar ? "الحجز باسمك" : "Booking for"}:{" "}
+                    <strong>{localizedName(auth.user, ar)}</strong>
+                  </p>
+                )}
                 <p>
-                  {t.sessionBalance}: <strong>{data.creditBalance}</strong>
+                  {t.sessionBalance}:{" "}
+                  <strong>
+                    {manager
+                      ? data.members.find((m) => m.id === modal.form.memberId)
+                          ?.creditBalance || 0
+                      : data.creditBalance}
+                  </strong>
                 </p>
                 <label className="check-label">
                   <input
                     type="checkbox"
                     disabled={
-                      data.creditBalance <
+                      (manager
+                        ? data.members.find((m) => m.id === modal.form.memberId)
+                            ?.creditBalance || 0
+                        : data.creditBalance) <
                       (data.classes.find((c) => c.id === modal.classId)
                         ?.creditCost || 1)
                     }
@@ -2780,6 +2829,7 @@ function App() {
                       setModal((m) => ({
                         ...m,
                         form: {
+                          ...m.form,
                           useCredits: e.target.checked,
                           discountCode: "",
                           voucherCode: "",

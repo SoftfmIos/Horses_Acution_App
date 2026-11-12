@@ -227,7 +227,10 @@ test("concurrent bookings cannot oversell capacity", async (t) => {
   const f = await fixture(t);
   const { cls } = await setup(f);
   const results = await Promise.all([
-    f.owner.call("/bookings", "POST", { classId: cls.id }),
+    f.owner.call("/bookings", "POST", {
+      classId: cls.id,
+      memberId: (await f.owner.call("/auth/me")).user.id,
+    }),
     f.member.call("/bookings", "POST", { classId: cls.id }),
   ]);
   assert.deepEqual(results.map((r) => r.httpStatus).sort(), [201, 409]);
@@ -900,7 +903,10 @@ test("weekly series are atomic and preserve Riyadh start time", async (t) => {
 test("waitlist holds no seat and notifies on release without bypassing payment", async (t) => {
   const f = await fixture(t);
   const { cls } = await setup(f);
-  const booked = await f.owner.call("/bookings", "POST", { classId: cls.id });
+  const booked = await f.owner.call("/bookings", "POST", {
+    classId: cls.id,
+    memberId: (await f.owner.call("/auth/me")).user.id,
+  });
   assert.equal(
     (await f.member.call("/waitlist", "POST", { classId: cls.id })).httpStatus,
     201,
@@ -1923,4 +1929,130 @@ test("instructor schedules reject shortages and conflicting days atomically", as
     ).httpStatus,
     404,
   );
+});
+
+test("staff explicitly choose a stable member; booking, invoice and notifications belong to that member", async (t) => {
+  const f = await fixture(t),
+    { cls } = await setup(f),
+    member = (await f.member.call("/auth/me")).user.id,
+    staff = (await f.owner.call("/auth/me")).user.id,
+    foreign = (await f.other.call("/auth/me")).user.id;
+  assert.equal(
+    (await f.owner.call("/quote", "POST", { classId: cls.id })).httpStatus,
+    400,
+  );
+  assert.equal(
+    (await f.owner.call("/bookings", "POST", { classId: cls.id })).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/bookings", "POST", {
+        classId: cls.id,
+        memberId: foreign,
+      })
+    ).httpStatus,
+    404,
+  );
+  assert.equal(
+    (
+      await f.member.call("/quote", "POST", {
+        classId: cls.id,
+        memberId: staff,
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.member.call("/bookings", "POST", {
+        classId: cls.id,
+        memberId: staff,
+      })
+    ).httpStatus,
+    403,
+  );
+  const quote = await f.owner.call("/quote", "POST", {
+    classId: cls.id,
+    memberId: member,
+  });
+  assert.equal(quote.memberId, member);
+  assert.equal(
+    (
+      await f.owner.call("/bookings", "POST", {
+        classId: cls.id,
+        memberId: member,
+        expectedMemberId: staff,
+      })
+    ).httpStatus,
+    409,
+  );
+  const booking = await f.owner.call("/bookings", "POST", {
+    classId: cls.id,
+    memberId: member,
+    expectedMemberId: quote.memberId,
+    expectedDue: quote.due,
+    expectedGross: quote.gross,
+  });
+  assert.equal(booking.httpStatus, 201);
+  assert.equal(booking.memberId, member);
+  const data = await f.member.call("/data");
+  assert.equal(data.bookings[0].member_id, member);
+  assert.equal(data.proformas[0].member_id, member);
+  assert.equal(data.proformas[0].activation, "pending_payment");
+  assert.ok(
+    data.notifications.some((n) => n.title.includes("Payment pending")),
+  );
+  assert.equal(
+    f.db
+      .prepare(
+        "SELECT actor_id FROM audit WHERE action='booking.create' AND record_id=?",
+      )
+      .get(booking.id).actor_id,
+    staff,
+  );
+});
+
+test("staff booking uses the selected member lesson balance and member self booking stays automatic", async (t) => {
+  const f = await fixture(t),
+    { cls } = await setup(f),
+    member = (await f.member.call("/auth/me")).user.id;
+  const pack = await f.create("plans", {
+    name: "Two lessons",
+    kind: "package",
+    credits: 2,
+    amount: 20000,
+  });
+  const invoice = await f.owner.call("/proformas", "POST", {
+    memberId: member,
+    planId: pack.id,
+  });
+  await f.owner.call("/proformas/" + invoice.id + "/payment", "POST", {
+    amount: 20000,
+    reference: "STAFF-CREDIT-PAY",
+    externalRef: "RECEIPT-1",
+  });
+  const quote = await f.owner.call("/quote", "POST", {
+    memberId: member,
+    classId: cls.id,
+    useCredits: true,
+  });
+  assert.equal(quote.httpStatus, 200);
+  assert.equal(quote.credits, 1);
+  const booked = await f.owner.call("/bookings", "POST", {
+    memberId: member,
+    classId: cls.id,
+    useCredits: true,
+  });
+  assert.equal(booked.httpStatus, 201);
+  assert.equal((await f.member.call("/data")).creditBalance, 1);
+  assert.equal((await f.owner.call("/data")).creditBalance, 0);
+  await f.owner.call("/bookings/" + booked.id + "/cancel", "POST");
+  assert.equal((await f.member.call("/data")).creditBalance, 2);
+  const own = await f.member.call("/bookings", "POST", {
+    classId: cls.id,
+    useCredits: true,
+  });
+  assert.equal(own.httpStatus, 201);
+  assert.equal(own.memberId, member);
 });

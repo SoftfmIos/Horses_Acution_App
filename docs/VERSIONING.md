@@ -17,3 +17,9 @@ Class creation selects multiple instructor catalogue records. Each selected date
 Saving no longer requires the class-series endpoint: the normal data response and existing record-read endpoint verify every date/instructor pair. A health capability check blocks multi-instructor writes against an outdated backend before any class is submitted. Discounts display and submit real three-letter/three-digit codes instead of a placeholder; issued codes remain unchanged and the backend handles generated-code collisions.
 
 The footer displays frontend and backend versions, links to health and labels version mismatches. The health response for this release includes `version: "1.12.0"` and `schedulingVersion: 2`. Pull in cPanel and restart Passenger before using the new instructor workflow; deploy the same commit in Vercel. Merely redeploying Vercel does not update cPanel.
+
+## 1.13.0
+
+Staff select **Book for member** when booking from a pre-created class card or calendar slot. Selection is required. The selected member owns the booking and pro forma, receives the booking notification and supplies lesson credits if used. Changing the selected member clears the quote and credit-payment choice. The actual staff operator remains the audit actor.
+
+Members have no booker dropdown: the server uses the signed-in member and rejects attempts to book for another account. Both quotes and booking confirmation validate stable membership; confirmation checks that the quoted member has not changed. Staff cannot submit a booking with an omitted member. Health includes `bookingVersion: 1`; the frontend checks this before staff quotes to prevent old backends silently booking the logged-in staff account. Update both deployments and restart the cPanel app.

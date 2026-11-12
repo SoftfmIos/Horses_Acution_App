@@ -307,6 +307,7 @@ let browser;
   await calendar.getByLabel("View", { exact: true }).selectOption("week");
 
   await page.getByRole("button", { name: "Book", exact: true }).click();
+  await field("Book for member").selectOption({ label: "Browser Manager" });
   await field("Discount code (optional)").fill(discountCode);
   await page
     .getByRole("button", { name: "Calculate total", exact: true })
@@ -575,6 +576,8 @@ let browser;
     .getByLabel("Choose instructor", { exact: true })
     .selectOption("Khalid");
   await mp.getByRole("button", { name: "Book", exact: true }).click();
+  if (await mp.getByLabel("Book for member", { exact: true }).count())
+    throw Error("Member can choose another booker");
   await mp.getByLabel("Use my lesson credits", { exact: true }).check();
   await mp
     .getByRole("button", { name: "Calculate total", exact: true })
