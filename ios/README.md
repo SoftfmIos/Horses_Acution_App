@@ -83,3 +83,7 @@ The in-app privacy screen links to the public privacy policy and Apple's standar
 - Standard EULA: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
 
 Use Apple's Standard EULA in App Store Connect. No custom license text is required. The deployment helper can raise the archive build number above 3 to avoid previously uploaded builds.
+
+## Codemagic version declaration
+
+The signed workflow declares `APP_VERSION: "1.0.2"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.

@@ -32,7 +32,7 @@ class DeploymentPreparationTests(unittest.TestCase):
         self.root = Path(folder.name)
         self.config = self.root / "Configuration/App.xcconfig"
         self.config.parent.mkdir()
-        self.original = "PRODUCT_BUNDLE_IDENTIFIER = com.riyadhpolohills.academy\nCURRENT_PROJECT_VERSION = 2\n"
+        self.original = "PRODUCT_BUNDLE_IDENTIFIER = com.riyadhpolohills.academy\nMARKETING_VERSION = 1.0.2\nCURRENT_PROJECT_VERSION = 2\n"
         self.config.write_text(self.original)
         self.app = json.dumps({"attributes": {"bundleId": "com.riyadhpolohills.academy"}})
         self.environment = {"APP_STORE_APPLE_ID": "6834111389"}
@@ -53,6 +53,24 @@ class DeploymentPreparationTests(unittest.TestCase):
     def test_first_upload_has_no_remote_build_number(self):
         self.prepare([self.app, ""])
         self.assertEqual(self.config.read_text(), self.original)
+
+    def test_workflow_version_is_written_to_the_xcode_archive_configuration(self):
+        self.environment["APP_VERSION"] = "1.0.3"
+        self.prepare([self.app, "17"])
+        config = self.config.read_text()
+        self.assertIn("MARKETING_VERSION = 1.0.3", config)
+        self.assertNotIn("MARKETING_VERSION = 1.0.2", config)
+        self.assertIn("CURRENT_PROJECT_VERSION = 18", config)
+
+    def test_invalid_workflow_version_stops_before_contacting_apple(self):
+        for version in ["", "1.0", "latest", "1.0.2; echo invalid"]:
+            with self.subTest(version=version):
+                self.environment["APP_VERSION"] = version
+                with patch.object(codemagic_prepare, "cli_json") as remote:
+                    with self.assertRaises(ValueError):
+                        self.prepare([])
+                    remote.assert_not_called()
+                self.assertEqual(self.config.read_text(), self.original)
 
     def test_ci_counter_avoids_reusing_a_pending_upload_number(self):
         self.environment["PROJECT_BUILD_NUMBER"] = "42"

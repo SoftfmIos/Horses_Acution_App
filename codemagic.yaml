@@ -34,6 +34,8 @@ workflows:
       vars:
         # Public App Store Connect app identifier; signing credentials stay in the integration.
         APP_STORE_APPLE_ID: "6834111389"
+        # Written to MARKETING_VERSION before tests and archiving; build number is automatic.
+        APP_VERSION: "1.0.2"
         # Minutes: Apple can take longer than the CLI defaults to expose/process a build.
         APP_STORE_CONNECT_MAX_FIND_BUILD_WAIT: "30"
         APP_STORE_CONNECT_MAX_BUILD_PROCESSING_WAIT: "30"
@@ -45,7 +47,7 @@ workflows:
     scripts:
       - name: Validate the Xcode project
         script: python3 ios/scripts/validate_project.py
-      - name: Verify the Apple app record and set the build number
+      - name: Verify the Apple app record and set version and build number
         script: python3 ios/scripts/codemagic_prepare.py
       - name: Run native simulator tests before archiving
         script: bash ios/scripts/run_simulator_tests.sh

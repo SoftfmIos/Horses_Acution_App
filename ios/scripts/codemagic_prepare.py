@@ -40,6 +40,12 @@ def main():
         raise SystemExit("Set APP_STORE_APPLE_ID to the numeric Apple ID from App Store Connect > App Information in codemagic.yaml under ios-testflight > environment > vars.")
     config_path = ROOT / "Configuration/App.xcconfig"
     config = config_path.read_text()
+    version_match = re.search(r"^MARKETING_VERSION\s*=\s*(\S+)\s*$", config, re.M)
+    if not version_match:
+        raise ValueError("MARKETING_VERSION is missing from App.xcconfig.")
+    version = os.environ.get("APP_VERSION", version_match.group(1)).strip()
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise ValueError("APP_VERSION must have three numeric components, such as 1.0.2.")
     bundle_id = re.search(r"^PRODUCT_BUNDLE_IDENTIFIER\s*=\s*(\S+)\s*$", config, re.M).group(1)
     app = cli_json("apps", "get", app_id)
     if not isinstance(app, dict) or app.get("attributes", {}).get("bundleId") != bundle_id:
@@ -49,8 +55,10 @@ def main():
     latest = cli_text("get-latest-testflight-build-number", app_id) or None
     current = re.search(r"^CURRENT_PROJECT_VERSION\s*=\s*([0-9]+)\s*$", config, re.M).group(1)
     number = choose_build_number(latest, current, os.environ.get("PROJECT_BUILD_NUMBER") or os.environ.get("BUILD_NUMBER"))
-    config_path.write_text(re.sub(r"^CURRENT_PROJECT_VERSION\s*=.*$", "CURRENT_PROJECT_VERSION = " + str(number), config, flags=re.M))
-    print("Verified App Store app " + app_id + " for " + bundle_id + "; archive build number " + str(number))
+    config = re.sub(r"^MARKETING_VERSION\s*=.*$", "MARKETING_VERSION = " + version, config, flags=re.M)
+    config = re.sub(r"^CURRENT_PROJECT_VERSION\s*=.*$", "CURRENT_PROJECT_VERSION = " + str(number), config, flags=re.M)
+    config_path.write_text(config)
+    print("Verified App Store app " + app_id + " for " + bundle_id + "; archive version " + version + ", build number " + str(number))
 
 
 if __name__ == "__main__":
