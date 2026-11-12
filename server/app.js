@@ -87,6 +87,7 @@ export function createApp(
     clock = () => new Date(),
     emailEnabled = false,
     publicOrigin,
+    allowedOrigins = [],
   } = {},
 ) {
   const app = express();
@@ -96,6 +97,19 @@ export function createApp(
     email.publicSettings(org)
       ? email.enabled(org)
       : emailEnabled || email.enabled(org);
+  const trustedOrigins = new Set(
+    [publicOrigin, ...allowedOrigins].filter(Boolean).map((value) => {
+      const parsed = new URL(value);
+      if (
+        !["https:", "http:"].includes(parsed.protocol) ||
+        parsed.origin !== value
+      )
+        throw new Error(
+          "Configure exact trusted website origins without paths or trailing slashes",
+        );
+      return value;
+    }),
+  );
   app.disable("x-powered-by");
   app.use(
     helmet({
@@ -502,9 +516,14 @@ export function createApp(
       const origin = req.get("origin");
       if (
         !origin ||
-        origin !== (publicOrigin || `${req.protocol}://${req.get("host")}`)
+        !(
+          trustedOrigins.has(origin) ||
+          (!publicOrigin && origin === `${req.protocol}://${req.get("host")}`)
+        )
       )
-        return res.status(403).json({ error: "Request origin rejected" });
+        return res
+          .status(403)
+          .json({ error: "Request origin rejected", code: "ORIGIN_REJECTED" });
       if (req.get("x-requested-with") !== "RiyadhAcademy")
         return res.status(403).json({ error: "Request token required" });
     }
@@ -712,7 +731,7 @@ export function createApp(
       if (org) {
         const token = randomBytes(32).toString("base64url");
         const link =
-          (publicOrigin || req.get("origin")) + "/#reset-password=" + token;
+          (req.get("origin") || publicOrigin) + "/#reset-password=" + token;
         transaction(() => {
           run(
             "DELETE FROM password_resets WHERE user_id=? OR expires_at<=?",
@@ -2882,7 +2901,7 @@ export function createApp(
         details.credentials = {
           email,
           role: req.body.role === "staff" ? "Staff / موظف" : "Member / عضو",
-          loginUrl: publicOrigin || req.get("origin"),
+          loginUrl: req.get("origin") || publicOrigin,
           ...(req.body.includePassword === true
             ? { passwordEncrypted: app.locals.emailSettings.encrypt(password) }
             : {}),
@@ -2915,7 +2934,7 @@ export function createApp(
     const details = mailDetails(req.org.id, uid);
     details.credentials = {
       email: account.email,
-      loginUrl: publicOrigin || req.get("origin"),
+      loginUrl: req.get("origin") || publicOrigin,
     };
     if (req.body.password !== undefined) {
       const password = text(req.body.password, "password", 128);

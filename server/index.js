@@ -1,3 +1,4 @@
+import backendConfig from "../config/backend.json" with { type: "json" };
 import { renderEmail } from "./email-template.js";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +35,13 @@ const emailEnabled = Boolean(
 const app = createApp(db, {
   production,
   publicOrigin: process.env.PUBLIC_ORIGIN,
+  allowedOrigins: [
+    ...(backendConfig.allowedWebsiteOrigins || []),
+    ...(process.env.ADDITIONAL_PUBLIC_ORIGINS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ],
   emailEnabled,
 });
 app.use(express.static(resolve(root, "dist")));

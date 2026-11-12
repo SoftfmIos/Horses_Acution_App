@@ -92,3 +92,9 @@ Login now offers Forgot password and Forgot login email recovery. Password reset
 Instructor profiles can link to a staff account, or match its login email when no explicit link exists. The linked instructor can upload/remove their own photo from Overview without general instructor-edit permissions. They cannot modify another instructor's photo. Members can see instructor photos for published upcoming sessions and their historical bookings. Photos appear in session/booking cards, booking details and the booking calendar, and update live across mounted views.
 
 Deploy both frontend and backend and restart the backend. The password-reset table is created automatically. Email delivery must be configured for at least one academy associated with the recovering account. The `iOSApp` branch remains separate.
+
+## 1.23.0
+
+The backend explicitly trusts the production website `https://app.riyadhpolohills.com` and the existing Vercel frontend. This fixes login and password-reset requests rejected when the deployed PUBLIC_ORIGIN still named the older site. Origins remain exact allowlisted matches; absent/null origins, lookalike domains, different ports and spoofed forwarding headers remain rejected. Recovery and account-login email links use the verified requesting origin so custom-domain users return to their site. Other deployment domains can be added explicitly through ADDITIONAL_PUBLIC_ORIGINS.
+
+For the current deployment, set `PUBLIC_ORIGIN=https://app.riyadhpolohills.com` in the backend Node application and restart it. Pull/deploy this backend version to apply the repository allowlist and update/redeploy the frontend for the clearer configuration error. The Docker runtime now includes the config directory required by the backend.

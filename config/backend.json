@@ -1,3 +1,8 @@
 {
-  "productionOrigin": "https://riyadhpolo.softfm.com"
+  "productionOrigin": "https://riyadhpolo.softfm.com",
+  "websiteOrigin": "https://app.riyadhpolohills.com",
+  "allowedWebsiteOrigins": [
+    "https://app.riyadhpolohills.com",
+    "https://horsesacutionapp.vercel.app"
+  ]
 }
