@@ -104,3 +104,13 @@ The current website is **https://app.riyadhpolohills.com**. In cPanel → Node.j
 Release 1.23.0 also reads the explicit `allowedWebsiteOrigins` in `config/backend.json`, supporting both the custom domain and the existing Vercel frontend even when migrating between them. Additional domains require exact origins in `ADDITIONAL_PUBLIC_ORIGINS` (comma-separated). Wildcards and reflected Host/X-Forwarded-Host values are not trusted. No CORS or CSRF protections need to be disabled. After pulling the backend, restart Passenger so the new origin configuration takes effect.
 
 Password-reset and welcome links follow the verified requesting site. A request from `app.riyadhpolohills.com` therefore receives a link to that custom domain.
+
+## Public App Store pages
+
+The repository includes `public/app.html`, `public/privacy.html` and `public/app-pages.css`. Vite copies these files to the deployed site root. They need no API or sign-in. Deploy `main` and confirm both links display the public pages before adding them to App Store Connect:
+
+- Marketing: `https://app.riyadhpolohills.com/app.html`
+- Support: `https://app.riyadhpolohills.com/app.html#support`
+- Privacy: `https://app.riyadhpolohills.com/privacy.html`
+
+The app uses Apple's Standard EULA: `https://www.apple.com/legal/internet-services/itunes/dev/stdeula/`. Leave the App Store Connect custom-license field empty to use Apple's standard agreement.

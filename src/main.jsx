@@ -1716,6 +1716,13 @@ function App() {
             </p>
           )}
           <AuthForm t={t} ar={ar} onSuccess={init} />
+          <p>
+            <a href="/app.html">{ar ? "عن التطبيق" : "About the app"}</a>
+            {" · "}
+            <a href="/privacy.html">
+              {ar ? "سياسة الخصوصية" : "Privacy policy"}
+            </a>
+          </p>
         </section>
       </div>
     );
@@ -3063,6 +3070,13 @@ function App() {
             </>
           )}
           <footer>
+            <span>
+              <a href="/app.html">{ar ? "عن التطبيق" : "About the app"}</a>
+              {" · "}
+              <a href="/privacy.html">
+                {ar ? "سياسة الخصوصية" : "Privacy policy"}
+              </a>
+            </span>
             <span>
               © {new Date().getFullYear()} {t.brand}
             </span>

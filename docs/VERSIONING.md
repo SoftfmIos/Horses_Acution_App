@@ -134,3 +134,9 @@ Session totals and the staff booking-credit lookup share one ledger calculation.
 Validation: `npm test` and, after `npm run build`, `CHROMIUM_PATH=/usr/bin/chromium node tests/member-account.mjs`. The browser scenario covers staff-to-member login, member relogin from invoices, actual paid packages, credit bookings, cancellation, refund, partial payment, matching account/balance totals, refresh, Arabic and mobile overflow.
 
 Deploy the frontend and backend together and restart Node.js. Health should report version 1.27.0. Historical missing paid-package counts still require administrator review; this change does not alter live production balances.
+
+## 1.28.0
+
+Adds public bilingual marketing/support and privacy pages at `/app.html` and `/privacy.html`, with the academy logo, local fonts, responsive layouts and links from the portal footer and sign-in page. Both pages are static HTML and work without authentication or JavaScript. The marketing page links to Apple's standard iOS EULA and explains TestFlight access, academy payment confirmation and local class reminders. The privacy notice describes the current app/portal data, access, optional device features, retention and account/data-request contact.
+
+The static files are copied into `dist` by Vite and served directly by Vercel or the standalone Node server. Deploy the frontend to publish the URLs. The release version is 1.28.0; update the backend too to keep version labels aligned. No database changes are included. Validation covers the production build, unauthenticated HTML responses, logo, links, canonical URLs, no-JavaScript access and Arabic mobile overflow. Live website access from the development environment is blocked, so publication must be confirmed after deployment.
