@@ -1059,3 +1059,119 @@ pre {
   height: 14px;
   accent-color: var(--gold-text);
 }
+
+.slot-legend,
+.slot-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.slot-legend > span,
+.slot-badges > span {
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.slot-available {
+  background: #e0f3e6 !important;
+  color: #195d32 !important;
+  border-color: #7fc492 !important;
+}
+.slot-held {
+  background: #fff2c4 !important;
+  color: #775b00 !important;
+  border-color: #e5c65a !important;
+}
+.slot-booked {
+  background: #f9dddd !important;
+  color: #843737 !important;
+  border-color: #dfa1a1 !important;
+}
+.slot-blocked {
+  background: #eee !important;
+  color: #555 !important;
+}
+.calendar-event .slot-badges,
+.calendar-event .slot-badges span {
+  display: flex;
+}
+.planner-task-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+.planner-task-card {
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+}
+.planner-task-card progress {
+  width: 100%;
+  accent-color: #28774b;
+}
+.planner-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.planner-print-sheet {
+  display: none;
+}
+.voucher-print-card {
+  text-align: center;
+  max-width: 560px;
+  margin: auto;
+  padding: 24px;
+}
+.voucher-logo {
+  width: 90px;
+  display: block;
+  margin: auto;
+}
+.voucher-code {
+  display: block;
+  font-size: 28px;
+  letter-spacing: 3px;
+  margin: 16px;
+}
+.voucher-link {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@media print {
+  body:has(.task-planner) .workspace {
+    display: block !important;
+  }
+  body:has(.task-planner) .workspace * {
+    visibility: hidden;
+  }
+  body:has(.task-planner) .planner-print-sheet,
+  body:has(.task-planner) .planner-print-sheet * {
+    visibility: visible;
+  }
+  body:has(.task-planner) .planner-print-sheet {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: white;
+    padding: 12px;
+  }
+  .planner-print-sheet table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .planner-print-sheet td,
+  .planner-print-sheet th {
+    border: 1px solid #aaa;
+    padding: 8px;
+    text-align: start;
+  }
+  .planner-print-sheet tr {
+    break-inside: avoid;
+  }
+  .voucher-print-card {
+    break-inside: avoid;
+  }
+}

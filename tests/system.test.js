@@ -918,7 +918,7 @@ test("waitlist holds no seat and notifies on release without bypassing payment",
   assert.equal((await f.member.call("/data")).waitlist.length, 0);
 });
 
-test("direct members, constrained staff roles and removal preserve access boundaries", async (t) => {
+test("direct members, staff access and removal preserve access boundaries", async (t) => {
   const f = await fixture(t);
   await setup(f);
   const created = await f.owner.call("/members", "POST", {
@@ -958,7 +958,7 @@ test("direct members, constrained staff roles and removal preserve access bounda
         amount: 10,
       })
     ).httpStatus,
-    403,
+    201,
   );
   assert.equal(
     (
@@ -966,9 +966,9 @@ test("direct members, constrained staff roles and removal preserve access bounda
         role: "instructor",
       })
     ).httpStatus,
-    403,
+    200,
   );
-  assert.equal((await staff.call("/reports")).httpStatus, 403);
+  assert.equal((await staff.call("/reports")).httpStatus, 200);
   assert.equal((await staff.call("/data")).proformas.length, 0);
   assert.equal(
     (
@@ -1391,6 +1391,7 @@ test("recurring medical appointments create tasks without medication and retain 
   const f = await fixture(t);
   const { horse } = await setup(f);
   const member = (await f.member.call("/auth/me")).user.id;
+  await f.owner.call("/members/" + member + "/role", "PUT", { role: "staff" });
   const course = await f.create("medical", {
     horseId: horse.id,
     type: "Follow-up",
@@ -1456,4 +1457,73 @@ test("saved open areas and indoor arenas are retained as class locations", async
     ).httpStatus,
     400,
   );
+});
+
+test("unpaid holds expire once and release calendar capacity", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f);
+  const booked = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(booked.httpStatus, 201);
+  assert.equal((await f.owner.call("/data")).classes[0].heldPlaces, 1);
+  f.db
+    .prepare("UPDATE reservations SET hold_expires_at=?")
+    .run("2026-11-10T00:00:00.000Z");
+  const data = await f.owner.call("/data");
+  assert.equal(data.classes[0].places, 1);
+  assert.equal(data.classes[0].heldPlaces, 0);
+  assert.equal(data.bookings[0].status, "expired");
+  assert.equal(data.proformas[0].status, "void");
+  assert.equal((await f.owner.call("/data")).classes[0].places, 1);
+});
+
+test("bulk feeding is atomic and discount titles generate immutable unique codes", async (t) => {
+  const f = await fixture(t);
+  const { horse } = await setup(f);
+  const second = await f.create("horses", { name: "Moon" });
+  const actor = (await f.owner.call("/auth/me")).user.id;
+  const body = {
+    horseIds: [horse.id, second.id],
+    feed: "Hay",
+    quantity: "2 kg",
+    time: "08:00",
+    durationMinutes: 30,
+    assigneeId: actor,
+  };
+  assert.equal(
+    (
+      await f.owner.call("/records/feeding", "POST", {
+        ...body,
+        horseIds: [horse.id, "missing"],
+      })
+    ).httpStatus,
+    404,
+  );
+  assert.equal((await f.owner.call("/data")).feeding.length, 0);
+  assert.equal(
+    (await f.owner.call("/records/feeding", "POST", body)).httpStatus,
+    201,
+  );
+  assert.equal((await f.owner.call("/data")).feeding.length, 2);
+  const discount = {
+    titleEn: "Summer",
+    mode: "percent",
+    value: 10,
+    expiresAt: "2026-12-30T00:00:00Z",
+  };
+  const first = await f.create("discounts", discount);
+  const next = await f.create("discounts", discount);
+  assert.match(first.code, /^SUM\d{3}$/);
+  assert.notEqual(first.code, next.code);
+  const edited = await f.owner.call("/records/discounts/" + first.id, "PUT", {
+    ...discount,
+    titleEn: "Winter",
+    code: "CHANGED",
+  });
+  assert.equal(edited.code, first.code);
+  for (const kind of ["boarding_food", "boarding_full", "boarding_medical"]) {
+    assert.equal(
+      (await f.create("plans", { name: kind, amount: 100, kind })).kind,
+      kind,
+    );
+  }
 });

@@ -63,5 +63,15 @@ CREATE TABLE IF NOT EXISTS staff_roles(org_id TEXT NOT NULL,user_id TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS waitlist(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,member_id TEXT NOT NULL,class_id TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(org_id,member_id,class_id));
 CREATE TABLE IF NOT EXISTS attendance(reservation_id TEXT PRIMARY KEY,org_id TEXT NOT NULL,status TEXT NOT NULL,actor_id TEXT NOT NULL,updated_at TEXT NOT NULL);
 `);
+  if (
+    !db
+      .prepare("PRAGMA table_info(reservations)")
+      .all()
+      .some((c) => c.name === "hold_expires_at")
+  )
+    db.exec("ALTER TABLE reservations ADD COLUMN hold_expires_at TEXT");
+  db.exec(`UPDATE reservations SET hold_expires_at=strftime('%Y-%m-%dT%H:%M:%fZ',created_at,'+72 hours') WHERE status='pending_payment' AND hold_expires_at IS NULL;
+UPDATE memberships SET role='owner' WHERE EXISTS(SELECT 1 FROM staff_roles s WHERE s.org_id=memberships.org_id AND s.user_id=memberships.user_id);
+DELETE FROM staff_roles;`);
   return db;
 }

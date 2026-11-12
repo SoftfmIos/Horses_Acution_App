@@ -34,6 +34,9 @@ import { HorseHead } from "./HorseHead";
 import { SettingsHub } from "./SettingsHub";
 import { ClientHome } from "./ClientHome";
 import { CareTasks } from "./CareTasks";
+import { TaskPlanner } from "./TaskPlanner";
+import { VoucherCard } from "./VoucherCard";
+import { riyadhDay } from "./calendar";
 import { RecurrenceFields } from "./RecurrenceFields";
 import { StablesManager } from "./StablesManager";
 import { Schedule, MemberTools } from "./Scheduling";
@@ -52,6 +55,8 @@ const dict = {
     breeds: "Horse breeds",
     address: "Address",
     phone: "Phone",
+    ownerId: "Horse owner",
+    instructorId: "Assigned instructor",
     placeType: "Place type",
     open_area: "Open area",
     indoor_arena: "Indoor arena",
@@ -122,7 +127,7 @@ const dict = {
     empty: "No records yet.",
     welcome: "Your academy workspace",
     intro: "Riding, care, and your team — connected in one place.",
-    manager: "Manager",
+    manager: "Staff",
     member: "Member",
     price: "Price (SAR)",
     amount: "Amount (SAR)",
@@ -205,11 +210,16 @@ const dict = {
     private: "Private lesson",
     ride: "Ride",
     boarding: "Boarding",
+    boarding_food: "Boarding with food",
+    boarding_full: "Full-inclusive boarding",
+    boarding_medical: "Boarding with medical care",
     other: "Other",
     open: "Pending payment",
     settled: "Paid",
     void: "Void",
-    pending_payment: "Pending payment",
+    pending_payment: "72-hour payment hold",
+    expired: "Expired hold",
+    refund_required: "Refund / reconciliation required",
     confirmed: "Confirmed",
     cancelled: "Cancelled",
     cancelBooking: "Cancel booking",
@@ -243,7 +253,7 @@ const dict = {
       "Completing care does not automatically clear rest. Edit the horse after veterinary clearance.",
     session: "Class",
     caregiver: "Caregiver",
-    owner: "Manager",
+    owner: "Staff",
     role: "Role",
     allBookings: "All bookings",
     noPrices: "Create a price plan and horses before scheduling a class.",
@@ -276,6 +286,8 @@ const dict = {
     breeds: "سلالات الخيول",
     address: "العنوان",
     phone: "الهاتف",
+    ownerId: "مالك الحصان",
+    instructorId: "المدرب المخصص",
     placeType: "نوع الموقع",
     open_area: "منطقة مفتوحة",
     indoor_arena: "ميدان مغلق",
@@ -345,7 +357,7 @@ const dict = {
     empty: "لا توجد سجلات بعد.",
     welcome: "مساحة الأكاديمية",
     intro: "الركوب والرعاية والفريق — في مكان واحد.",
-    manager: "مدير",
+    manager: "موظف",
     member: "عضو",
     price: "السعر (ريال)",
     amount: "المبلغ (ريال)",
@@ -428,11 +440,16 @@ const dict = {
     private: "حصة خاصة",
     ride: "جولة ركوب",
     boarding: "إيواء",
+    boarding_food: "إيواء مع التغذية",
+    boarding_full: "إيواء شامل",
+    boarding_medical: "إيواء مع الرعاية الطبية",
     other: "أخرى",
     open: "بانتظار الدفع",
     settled: "مسدد",
     void: "ملغى",
-    pending_payment: "بانتظار الدفع",
+    pending_payment: "حجز مؤقت للسداد (72 ساعة)",
+    expired: "انتهت مهلة الحجز",
+    refund_required: "تحتاج استرداداً أو تسوية",
     confirmed: "مؤكد",
     cancelled: "ملغى",
     cancelBooking: "إلغاء الحجز",
@@ -462,7 +479,7 @@ const dict = {
     restrictionNote:
       "إكمال الرعاية لا يرفع الراحة تلقائياً. عدّل حالة الحصان بعد موافقة الطبيب.",
     session: "الحصة",
-    owner: "مدير",
+    owner: "موظف",
     role: "الدور",
     allBookings: "جميع الحجوزات",
     noPrices: "أنشئ خطة سعر وأضف الخيول قبل جدولة حصة.",
@@ -525,12 +542,35 @@ function App() {
     [menu, setMenu] = useState(false),
     [instructorFilter, setInstructorFilter] = useState(""),
     [q, setQ] = useState(""),
-    [reports, setReports] = useState(null);
-  const t = dict[lang],
+    [reports, setReports] = useState(null),
+    [calendarDate, setCalendarDate] = useState(""),
+    [pendingVoucher, setPendingVoucher] = useState(() => {
+      const url = new URL(window.location.href),
+        code = url.searchParams.get("voucher");
+      if (code) {
+        sessionStorage.setItem("booking-voucher", code.trim().toUpperCase());
+        url.searchParams.delete("voucher");
+        window.history.replaceState(
+          null,
+          "",
+          url.pathname + url.search + url.hash,
+        );
+      }
+      return sessionStorage.getItem("booking-voucher") || "";
+    });
+  const t = { ...dict[lang] },
     ar = lang === "ar",
-    manager = stable?.role === "owner",
-    staff = ["instructor", "vet", "caregiver"].includes(stable?.role),
+    manager = ["owner", "staff", "instructor", "vet", "caregiver"].includes(
+      stable?.role,
+    ),
+    staff = false,
     client = stable?.role === "member";
+  if (client) {
+    t.classes = ar ? "حجز موعد" : "Book a slot";
+    t.horses = ar ? "خيولي" : "My horses";
+    t.instructors = ar ? "مدربوني" : "My instructors";
+    t.billing = ar ? "فواتيري" : "My invoices";
+  }
   const refreshSequence = useRef(0),
     stableRef = useRef(stable?.id);
   stableRef.current = stable?.id;
@@ -539,6 +579,7 @@ function App() {
     if (!selected || selected.id === stable?.id) return;
     refreshSequence.current++;
     setData(fresh);
+    setCalendarDate("");
     setStable(selected);
     setPage("overview");
     setQ("");
@@ -674,6 +715,7 @@ function App() {
     ["classes", CalendarDays],
     ...(!manager ? [["accountBalance", BookOpen]] : []),
     ["horses", HorseHead],
+    ...(client ? [["instructors", GraduationCap]] : []),
     ...(manager
       ? [
           ["medical", HeartPulse],
@@ -706,9 +748,9 @@ function App() {
           "overview",
           "classes",
           "accountBalance",
-          "pricing",
+          "horses",
+          "instructors",
           "billing",
-          "notifications",
         ].includes(key),
     )
     .filter(
@@ -774,6 +816,13 @@ function App() {
           ["breed", "text"],
           ["birthDate", "date"],
           ["microchip", "text"],
+          ["ownerId", "select", false, members],
+          [
+            "instructorId",
+            "select",
+            false,
+            data.instructors.map((i) => [i.id, i.name]),
+          ],
           [
             "status",
             "select",
@@ -790,9 +839,17 @@ function App() {
             "kind",
             "select",
             true,
-            ["class", "private", "ride", "boarding", "package", "other"].map(
-              (v) => [v, t[v]],
-            ),
+            [
+              "class",
+              "private",
+              "ride",
+              "boarding",
+              "boarding_food",
+              "boarding_full",
+              "boarding_medical",
+              "package",
+              "other",
+            ].map((v) => [v, t[v]]),
           ],
           ["credits", "number"],
           ["active", "checkbox"],
@@ -849,7 +906,9 @@ function App() {
           ["completed", "checkbox"],
         ],
         feeding: [
-          ["horseId", "select", true, horses],
+          modal?.record
+            ? ["horseId", "select", true, horses]
+            : ["horseIds", "multi", true, horses],
           ["feed", "text", true],
           ["quantity", "text", true],
           ["time", "time", true],
@@ -868,7 +927,9 @@ function App() {
           ["notes", "textarea"],
         ],
         discounts: [
-          ["code", "text", true],
+          ["titleEn", "text", true],
+          ["titleAr", "text"],
+          ["code", "generated", false],
           ["mode", "select", true, ["percent", "fixed"].map((v) => [v, t[v]])],
           ["value", "number", true],
           ["minAmount", "money"],
@@ -972,6 +1033,10 @@ function App() {
       // A successful write must not be hidden by an old search filter.
       setModal(null);
       go(kind === "plans" ? "pricing" : kind);
+      if (kind === "classes") {
+        setInstructorFilter("");
+        setCalendarDate(riyadhDay(saved.startsAt));
+      }
       const loaded = await refresh();
       if (stableRef.current !== savedStable) return;
       if (loaded?.[kind]?.some((r) => r.id === saved.id)) notify(t.saved);
@@ -1132,6 +1197,9 @@ function App() {
           </>
         ) : kind === "discounts" ? (
           <>
+            <code className="discount-code" dir="ltr">
+              {r.code}
+            </code>
             <div className="big-money">
               {r.mode === "percent" ? r.value + "%" : money(r.value)}
             </div>
@@ -1146,6 +1214,12 @@ function App() {
             <p>
               {t.remaining} · {when(r.expiresAt)}
             </p>
+            <button
+              className="primary"
+              onClick={() => setModal({ kind: "voucherPrint", record: r })}
+            >
+              {ar ? "عرض QR والطباعة" : "QR code & print"}
+            </button>
           </>
         ) : kind === "medical" ? (
           <>
@@ -1831,33 +1905,74 @@ function App() {
             <>
               <p className="notice">
                 {ar
-                  ? "الحجز بانتظار الدفع حتى تسجيل سند الدفع بالكامل. الحصص المسددة برصيد مدفوع مسبقاً تتفعل فوراً."
-                  : "Bookings remain pending until the academy records payment voucher details and full payment. Bookings using prepaid credits activate immediately."}
+                  ? "احجز موعداً أخضر. الحجز الأصفر يحتفظ بالمقعد لمدة تصل إلى 72 ساعة لتأكيد السداد، ثم يحرر تلقائياً."
+                  : "Book a green opening. Yellow holds reserve a seat for up to 72 hours for full payment confirmation, then release automatically."}
               </p>
+              <div className="slot-summary">
+                <strong>
+                  {
+                    data.classes.filter(
+                      (c) => c.endsAt > new Date().toISOString(),
+                    ).length
+                  }{" "}
+                  {ar ? "مواعيد مجدولة" : "scheduled openings"}
+                </strong>
+                <span>
+                  {data.classes.reduce(
+                    (n, c) => n + (c.confirmedPlaces || 0),
+                    0,
+                  )}{" "}
+                  {ar ? "مقاعد مؤكدة" : "confirmed seats"}
+                </span>
+              </div>
               <details
                 className={client ? "client-calendar" : "admin-calendar"}
-                open={!client}
+                open
               >
                 <summary>{ar ? "عرض التقويم" : "Show calendar"}</summary>
                 <Schedule
                   defaultView={data.settings?.calendarView || "month"}
-                  key={data.settings?.calendarView || "month"}
+                  initialDate={calendarDate}
+                  key={
+                    (data.settings?.calendarView || "month") +
+                    "|" +
+                    calendarDate
+                  }
                   classes={data.classes.filter(
                     (c) =>
                       !instructorFilter || c.instructor === instructorFilter,
                   )}
                   horses={data.horses}
                   ar={ar}
-                  onSelect={(c) =>
-                    canManage("classes")
-                      ? openForm("classes", c)
-                      : setModal({
-                          kind: "booking",
-                          classId: c.id,
-                          title: c.title,
-                          form: {},
-                        })
-                  }
+                  onSelect={(c) => {
+                    if (manager) {
+                      openForm("classes", c);
+                      return;
+                    }
+                    const existing = data.bookings.find(
+                      (b) =>
+                        b.class_id === c.id &&
+                        ["confirmed", "pending_payment"].includes(b.status),
+                    );
+                    if (existing) {
+                      go("overview");
+                      return;
+                    }
+                    if (c.places <= 0) {
+                      notify(
+                        ar
+                          ? "هذا الموعد غير متاح حالياً. اختر موعداً أخضر."
+                          : "This slot is unavailable. Choose a green slot.",
+                      );
+                      return;
+                    }
+                    setModal({
+                      kind: "booking",
+                      classId: c.id,
+                      title: c.title,
+                      form: { voucherCode: pendingVoucher },
+                    });
+                  }}
                 />
               </details>
 
@@ -1932,7 +2047,7 @@ function App() {
                                       kind: "booking",
                                       classId: c.id,
                                       title: c.title,
-                                      form: {},
+                                      form: { voucherCode: pendingVoucher },
                                     })
                             }
                           >
@@ -2065,8 +2180,8 @@ function App() {
               </div>
             </>
           )}
-          {page === "tasks" && (
-            <CareTasks
+          {page === "tasks" && manager && (
+            <TaskPlanner
               tasks={data.tasks}
               history={data.taskHistory}
               members={data.members}
@@ -2075,6 +2190,7 @@ function App() {
               toggle={toggleCareTask}
               busy={busy}
               canComplete={canComplete}
+              stableName={localizedName(stable, ar)}
             />
           )}
           {[
@@ -2282,7 +2398,12 @@ function App() {
         <div className="modal-backdrop" onClick={() => !busy && setModal(null)}>
           <section
             className={
-              "modal " + (modal.kind === "proforma" ? "proforma-modal" : "")
+              "modal " +
+              (modal.kind === "proforma"
+                ? "proforma-modal"
+                : modal.kind === "voucherPrint"
+                  ? "voucher-modal"
+                  : "")
             }
             role="dialog"
             aria-modal="true"
@@ -2316,7 +2437,15 @@ function App() {
                                 modal.kind === "plans" ? "pricing" : modal.kind
                               ]}
             </h2>
-            {modal.kind === "invite" ? (
+            {modal.kind === "voucherPrint" ? (
+              <VoucherCard
+                voucher={modal.record}
+                academy={localizedName(stable, ar)}
+                ar={ar}
+                money={money}
+                when={when}
+              />
+            ) : modal.kind === "invite" ? (
               <>
                 <p>{t.inviteInfo}</p>
                 <code className="invite-code" dir="ltr">
@@ -2368,6 +2497,8 @@ function App() {
                     )
                   ) {
                     setModal(null);
+                    setPendingVoucher("");
+                    sessionStorage.removeItem("booking-voucher");
                     notify(t.bookingSaved);
                   }
                 }}
@@ -2652,7 +2783,20 @@ function App() {
                     ) : (
                       <>
                         {key === "amount" ? t.price : t[key]}
-                        {type === "select" || type === "multi" ? (
+                        {type === "generated" ? (
+                          <input
+                            readOnly
+                            aria-label={t[key]}
+                            value={
+                              modal.record?.code ||
+                              (modal.form.titleEn || "Offer")
+                                .replace(/[^a-z]/gi, "")
+                                .slice(0, 3)
+                                .toUpperCase()
+                                .padEnd(3, "X") + "###"
+                            }
+                          />
+                        ) : type === "select" || type === "multi" ? (
                           <select
                             aria-label={t[key]}
                             required={required}

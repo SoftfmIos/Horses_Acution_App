@@ -202,7 +202,7 @@ let browser;
 
   await nav("Discount codes");
   await add();
-  await field("Code").fill("HELLO10");
+  await field("Title (English)").fill("Summer");
   await field("Discount type").selectOption("percent");
   await field("Value (% or SAR)").fill("10");
   await field("Maximum redemptions").fill("5");
@@ -211,6 +211,9 @@ let browser;
     .slice(0, 16);
   await field("Expiry").fill(expiry);
   await save();
+  const discountCode = (await page.locator(".record-card").innerText()).match(
+    /SUM\d{3}/,
+  )[0];
   await nav("Classes & riding");
   await add();
   await field("Title (English)").fill("Browser private class");
@@ -270,7 +273,7 @@ let browser;
   await calendar.getByLabel("View", { exact: true }).selectOption("week");
 
   await page.getByRole("button", { name: "Book", exact: true }).click();
-  await field("Discount code (optional)").fill("HELLO10");
+  await field("Discount code (optional)").fill(discountCode);
   await page
     .getByRole("button", { name: "Calculate total", exact: true })
     .click();
@@ -330,7 +333,9 @@ let browser;
 
   await nav("Feeding plans");
   await add();
-  await field("Horse").selectOption({ label: "Browser Shams" });
+  await field("Available horses (select multiple)").selectOption({
+    label: "Browser Shams",
+  });
   await field("Feed / supplement").fill("Hay");
   await field("Quantity").fill("2 kg");
   await field("Assigned to").selectOption({ index: 1 });
@@ -343,7 +348,7 @@ let browser;
   );
   await field("Assigned to").selectOption({ index: 1 });
   await save();
-  await page.getByText("Inspect tack", { exact: true }).waitFor();
+  await page.getByRole("heading", {name:"Inspect tack",exact:true}).waitFor();
   await nav("Inventory");
   await add();
   await field("Name (English)").fill("Hay bales");
@@ -477,8 +482,23 @@ let browser;
       .count()
   )
     throw Error("Member sees manager medical tools");
-  const mn = async (name) =>
-    mp.locator("nav").getByRole("button", { name, exact: true }).click();
+  const mn = async (name) => {
+    if (name === "Pricing") {
+      await mp
+        .locator("nav")
+        .getByRole("button", { name: "My account", exact: true })
+        .click();
+      await mp.getByRole("button", { name: "Pricing", exact: true }).click();
+      return;
+    }
+    await mp
+      .locator("nav")
+      .getByRole("button", {
+        name: name === "Classes & riding" ? "Book a slot" : name,
+        exact: true,
+      })
+      .click();
+  };
   await mn("Pricing");
   await mp
     .getByRole("button", { name: "Request package", exact: true })

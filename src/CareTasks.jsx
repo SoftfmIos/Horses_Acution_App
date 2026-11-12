@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { inPeriod } from "./taskPlanner";
 export function CareTasks({
   tasks,
   history = [],
@@ -9,13 +10,18 @@ export function CareTasks({
   busy,
   compact = false,
   canComplete = () => true,
+  period = null,
 }) {
   const [filter, setFilter] = useState("pending"),
     [pending, setPending] = useState({});
   const label = (en, arabic) => (ar ? arabic : en);
   const name = (id) => members.find((m) => m.id === id)?.name || "—";
   const shown = tasks
-    .filter((t) => filter === "all" || (filter === "done" ? t.done : !t.done))
+    .filter(
+      (t) =>
+        (!period || inPeriod(t, period)) &&
+        (filter === "all" || (filter === "done" ? t.done : !t.done)),
+    )
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   const completed = tasks.filter((task) => task.done).length;
   const percent = tasks.length

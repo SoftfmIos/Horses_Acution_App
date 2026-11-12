@@ -11,9 +11,19 @@ export function Schedule({
   onSelect,
   ar,
   defaultView = "month",
+  initialDate = "",
 }) {
   const [view, setView] = useState(defaultView),
-    [anchor, setAnchor] = useState(dayKey(new Date())),
+    [anchor, setAnchor] = useState(
+      () =>
+        initialDate ||
+        dayKey(
+          classes
+            .filter((c) => c.endsAt > new Date().toISOString())
+            .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0]
+            ?.startsAt || new Date(),
+        ),
+    ),
     [horse, setHorse] = useState(""),
     [arena, setArena] = useState("");
   const filtered = classes.filter(
@@ -39,6 +49,18 @@ export function Schedule({
       className="panel schedule"
       aria-label={ar ? "تقويم الحجز" : "Booking calendar"}
     >
+      <div className="slot-legend">
+        <span className="slot-available">{ar ? "متاح" : "Available"}</span>
+        <span className="slot-held">
+          {ar ? "حجز مؤقت 72 ساعة" : "72-hour payment hold"}
+        </span>
+        <span className="slot-booked">
+          {ar ? "حجز مؤكد" : "Confirmed booking"}
+        </span>
+        <span className="slot-blocked">
+          {ar ? "غير متاح للرعاية" : "Unavailable for care"}
+        </span>
+      </div>
       <div className="calendar-tools">
         <label>
           {ar ? "العرض" : "View"}
@@ -151,7 +173,16 @@ export function Schedule({
                     </strong>
                     {sessions.map((c) => (
                       <button
-                        className="calendar-event"
+                        className={
+                          "calendar-event " +
+                          (c.places > 0
+                            ? "slot-available"
+                            : c.heldPlaces > 0
+                              ? "slot-held"
+                              : c.confirmedPlaces > 0
+                                ? "slot-booked"
+                                : "slot-blocked")
+                        }
                         key={c.id}
                         onClick={() => onSelect(c)}
                       >
@@ -166,6 +197,21 @@ export function Schedule({
                         </span>
                         <span>
                           {c.arena} · {c.places} {ar ? "مقاعد" : "places"}
+                        </span>
+                        <span className="slot-badges">
+                          <span className="slot-available">
+                            {c.places} {ar ? "متاح" : "available"}
+                          </span>
+                          {c.heldPlaces > 0 && (
+                            <span className="slot-held">
+                              {c.heldPlaces} {ar ? "معلق" : "held"}
+                            </span>
+                          )}
+                          {c.confirmedPlaces > 0 && (
+                            <span className="slot-booked">
+                              {c.confirmedPlaces} {ar ? "محجوز" : "booked"}
+                            </span>
+                          )}
                         </span>
                       </button>
                     ))}
@@ -292,6 +338,19 @@ export function MemberTools({ members, request, action, ar, busy = false }) {
               )}
               {form.mode === "create" && (
                 <label>
+                  {label("User type", "نوع المستخدم")}
+                  <select
+                    aria-label={label("User type", "نوع المستخدم")}
+                    value={form.role || "member"}
+                    onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  >
+                    <option value="member">{label("Member", "عضو")}</option>
+                    <option value="staff">{label("Staff", "موظف")}</option>
+                  </select>
+                </label>
+              )}
+              {form.mode === "create" && (
+                <label>
                   {label(
                     "Password (6+ characters)",
                     "كلمة المرور (6 أحرف على الأقل)",
@@ -333,7 +392,7 @@ export function MemberTools({ members, request, action, ar, busy = false }) {
         </div>
       )}
       {members
-        .filter((m) => m.role !== "owner")
+        .filter((m) => true)
         .map((m) => (
           <div className="task-row member-row" key={m.id}>
             <strong>
@@ -358,9 +417,7 @@ export function MemberTools({ members, request, action, ar, busy = false }) {
               >
                 {[
                   ["member", "Member", "عضو"],
-                  ["instructor", "Instructor", "مدرب"],
-                  ["vet", "Vet", "طبيب بيطري"],
-                  ["caregiver", "Caregiver", "سائس"],
+                  ["owner", "Staff", "موظف"],
                 ].map(([v, en, arabic]) => (
                   <option key={v} value={v}>
                     {ar ? arabic : en}

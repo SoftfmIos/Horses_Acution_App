@@ -52,7 +52,7 @@ export function ClientHome({
           </p>
         </div>
         <button className="primary" onClick={() => go("classes")}>
-          {label("Book a class", "احجز حصة")}
+          {label("Book a slot", "احجز موعداً")}
           <ArrowRight size={18} />
         </button>
       </section>
@@ -117,6 +117,12 @@ export function ClientHome({
               <MapPin size={16} />
               {b.session.arena}
             </p>
+            {b.status === "pending_payment" && b.hold_expires_at && (
+              <p>
+                {label("Hold expires", "تنتهي المهلة")}:{" "}
+                {when(b.hold_expires_at)}
+              </p>
+            )}
             {b.status === "pending_payment" && (
               <p className="notice">
                 {label(
