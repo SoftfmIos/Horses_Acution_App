@@ -2507,3 +2507,86 @@ test("staff Add Edit Delete permissions are independent and enforced across reco
     400,
   );
 });
+
+test("email settings are manager-only, encrypted, stable-scoped and preserve blank passwords", async (t) => {
+  const f = await fixture(t);
+  const body = {
+    enabled: true,
+    host: "smtp.example.com",
+    port: 587,
+    username: "notifications@riyadhpolohills.com",
+    from: "notifications@riyadhpolohills.com",
+    replyTo: "support@riyadhpolohills.com",
+    password: "private-app-password",
+  };
+  assert.equal(
+    (await f.member.call("/settings/email", "PUT", body)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.owner.call("/settings/email", "PUT", { ...body, password: "" }))
+      .httpStatus,
+    400,
+  );
+  const saved = await f.owner.call("/settings/email", "PUT", body);
+  assert.equal(saved.httpStatus, 200);
+  assert.equal(saved.passwordSaved, true);
+  assert.equal(saved.password, undefined);
+  const row = f.db
+    .prepare("SELECT data FROM email_settings WHERE org_id=?")
+    .get(f.owner.stable);
+  assert.equal(row.data.includes(body.password), false);
+  assert.equal(
+    f.app.locals.emailSettings.config(f.owner.stable).password,
+    body.password,
+  );
+  const data = await f.owner.call("/data");
+  assert.equal(data.emailSettings.passwordSaved, true);
+  assert.equal(data.emailConfigured, true);
+  assert.equal(JSON.stringify(data).includes(body.password), false);
+  assert.equal((await f.member.call("/data")).emailSettings, undefined);
+  assert.equal((await f.other.call("/data")).emailSettings, null);
+  assert.equal(
+    (
+      await f.owner.call("/settings/email", "PUT", {
+        ...body,
+        password: "",
+        replyTo: "help@example.com",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    f.app.locals.emailSettings.config(f.owner.stable).password,
+    body.password,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/settings/email", "PUT", {
+        ...body,
+        host: "https://smtp.example.com",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/settings/email", "PUT", {
+        ...body,
+        from: "bad\r\nBcc: hidden@example.com",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/settings/email", "PUT", {
+        ...body,
+        enabled: false,
+        password: "",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(f.app.locals.emailSettings.config(f.owner.stable), null);
+});

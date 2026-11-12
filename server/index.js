@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import nodemailer from "nodemailer";
 import { openDatabase } from "./db.js";
 import { createApp } from "./app.js";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -49,29 +48,26 @@ const server = app.listen(
     ),
 );
 let working = false;
-const mail = emailEnabled
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_PORT === "465",
-      requireTLS: process.env.SMTP_PORT !== "465",
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-    })
-  : null;
 async function tick() {
   if (working) return;
   working = true;
   try {
     app.locals.remind();
-    if (mail) {
+    {
       for (const job of db
         .prepare(
-          "SELECT e.*,u.email FROM email_outbox e JOIN users u ON u.id=e.user_id WHERE e.status='pending' AND attempts<5 LIMIT 10",
+          "SELECT e.*,u.email FROM email_outbox e JOIN users u ON u.id=e.user_id WHERE e.status='pending' AND attempts<5",
         )
-        .all()) {
+        .all()
+        .filter((job) => app.locals.emailSettings.enabled(job.org_id))
+        .slice(0, 10)) {
         try {
+          const config = app.locals.emailSettings.config(job.org_id);
+          if (!config) continue;
+          const mail = app.locals.emailSettings.transport(config);
           await mail.sendMail({
-            from: process.env.EMAIL_FROM,
+            from: config.from,
+            replyTo: config.replyTo || undefined,
             to: job.email,
             subject: job.subject,
             text: job.body,

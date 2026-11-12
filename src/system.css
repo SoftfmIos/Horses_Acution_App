@@ -1993,3 +1993,34 @@ pre {
     box-shadow: none !important;
   }
 }
+
+.credential-details {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 2fr;
+  gap: 12px;
+}
+.credential-details dt {
+  font-weight: 600;
+}
+.credential-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media print {
+  body:has(.user-credentials) .workspace {
+    display: block !important;
+  }
+  body:has(.user-credentials) #root * {
+    visibility: hidden;
+  }
+  body:has(.user-credentials) #root .user-credentials,
+  body:has(.user-credentials) #root .user-credentials * {
+    visibility: visible;
+  }
+  body:has(.user-credentials) .user-credentials {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+    background: white;
+  }
+}

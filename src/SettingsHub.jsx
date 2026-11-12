@@ -1,4 +1,5 @@
 import { DEFAULT_HOLD_HOURS, MAX_HOLD_HOURS } from "../shared/booking-policy";
+import { EmailSettings } from "./EmailSettings";
 import React, { useState } from "react";
 import {
   Users,
@@ -104,6 +105,13 @@ export function SettingsHub({
   ];
   return (
     <>
+      <EmailSettings
+        settings={data.emailSettings}
+        ar={ar}
+        request={request}
+        action={action}
+        busy={busy || !can("settings", "edit")}
+      />
       <section className="panel">
         <h2>
           {label(

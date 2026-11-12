@@ -242,6 +242,8 @@ export function MemberTools({
   canDelete = true,
 }) {
   const [form, setForm] = useState(null);
+  const [credentials, setCredentials] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const label = (en, arabic) => (ar ? arabic : en);
   return (
     <section className="panel">
@@ -249,17 +251,18 @@ export function MemberTools({
         <button
           className="primary"
           disabled={!canAdd}
-          onClick={() =>
+          onClick={() => {
+            setShowPassword(false);
             setForm({
               mode: "create",
               nameEn: "",
               nameAr: "",
               email: "",
               password: "",
-            })
-          }
+            });
+          }}
         >
-          {label("Create member", "إنشاء عضو")}
+          {label("Add user", "إضافة مستخدم")}
         </button>
         <button
           className="soft"
@@ -284,7 +287,7 @@ export function MemberTools({
                   ? label("Edit member", "تعديل العضو")
                   : form.mode === "link"
                     ? label("Add existing member", "إضافة عضو مسجل")
-                    : label("Create member", "إنشاء عضو")}
+                    : label("Add user", "إضافة مستخدم")}
               </h2>
               <button
                 className="icon-button"
@@ -310,8 +313,11 @@ export function MemberTools({
                       body: form,
                     }),
                   )
-                )
+                ) {
+                  if (form.mode === "create") setCredentials({ ...form });
                   setForm(null);
+                  setShowPassword(false);
+                }
               }}
             >
               {form.mode !== "link" && (
@@ -375,7 +381,7 @@ export function MemberTools({
                     "كلمة المرور (6 أحرف على الأقل)",
                   )}
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     required
                     minLength={6}
                     maxLength={128}
@@ -385,6 +391,41 @@ export function MemberTools({
                       setForm({ ...form, password: e.target.value })
                     }
                   />
+                  <span className="member-toolbar">
+                    <button
+                      type="button"
+                      className="soft"
+                      disabled={busy}
+                      onClick={() => {
+                        const alphabet =
+                          "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*?";
+                        const limit = 256 - (256 % alphabet.length);
+                        let password = "";
+                        while (password.length < 16) {
+                          const bytes = crypto.getRandomValues(
+                            new Uint8Array(32),
+                          );
+                          for (const byte of bytes) {
+                            if (byte < limit && password.length < 16)
+                              password += alphabet[byte % alphabet.length];
+                          }
+                        }
+                        setForm({ ...form, password });
+                      }}
+                    >
+                      {label("Generate password", "توليد كلمة المرور")}
+                    </button>
+                    <button
+                      type="button"
+                      className="soft"
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword
+                        ? label("Hide password", "إخفاء كلمة المرور")
+                        : label("Show password", "إظهار كلمة المرور")}
+                    </button>
+                  </span>
                 </label>
               )}
               <p className="notice">
@@ -407,6 +448,63 @@ export function MemberTools({
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+      {credentials && (
+        <div className="modal-backdrop" onClick={() => setCredentials(null)}>
+          <section
+            className="modal user-credentials"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="credentials-title"
+            dir={ar ? "rtl" : "ltr"}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="credentials-title">
+              {label(
+                "User created — account details",
+                "تم إنشاء المستخدم — بيانات الحساب",
+              )}
+            </h2>
+            <dl className="credential-details">
+              <dt>{label("Name", "الاسم")}</dt>
+              <dd>
+                {(ar ? credentials.nameAr : credentials.nameEn) ||
+                  credentials.nameEn ||
+                  credentials.nameAr}
+              </dd>
+              <dt>{label("Email", "البريد الإلكتروني")}</dt>
+              <dd dir="ltr">{credentials.email.trim().toLowerCase()}</dd>
+              <dt>{label("Password", "كلمة المرور")}</dt>
+              <dd dir="ltr">
+                <code>{credentials.password}</code>
+              </dd>
+              <dt>{label("User type", "نوع المستخدم")}</dt>
+              <dd>
+                {credentials.role === "staff"
+                  ? label("Staff", "موظف")
+                  : label("Member", "عضو")}
+              </dd>
+              <dt>{label("Sign-in URL", "رابط تسجيل الدخول")}</dt>
+              <dd dir="ltr">
+                {window.location.origin + window.location.pathname}
+              </dd>
+            </dl>
+            <p>
+              {label(
+                "Keep these details private. The password is only available here until this card is closed.",
+                "احتفظ بهذه البيانات بسرية. تتوفر كلمة المرور هنا فقط حتى إغلاق هذه البطاقة.",
+              )}
+            </p>
+            <div className="modal-actions no-print">
+              <button className="primary" onClick={() => window.print()}>
+                {label("Print account details", "طباعة بيانات الحساب")}
+              </button>
+              <button className="soft" onClick={() => setCredentials(null)}>
+                {label("Close", "إغلاق")}
+              </button>
+            </div>
           </section>
         </div>
       )}

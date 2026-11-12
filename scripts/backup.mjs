@@ -1,7 +1,7 @@
 import { backup } from "node:sqlite";
 import { openDatabase } from "../server/db.js";
 import { resolve } from "node:path";
-import { existsSync, chmodSync } from "node:fs";
+import { existsSync, chmodSync, copyFileSync, constants } from "node:fs";
 const target = process.argv[2];
 if (!target) throw new Error("Supply a backup destination");
 const source = process.env.DATABASE_PATH || resolve("data/academy.sqlite");
@@ -12,6 +12,14 @@ const db = openDatabase(source);
 try {
   await backup(db, target);
   chmodSync(target, 0o600);
+  if (existsSync(source + ".email-key")) {
+    copyFileSync(
+      source + ".email-key",
+      target + ".email-key",
+      constants.COPYFILE_EXCL,
+    );
+    chmodSync(target + ".email-key", 0o600);
+  }
   console.log("Database backup completed.");
 } finally {
   db.close();

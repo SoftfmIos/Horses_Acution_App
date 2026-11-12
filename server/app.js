@@ -9,6 +9,7 @@ import {
   DEFAULT_HOLD_HOURS,
   MAX_HOLD_HOURS,
 } from "../shared/booking-policy.js";
+import { emailSettings } from "./email-settings.js";
 import { discountPrefix } from "../shared/discount-code.js";
 import { classOpenings } from "../shared/class-openings.js";
 import release from "../package.json" with { type: "json" };
@@ -89,6 +90,8 @@ export function createApp(
   } = {},
 ) {
   const app = express();
+  const email = emailSettings(db);
+  app.locals.emailSettings = email;
   app.disable("x-powered-by");
   app.use(
     helmet({
@@ -305,13 +308,14 @@ export function createApp(
       dedupe,
       now(),
     );
-    if (emailEnabled && result.changes)
+    if ((emailEnabled || email.enabled(org)) && result.changes)
       run(
-        "INSERT INTO email_outbox(id,user_id,subject,body) VALUES(?,?,?,?)",
+        "INSERT INTO email_outbox(id,user_id,subject,body,org_id) VALUES(?,?,?,?,?)",
         rid,
         user,
         title,
         message,
+        org,
       );
   };
   const owners = (org) =>
@@ -1557,7 +1561,8 @@ export function createApp(
         };
     }
     result.backendVersion = release.version;
-    result.emailConfigured = emailEnabled;
+    result.emailConfigured = emailEnabled || email.enabled(org);
+    if (manager) result.emailSettings = email.publicSettings(org);
     res.json(result);
   });
   function restrictHorse(req, data, rid) {
@@ -2442,6 +2447,40 @@ export function createApp(
       audit(req, "member.link", user.id);
     });
     res.status(201).json({ id: user.id });
+  });
+  app.put("/api/settings/email", owner, (req, res) => {
+    const b = req.body;
+    if (typeof b.enabled !== "boolean") fail("Invalid email status");
+    const address = (value, label) => {
+      const v = text(value, label, 254);
+      if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v)) fail("Invalid " + label);
+      return v;
+    };
+    const host = text(b.host, "SMTP host", 253);
+    if (!/^[a-zA-Z0-9.-]+$/.test(host))
+      fail("Enter an SMTP hostname without a URL or port");
+    if (
+      b.password !== undefined &&
+      (typeof b.password !== "string" || b.password.length > 1024)
+    )
+      fail("Invalid SMTP password");
+    if (
+      b.enabled &&
+      !b.password &&
+      !email.publicSettings(req.org.id)?.passwordSaved
+    )
+      fail("Enter an SMTP password");
+    const value = email.save(req.org.id, {
+      enabled: b.enabled,
+      host,
+      port: integer(b.port, "SMTP port", 1, 65535),
+      username: text(b.username, "SMTP username", 254),
+      from: address(b.from, "sender email"),
+      replyTo: b.replyTo ? address(b.replyTo, "reply-to email") : "",
+      password: b.password || "",
+    });
+    audit(req, "email.settings.update", req.org.id);
+    res.json(value);
   });
   app.put("/api/settings", owner, (req, res) => {
     const b = req.body;
