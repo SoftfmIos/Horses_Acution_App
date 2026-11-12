@@ -8,6 +8,7 @@ export function ProfilePhoto({
   editable = false,
   removable = editable,
   ar = false,
+  compact = false,
 }) {
   const [photo, setPhoto] = useState(null),
     [busy, setBusy] = useState(false),
@@ -23,8 +24,14 @@ export function ProfilePhoto({
         if (active) setPhoto(p.content ? p : null);
       })
       .catch(() => {});
+    const updated = (e) => {
+      if (e.detail.kind === kind && e.detail.id === id)
+        setPhoto(e.detail.photo);
+    };
+    window.addEventListener("academy-photo-updated", updated);
     return () => {
       active = false;
+      window.removeEventListener("academy-photo-updated", updated);
     };
   }, [kind, id]);
   async function upload(file) {
@@ -53,7 +60,13 @@ export function ProfilePhoto({
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
       bitmap.close();
       const content = canvas.toDataURL("image/jpeg", 0.82).split(",")[1];
-      setPhoto(await request(path, { method: "PUT", body: { content } }));
+      const saved = await request(path, { method: "PUT", body: { content } });
+      setPhoto(saved);
+      window.dispatchEvent(
+        new CustomEvent("academy-photo-updated", {
+          detail: { kind, id, photo: saved },
+        }),
+      );
     } catch (e) {
       setError(e.message);
     } finally {
@@ -61,7 +74,9 @@ export function ProfilePhoto({
     }
   }
   return (
-    <div className="profile-photo">
+    <div
+      className={"profile-photo" + (compact ? " compact-profile-photo" : "")}
+    >
       <div className="profile-photo-image">
         {photo ? (
           <img
@@ -106,6 +121,11 @@ export function ProfilePhoto({
                 try {
                   await request(path, { method: "DELETE" });
                   setPhoto(null);
+                  window.dispatchEvent(
+                    new CustomEvent("academy-photo-updated", {
+                      detail: { kind, id, photo: null },
+                    }),
+                  );
                   setError("");
                 } catch (e) {
                   setError(e.message);

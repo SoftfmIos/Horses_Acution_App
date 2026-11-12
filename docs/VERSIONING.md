@@ -84,3 +84,11 @@ Deploy frontend and backend from the same release and restart the backend. Exist
 ## 1.21.0
 
 Email Settings and System Settings now use the same icon cards and Manage controls as the other settings modules. User-management buttons share sizing, spacing and shape, and the User and Access Level selectors have matching widths. Horse timelines, rides, medical records, care tasks, documents and boarding stays are grouped by month using Riyadh time, newest first. Print horse card & history prints a compact horse summary and the selected section, with month headers and without editing/upload controls. English and Arabic month labels follow the current language.
+
+## 1.22.0
+
+Login now offers Forgot password and Forgot login email recovery. Password reset emails use an encrypted queued link, a hashed single-use token with a 30-minute expiry, generic account-existence responses and authentication rate limiting. A reset invalidates existing sessions; reset tokens stay in a URL fragment and are removed from the address bar when the form opens. Forgotten email assistance goes to the academy support mailbox for identity verification.
+
+Instructor profiles can link to a staff account, or match its login email when no explicit link exists. The linked instructor can upload/remove their own photo from Overview without general instructor-edit permissions. They cannot modify another instructor's photo. Members can see instructor photos for published upcoming sessions and their historical bookings. Photos appear in session/booking cards, booking details and the booking calendar, and update live across mounted views.
+
+Deploy both frontend and backend and restart the backend. The password-reset table is created automatically. Email delivery must be configured for at least one academy associated with the recovering account. The `iOSApp` branch remains separate.

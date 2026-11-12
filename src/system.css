@@ -2218,3 +2218,33 @@ pre {
     padding: 7px 10px;
   }
 }
+.auth-recovery-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-recovery {
+  display: grid;
+  gap: 16px;
+}
+.account-recovery h3 {
+  margin-top: 12px;
+}
+.instructor-badge {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--navy);
+}
+.instructor-badge .profile-photo {
+  margin: 0;
+}
+.compact-profile-photo .profile-photo-image {
+  width: 42px;
+  height: 42px;
+}
+.instructor-badge .photo-error {
+  display: none;
+}

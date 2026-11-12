@@ -1,3 +1,5 @@
+import { AccountRecovery, ResetPassword } from "./AccountRecovery";
+import { InstructorBadge } from "./InstructorBadge";
 import { PaymentReport } from "./PaymentReport";
 import { EmailSettings } from "./EmailSettings";
 import { BookingPlanner } from "./BookingPlanner";
@@ -70,6 +72,7 @@ const dict = {
     startDate: "Schedule start date",
     endDate: "Schedule end date",
     instructors: "Instructors",
+    userId: "Instructor staff account",
     arenas: "Training locations & arenas",
     breeds: "Horse breeds",
     address: "Address",
@@ -310,6 +313,7 @@ const dict = {
     startDate: "تاريخ بداية الجدول",
     endDate: "تاريخ نهاية الجدول",
     instructors: "المدربون",
+    userId: "حساب الموظف للمدرب",
     arenas: "مواقع التدريب والميادين",
     breeds: "سلالات الخيول",
     address: "العنوان",
@@ -567,6 +571,9 @@ function App() {
   const [lang, setLang] = useState(
       localStorage.getItem("academy-language") || "en",
     ),
+    [resetToken, setResetToken] = useState(() =>
+      new URLSearchParams(window.location.hash.slice(1)).get("reset-password"),
+    ),
     [auth, setAuth] = useState(null),
     [stable, setStable] = useState(null),
     [rawData, setData] = useState(fresh),
@@ -613,6 +620,22 @@ function App() {
   const refreshSequence = useRef(0),
     stableRef = useRef(stable?.id);
   stableRef.current = stable?.id;
+  useEffect(() => {
+    const handle = () =>
+      setResetToken(
+        new URLSearchParams(window.location.hash.slice(1)).get(
+          "reset-password",
+        ),
+      );
+    window.addEventListener("hashchange", handle);
+    if (resetToken)
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    return () => window.removeEventListener("hashchange", handle);
+  }, [resetToken]);
   const data = localizeData(rawData, ar);
   const selectStable = (selected) => {
     if (!selected || selected.id === stable?.id) return;
@@ -875,6 +898,14 @@ function App() {
           ["nameEn", "text", true],
           ["nameAr", "text"],
           ["email", "email"],
+          [
+            "userId",
+            "select",
+            false,
+            data.members
+              .filter((m) => m.role === "owner")
+              .map((m) => [m.id, m.name]),
+          ],
           ["phone", "tel"],
           ["active", "checkbox"],
           ["notes", "textarea"],
@@ -1360,8 +1391,16 @@ function App() {
             id={r.id}
             name={r.name}
             request={request}
-            editable={canManage(kind, "edit")}
-            removable={canManage(kind, "delete")}
+            editable={
+              canManage(kind, "edit") ||
+              (kind === "instructors" &&
+                rawData.myInstructorProfiles?.some((i) => i.id === r.id))
+            }
+            removable={
+              canManage(kind, "delete") ||
+              (kind === "instructors" &&
+                rawData.myInstructorProfiles?.some((i) => i.id === r.id))
+            }
             ar={ar}
           />
         )}
@@ -1573,6 +1612,22 @@ function App() {
       </article>
     );
   }
+  if (resetToken)
+    return (
+      <ResetPassword
+        token={resetToken}
+        ar={ar}
+        onBack={() => {
+          setResetToken(null);
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+          window.location.reload();
+        }}
+      />
+    );
   if (loading)
     return (
       <div className="auth-page">
@@ -1601,7 +1656,7 @@ function App() {
               {failure}
             </p>
           )}
-          <AuthForm t={t} onSuccess={init} />
+          <AuthForm t={t} ar={ar} onSuccess={init} />
         </section>
       </div>
     );
@@ -1856,6 +1911,23 @@ function App() {
             )}
           </div>
 
+          {page === "overview" && !!rawData.myInstructorProfiles?.length && (
+            <section className="panel">
+              <h2>{ar ? "صورتي كمدرب" : "My instructor photo"}</h2>
+              {rawData.myInstructorProfiles.map((i) => (
+                <ProfilePhoto
+                  key={i.id}
+                  kind="instructors"
+                  id={i.id}
+                  name={localizedName(i, ar)}
+                  request={request}
+                  editable
+                  removable
+                  ar={ar}
+                />
+              ))}
+            </section>
+          )}
           {page === "permissions" &&
             manager &&
             !isSystemAdmin &&
@@ -2087,9 +2159,13 @@ function App() {
                       <article className="panel record-card" key={b.id}>
                         <h3>{c.title}</h3>
                         <p>{when(c.startsAt)}</p>
-                        <p>
-                          {c.instructor} · {c.arena}
-                        </p>
+                        <InstructorBadge
+                          session={c}
+                          instructors={data.instructors}
+                          request={request}
+                          ar={ar}
+                        />
+                        <p>{c.arena}</p>
                         <p>{labelHorse(b.horse_id)}</p>
                         <button
                           className="text-button"
@@ -2319,6 +2395,7 @@ function App() {
               </details>
 
               <BookingPlanner
+                request={request}
                 data={data}
                 ar={ar}
                 staff={manager}
@@ -2364,7 +2441,12 @@ function App() {
                     return (
                       <article className="session" key={c.id}>
                         <div className="session-top">
-                          <span className="eyebrow">{c.instructor}</span>
+                          <InstructorBadge
+                            session={c}
+                            instructors={data.instructors}
+                            request={request}
+                            ar={ar}
+                          />
                           <span className="pill">
                             {c.places} {t.places}
                           </span>
@@ -2979,6 +3061,14 @@ function App() {
                   }
                 }}
               >
+                <InstructorBadge
+                  session={
+                    data.classes.find((c) => c.id === modal.classId) || {}
+                  }
+                  instructors={data.instructors}
+                  request={request}
+                  ar={ar}
+                />
                 {manager && (
                   <label>
                     {ar ? "الحجز للعضو" : "Book for member"}
@@ -3511,11 +3601,14 @@ function App() {
     </div>
   );
 }
-function AuthForm({ t, onSuccess }) {
+function AuthForm({ t, ar, onSuccess }) {
+  const [recovery, setRecovery] = useState(false);
   const [mode, setMode] = useState("login"),
     [join, setJoin] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  if (recovery)
+    return <AccountRecovery ar={ar} onBack={() => setRecovery(false)} />;
   return (
     <>
       <div className="tabs">
@@ -3585,6 +3678,24 @@ function AuthForm({ t, onSuccess }) {
             }
           />
         </label>
+        {mode === "login" && (
+          <div className="auth-recovery-links">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setRecovery(true)}
+            >
+              {ar ? "نسيت كلمة المرور؟" : "Forgot password?"}
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setRecovery(true)}
+            >
+              {ar ? "نسيت بريد تسجيل الدخول؟" : "Forgot login email?"}
+            </button>
+          </div>
+        )}
         {mode === "register" && (
           <>
             <label className="check-label">

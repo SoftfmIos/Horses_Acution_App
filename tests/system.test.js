@@ -2881,3 +2881,200 @@ test("booking, partial payment and final payment emails keep complete snapshots 
     404,
   );
 });
+
+test("password recovery uses expiring single-use hashed tokens, generic responses and revokes all sessions", async (t) => {
+  const f = await fixture(t);
+  await f.owner.call("/settings/email", "PUT", {
+    enabled: true,
+    host: "smtp.example.com",
+    port: 587,
+    username: "sender@example.com",
+    from: "sender@example.com",
+    password: "smtp-secret",
+  });
+  const known = await f.owner.call("/auth/forgot-password", "POST", {
+    email: "owner@test.com",
+  });
+  const unknown = await f.owner.call("/auth/forgot-password", "POST", {
+    email: "unknown@test.com",
+  });
+  assert.deepEqual(known, unknown);
+  const job = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE subject LIKE 'Reset your password%' ORDER BY rowid DESC LIMIT 1",
+    )
+    .get();
+  const details = JSON.parse(job.details);
+  const link = f.app.locals.emailSettings.decrypt(
+    details.recovery.linkEncrypted,
+  );
+  const token = new URLSearchParams(new URL(link).hash.slice(1)).get(
+    "reset-password",
+  );
+  assert.equal(job.details.includes(token), false);
+  assert.notEqual(
+    f.db.prepare("SELECT token FROM password_resets").get().token,
+    token,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/auth/reset-password", "POST", {
+        token,
+        password: "short",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/auth/reset-password", "POST", {
+        token,
+        password: "New secure password",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal((await f.owner.call("/auth/me")).httpStatus, 401);
+  assert.equal(
+    (
+      await f.owner.call("/auth/reset-password", "POST", {
+        token,
+        password: "Another secure password",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/auth/login", "POST", {
+        email: "owner@test.com",
+        password: "Very secure password 123!",
+      })
+    ).httpStatus,
+    401,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/auth/login", "POST", {
+        email: "owner@test.com",
+        password: "New secure password",
+      })
+    ).httpStatus,
+    200,
+  );
+  await f.owner.call("/auth/forgot-password", "POST", {
+    email: "owner@test.com",
+  });
+  const next = f.db
+    .prepare(
+      "SELECT * FROM email_outbox WHERE subject LIKE 'Reset your password%' ORDER BY rowid DESC LIMIT 1",
+    )
+    .get();
+  const expired = new URLSearchParams(
+    new URL(
+      f.app.locals.emailSettings.decrypt(
+        JSON.parse(next.details).recovery.linkEncrypted,
+      ),
+    ).hash.slice(1),
+  ).get("reset-password");
+  f.db
+    .prepare("UPDATE password_resets SET expires_at='2000-01-01T00:00:00Z'")
+    .run();
+  assert.equal(
+    (
+      await f.owner.call("/auth/reset-password", "POST", {
+        token: expired,
+        password: "Another secure password",
+      })
+    ).httpStatus,
+    400,
+  );
+});
+
+test("instructors upload only their own linked photos without general instructor edit access, visible in published sessions", async (t) => {
+  const f = await fixture(t);
+  const uid = (await f.member.call("/auth/me")).user.id;
+  assert.equal(
+    (
+      await f.owner.call("/permissions/" + uid, "PUT", {
+        role: "staff",
+        permissions: ["classes"],
+        actionPermissions: { classes: [] },
+      })
+    ).httpStatus,
+    200,
+  );
+  const instructor = await f.create("instructors", {
+    name: "Teacher",
+    email: "member@test.com",
+    userId: uid,
+    active: true,
+  });
+  const other = await f.create("instructors", {
+    name: "Other Teacher",
+    active: true,
+  });
+  const content =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=";
+  assert.equal(
+    (
+      await f.member.call("/photos/instructors/" + instructor.id, "PUT", {
+        content,
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/photos/instructors/" + other.id, "PUT", { content }))
+      .httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.other.call("/photos/instructors/" + instructor.id, "PUT", {
+        content,
+      })
+    ).httpStatus,
+    404,
+  );
+  assert.equal(
+    (await f.member.call("/data")).myInstructorProfiles[0].id,
+    instructor.id,
+  );
+  const invite = await f.owner.call("/invites", "POST"),
+    rider = f.client();
+  await rider.register("photo-rider@test.com", invite.code);
+  assert.equal(
+    (await rider.call("/photos/instructors/" + instructor.id)).httpStatus,
+    403,
+  );
+  const { horse, plan } = await setup(f);
+  await f.create("classes", {
+    title: "Instructor session",
+    startsAt: "2026-11-14T10:00:00Z",
+    endsAt: "2026-11-14T11:00:00Z",
+    capacity: 1,
+    horseIds: [horse.id],
+    instructorId: instructor.id,
+    instructor: "Teacher",
+    arena: "A",
+    planId: plan.id,
+  });
+  assert.equal(
+    (await rider.call("/photos/instructors/" + instructor.id)).content,
+    content,
+  );
+  assert.equal(
+    (
+      await rider.call("/photos/instructors/" + instructor.id, "PUT", {
+        content,
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.member.call("/photos/instructors/" + instructor.id, "DELETE"))
+      .httpStatus,
+    200,
+  );
+});

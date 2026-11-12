@@ -20,6 +20,7 @@ export function stableOperations(c) {
     notify,
     mailDetails,
     createPaymentRequest,
+    ownsInstructor,
   } = c;
   const day = (value) =>
     new Intl.DateTimeFormat("en-CA", {
@@ -100,16 +101,24 @@ export function stableOperations(c) {
         fail("Photo access denied", 403);
     } else {
       const profile = record(org, kind, target);
+      if (kind === "instructors" && ownsInstructor(req, target))
+        return "photo:" + org + ":" + kind + ":" + target;
       if (req.org.role !== "owner") {
         if (write) fail("Staff permission required", 403);
         if (kind === "horses") horseAccess(req, target);
         else {
           const assigned =
+            (profile.active !== false &&
+              records(org, "classes").some(
+                (c) =>
+                  c.startsAt > now() &&
+                  (c.instructorId === target || c.instructor === profile.name),
+              )) ||
             records(org, "horses").some(
               (h) => h.ownerId === req.user.id && h.instructorId === target,
             ) ||
             all(
-              "SELECT class_id FROM reservations WHERE org_id=? AND member_id=? AND status IN ('confirmed','pending_payment')",
+              "SELECT class_id FROM reservations WHERE org_id=? AND member_id=?",
               org,
               req.user.id,
             ).some((b) => {

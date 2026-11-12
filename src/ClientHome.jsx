@@ -1,3 +1,4 @@
+import { InstructorBadge } from "./InstructorBadge";
 import { ProfilePhoto } from "./ProfilePhoto";
 import React, { useState } from "react";
 import {
@@ -119,10 +120,12 @@ export function ClientHome({
               <Clock size={16} />
               {when(b.session.startsAt)}
             </p>
-            <p>
-              <GraduationCap size={16} />
-              {b.session.instructor}
-            </p>
+            <InstructorBadge
+              session={b.session}
+              instructors={data.instructors}
+              request={request}
+              ar={ar}
+            />
             <p>
               <MapPin size={16} />
               {b.session.arena}

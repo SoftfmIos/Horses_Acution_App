@@ -546,7 +546,10 @@ export function createApp(
         .json({ error: "Authentication is busy; try again later" }),
   });
   app.use("/api/auth", (req, res, next) =>
-    req.method === "POST" && ["/login", "/register"].includes(req.path)
+    req.method === "POST" &&
+    ["/login", "/register", "/forgot-password", "/reset-password"].includes(
+      req.path,
+    )
       ? authBurst(req, res, () => authLimit(req, res, next))
       : next(),
   );
@@ -697,6 +700,78 @@ export function createApp(
     cookie(res, token);
     res.status(201).json({ ok: true });
   });
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const emailAddress = text(req.body.email, "email", 254).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)) fail("Invalid email");
+    const user = get("SELECT id FROM users WHERE email=?", emailAddress);
+    if (user) {
+      const org = all(
+        "SELECT org_id FROM memberships WHERE user_id=?",
+        user.id,
+      ).find((m) => emailAvailable(m.org_id));
+      if (org) {
+        const token = randomBytes(32).toString("base64url");
+        const link =
+          (publicOrigin || req.get("origin")) + "/#reset-password=" + token;
+        transaction(() => {
+          run(
+            "DELETE FROM password_resets WHERE user_id=? OR expires_at<=?",
+            user.id,
+            now(),
+          );
+          run(
+            "INSERT INTO password_resets VALUES(?,?,?,0)",
+            hash(token),
+            user.id,
+            new Date(clock().getTime() + 30 * 60000).toISOString(),
+          );
+          const details = mailDetails(org.org_id, user.id);
+          details.recovery = { linkEncrypted: email.encrypt(link) };
+          const rid = id();
+          run(
+            "INSERT INTO email_outbox(id,user_id,subject,body,org_id,details) VALUES(?,?,?,?,?,?)",
+            rid,
+            user.id,
+            "Reset your password / إعادة تعيين كلمة المرور",
+            "A password reset was requested. This link expires in 30 minutes. Ignore this email if you did not request it. / تم طلب إعادة تعيين كلمة المرور. تنتهي صلاحية الرابط خلال 30 دقيقة. تجاهل الرسالة إذا لم تطلب ذلك.",
+            org.org_id,
+            JSON.stringify(details),
+          );
+        });
+      }
+    }
+    res.json({
+      ok: true,
+      message:
+        "If an account can receive email, a reset link will be sent. / إذا كان الحساب يستقبل البريد فسيُرسل رابط إعادة التعيين.",
+    });
+  });
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const token = text(req.body.token, "reset token", 128);
+    const password = text(req.body.password, "password", 128);
+    if (password.length < 6) fail("Password must have at least 6 characters");
+    const row = get(
+      "SELECT user_id FROM password_resets WHERE token=? AND used=0 AND expires_at>?",
+      hash(token),
+      now(),
+    );
+    if (!row)
+      fail("Reset link is invalid or expired. Request a new link.", 400);
+    const encrypted = await passwordHash(password);
+    transaction(() => {
+      const changed = run(
+        "UPDATE password_resets SET used=1 WHERE token=? AND used=0 AND expires_at>?",
+        hash(token),
+        now(),
+      );
+      if (!changed.changes)
+        fail("Reset link is invalid or expired. Request a new link.", 400);
+      run("UPDATE users SET password=? WHERE id=?", encrypted, row.user_id);
+      run("DELETE FROM sessions WHERE user_id=?", row.user_id);
+      run("DELETE FROM password_resets WHERE user_id=?", row.user_id);
+    });
+    res.json({ ok: true });
+  });
   app.post("/api/auth/login", async (req, res) => {
     const email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "password", 128);
@@ -769,9 +844,25 @@ export function createApp(
     transaction(() => expireHolds(req.org.id));
     next();
   });
+  const ownsInstructor = (req, target) =>
+    req.org.role === "owner" &&
+    records(req.org.id, "instructors").some(
+      (i) =>
+        i.id === target &&
+        (i.userId === req.user.id ||
+          (!i.userId &&
+            i.email?.trim().toLowerCase() === req.user.email.toLowerCase())),
+    );
   app.use("/api", (req, res, next) => {
     if (req.org.role !== "owner" || req.org.isAdmin) return next();
     const path = req.path;
+    const instructorPhoto = /^\/photos\/instructors\/([^/]+)$/.exec(path);
+    if (
+      instructorPhoto &&
+      (ownsInstructor(req, instructorPhoto[1]) ||
+        (req.method === "GET" && req.org.permissions.includes("classes")))
+    )
+      return next();
     const required = permissionForRoute(path, req.method);
     if (
       path === "/records/classes" &&
@@ -990,7 +1081,36 @@ export function createApp(
             }
           : {}),
         ...(kind === "instructors"
-          ? { email: optional(b.email), phone: optional(b.phone) }
+          ? {
+              email: optional(b.email).toLowerCase(),
+              phone: optional(b.phone),
+              userId: (() => {
+                const linked =
+                  b.userId ??
+                  (rid ? record(org, "instructors", rid).userId : "") ??
+                  "";
+                if (
+                  linked &&
+                  !get(
+                    "SELECT user_id FROM memberships WHERE org_id=? AND user_id=? AND role='owner'",
+                    org,
+                    linked,
+                  )
+                )
+                  fail("Link an instructor to a staff account in this stable");
+                if (
+                  linked &&
+                  records(org, "instructors").some(
+                    (i) => i.id !== rid && i.userId === linked,
+                  )
+                )
+                  fail(
+                    "This staff account already has an instructor profile",
+                    409,
+                  );
+                return linked;
+              })(),
+            }
           : {}),
       };
     if (kind === "horses") {
@@ -1651,6 +1771,16 @@ export function createApp(
         };
     }
     result.backendVersion = release.version;
+    result.myInstructorProfiles = manager
+      ? records(org, "instructors")
+          .filter((i) => ownsInstructor(req, i.id))
+          .map((i) => ({
+            id: i.id,
+            name: i.name,
+            nameEn: i.nameEn,
+            nameAr: i.nameAr,
+          }))
+      : [];
     result.emailConfigured = emailAvailable(org);
     if (
       manager &&
@@ -1708,6 +1838,7 @@ export function createApp(
     notify,
     mailDetails,
     createPaymentRequest,
+    ownsInstructor,
   });
   app.get("/api/class-series/:id", owner, (req, res) => {
     const slots = records(req.org.id, "classes")

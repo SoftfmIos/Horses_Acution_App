@@ -94,3 +94,29 @@ test("welcome email includes the sign-in link and only includes a password when 
   assert.ok(withPassword.html.includes("A&amp;B&lt;secret&gt;"));
   assert.ok(withPassword.text.includes("A&B<secret>"));
 });
+
+test("password reset emails include the secure reset action without exposing encrypted link data", () => {
+  const result = renderEmail({
+    subject: "Reset your password / إعادة تعيين كلمة المرور",
+    body: "This link expires in 30 minutes. / تنتهي صلاحية الرابط خلال 30 دقيقة.",
+    details: {
+      recipient: "Rider",
+      recovery: {
+        link: "https://academy.example.com/#reset-password=opaque-token",
+        linkEncrypted: "encrypted-value",
+      },
+    },
+  });
+  assert.ok(
+    result.html.includes(
+      'href="https://academy.example.com/#reset-password=opaque-token"',
+    ),
+  );
+  assert.ok(result.html.includes("إعادة تعيين كلمة المرور"));
+  assert.ok(!result.html.includes("encrypted-value"));
+  assert.ok(
+    result.text.includes(
+      "https://academy.example.com/#reset-password=opaque-token",
+    ),
+  );
+});

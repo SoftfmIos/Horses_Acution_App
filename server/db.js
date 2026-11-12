@@ -86,5 +86,8 @@ INSERT OR IGNORE INTO system_admins SELECT m.org_id,m.user_id FROM memberships m
       .some((c) => c.name === "actions")
   )
     db.exec("ALTER TABLE staff_permissions ADD COLUMN actions TEXT");
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS password_resets(token TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires_at TEXT NOT NULL,used INTEGER NOT NULL DEFAULT 0)",
+  );
   return db;
 }
