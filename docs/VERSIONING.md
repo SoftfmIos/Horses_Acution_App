@@ -44,3 +44,11 @@ Additional 1.14.0 workflow controls:
 ## 1.15.0
 
 Task-calendar dates now contain collapsible Feeding, Medical and Other task groups. Each group shows completed/total and its own completion percentage. Daily view opens the groups for immediate check-off; weekly and monthly views start collapsed to keep the calendar compact. A group filter can show only feeding, medical or other work. Status filtering does not inflate the group's completion percentage: progress uses all uncancelled tasks in that date/category. Existing checkboxes, assignee filtering, audit stamps and historical editing limits remain enforced.
+
+## 1.16.0
+
+Users & Permissions now separates page access (viewing) from independent Add, Edit and Delete permissions. Instructors, arenas, breeds, stalls, boarding, discounts, vouchers and stable management each have separate rows. Reports are view-only and preferences use Edit; unavailable operations are disabled in the matrix.
+
+The API checks the action for every protected function, including POST-based operations: booking cancellation and ending boarding require Delete; task completion/reopening, attendance, payments, refunds and profile-photo changes require Edit; invitations, documents, stock receipts and new bookings require Add. Expanding an existing class requires both Add and Edit. Administrator-only controls and task-date locks remain additional restrictions.
+
+Existing staff page grants migrate to their previous full actions and associated function pages. A new nullable SQLite column stores explicit action grants without replacing existing data. Older module-only permission clients retain their previous semantics; the new matrix refuses to save against a backend that does not advertise permissionVersion 2. Update and restart cPanel together with the frontend.

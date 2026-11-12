@@ -1,7 +1,16 @@
 import React, { useState } from "react";
 import { localizedName } from "./localization";
 import { riyadhDay } from "./calendar";
-export function Boarding({ data, ar, request, action, busy, openForm, money }) {
+export function Boarding({
+  data,
+  ar,
+  request,
+  action,
+  busy,
+  openForm,
+  money,
+  can = () => true,
+}) {
   const [form, setForm] = useState(null),
     [error, setError] = useState("");
   const l = (en, a) => (ar ? a : en);
@@ -25,6 +34,7 @@ export function Boarding({ data, ar, request, action, busy, openForm, money }) {
         </p>
         <button
           className="primary"
+          disabled={!can("boarding", "add")}
           onClick={() => {
             setError("");
             setForm({ startDate: today, endDate: today });
@@ -32,7 +42,11 @@ export function Boarding({ data, ar, request, action, busy, openForm, money }) {
         >
           {l("Assign boarding", "إضافة إيواء")}
         </button>
-        <button className="soft" onClick={() => openForm("stalls")}>
+        <button
+          className="soft"
+          disabled={!can("stalls", "add")}
+          onClick={() => openForm("stalls")}
+        >
           {l("Add stall", "إضافة مربط")}
         </button>
       </div>
@@ -45,7 +59,11 @@ export function Boarding({ data, ar, request, action, busy, openForm, money }) {
               {l("occupied today", "مشغول اليوم")}
             </p>
             <p>{s.notes}</p>
-            <button className="soft" onClick={() => openForm("stalls", s)}>
+            <button
+              className="soft"
+              disabled={!can("stalls", "edit")}
+              onClick={() => openForm("stalls", s)}
+            >
               {l("Edit stall", "تعديل المربط")}
             </button>
           </article>
@@ -77,7 +95,7 @@ export function Boarding({ data, ar, request, action, busy, openForm, money }) {
             </small>
             {b.status === "active" && (
               <button
-                disabled={busy}
+                disabled={busy || !can("boarding", "delete")}
                 onClick={() =>
                   action(() =>
                     request("/boarding/" + b.id + "/end", { method: "POST" }),
@@ -190,7 +208,14 @@ export function Boarding({ data, ar, request, action, busy, openForm, money }) {
     </section>
   );
 }
-export function FeedStock({ data, ar, request, action, busy }) {
+export function FeedStock({
+  data,
+  ar,
+  request,
+  action,
+  busy,
+  canReceive = true,
+}) {
   const [form, setForm] = useState({}),
     l = (en, a) => (ar ? a : en);
 
@@ -275,7 +300,7 @@ export function FeedStock({ data, ar, request, action, busy }) {
                   }
                 />
               </label>
-              <button className="primary" disabled={busy}>
+              <button className="primary" disabled={busy || !canReceive}>
                 {l("Receive stock", "استلام المخزون")}
               </button>
             </form>

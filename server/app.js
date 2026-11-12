@@ -1,4 +1,10 @@
-import { STAFF_MODULES, mayEditTaskDate } from "../shared/permissions.js";
+import {
+  PERMISSION_PAGES,
+  PERMISSION_ACTIONS,
+  staffPolicy,
+  permissionForRoute,
+  mayEditTaskDate,
+} from "../shared/permissions.js";
 import {
   DEFAULT_HOLD_HOURS,
   MAX_HOLD_HOURS,
@@ -477,14 +483,18 @@ export function createApp(
         uid,
       ),
     );
-  const userModules = (org, uid) => {
+  const userPolicy = (org, uid) => {
     const row = get(
-      "SELECT modules FROM staff_permissions WHERE org_id=? AND user_id=?",
+      "SELECT modules,actions FROM staff_permissions WHERE org_id=? AND user_id=?",
       org,
       uid,
     );
-    return row ? JSON.parse(row.modules) : STAFF_MODULES;
+    return staffPolicy(
+      row ? JSON.parse(row.modules) : PERMISSION_PAGES,
+      row?.actions ? JSON.parse(row.actions) : null,
+    );
   };
+  const userModules = (org, uid) => userPolicy(org, uid).modules;
   function adminOnly(req, res, next) {
     if (!adminUser(req.org.id, req.user.id))
       fail("System administrator permission required", 403);
@@ -502,6 +512,7 @@ export function createApp(
       ...org,
       isAdmin: adminUser(org.id, req.user.id),
       permissions: userModules(org.id, req.user.id),
+      actionPermissions: userPolicy(org.id, req.user.id).actions,
     };
     next();
   }
@@ -625,6 +636,7 @@ export function createApp(
           ...o,
           isAdmin: adminUser(o.id, req.user.id),
           permissions: userModules(o.id, req.user.id),
+          actionPermissions: userPolicy(o.id, req.user.id).actions,
           nameEn: settings?.academyNameEn ?? o.name,
           nameAr: settings?.academyNameAr || "",
         };
@@ -668,51 +680,34 @@ export function createApp(
   app.use("/api", (req, res, next) => {
     if (req.org.role !== "owner" || req.org.isAdmin) return next();
     const path = req.path;
-    if (path === "/photos/members/" + req.user.id) return next();
-    let module = path.startsWith("/records/")
-      ? path.split("/")[2]
-      : path.startsWith("/photos/")
-        ? path.split("/")[2]
-        : null;
-    module =
-      {
-        plans: "pricing",
-        discounts: "pricing",
-        vouchers: "billing",
-        instructors: "classes",
-        arenas: "classes",
-        breeds: "horses",
-        stalls: "horses",
-      }[module] || module;
-    if (!module)
-      module = /^\/(quote|bookings|class-series|attendance|waitlist)/.test(path)
-        ? "classes"
-        : /^\/(proformas|packages)/.test(path)
-          ? "billing"
-          : /^\/(horses|horse-documents|boarding)/.test(path)
-            ? "horses"
-            : /^\/tasks/.test(path)
-              ? "tasks"
-              : /^\/inventory/.test(path)
-                ? "inventory"
-                : /^\/(members|invites)/.test(path)
-                  ? "members"
-                  : /^\/(settings|stables)/.test(path)
-                    ? "settings"
-                    : /^\/reports/.test(path)
-                      ? "reports"
-                      : null;
+    const required = permissionForRoute(path, req.method);
     if (
-      module &&
-      STAFF_MODULES.includes(module) &&
-      !req.org.permissions.includes(module)
+      path === "/records/classes" &&
+      req.method === "POST" &&
+      req.body.sourceClassId &&
+      !req.org.actionPermissions.classes?.includes("edit")
     )
-      fail("You do not have permission for this module", 403);
+      fail("Edit permission is required to expand an existing class", 403);
+    if (
+      required &&
+      (!req.org.permissions.includes(required.page) ||
+        (required.action &&
+          !req.org.actionPermissions[required.page]?.includes(required.action)))
+    )
+      fail(
+        "You do not have " +
+          (required.action || "view") +
+          " permission for " +
+          required.page,
+        403,
+      );
     next();
   });
   app.get("/api/permissions", adminOnly, (req, res) =>
     res.json({
-      modules: STAFF_MODULES,
+      modules: PERMISSION_PAGES,
+      actions: PERMISSION_ACTIONS,
+      permissionVersion: 2,
       users: all(
         "SELECT u.id,u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.org_id=?",
         req.org.id,
@@ -720,6 +715,7 @@ export function createApp(
         ...u,
         isAdmin: adminUser(req.org.id, u.id),
         permissions: userModules(req.org.id, u.id),
+        actionPermissions: userPolicy(req.org.id, u.id).actions,
       })),
     }),
   );
@@ -737,9 +733,25 @@ export function createApp(
     if (
       !["admin", "staff", "member"].includes(b.role) ||
       !Array.isArray(b.permissions) ||
-      b.permissions.some((p) => !STAFF_MODULES.includes(p))
+      b.permissions.some((p) => !PERMISSION_PAGES.includes(p))
     )
       fail("Invalid permissions");
+    if (
+      b.actionPermissions !== undefined &&
+      (!b.actionPermissions ||
+        typeof b.actionPermissions !== "object" ||
+        Array.isArray(b.actionPermissions) ||
+        Object.entries(b.actionPermissions).some(
+          ([page, actions]) =>
+            !PERMISSION_PAGES.includes(page) ||
+            !Array.isArray(actions) ||
+            actions.some((a) => !PERMISSION_ACTIONS.includes(a)) ||
+            (!b.permissions.includes(page) && actions.length),
+        ))
+    )
+      fail("Invalid action permissions");
+    const policy = staffPolicy(b.permissions, b.actionPermissions ?? null);
+
     if (
       b.role !== "admin" &&
       adminUser(req.org.id, uid) &&
@@ -762,10 +774,11 @@ export function createApp(
       if (b.role === "admin")
         run("INSERT INTO system_admins VALUES(?,?)", req.org.id, uid);
       run(
-        "INSERT INTO staff_permissions VALUES(?,?,?) ON CONFLICT(org_id,user_id) DO UPDATE SET modules=excluded.modules",
+        "INSERT INTO staff_permissions(org_id,user_id,modules,actions) VALUES(?,?,?,?) ON CONFLICT(org_id,user_id) DO UPDATE SET modules=excluded.modules,actions=excluded.actions",
         req.org.id,
         uid,
-        JSON.stringify([...new Set(b.permissions)]),
+        JSON.stringify(policy.modules),
+        JSON.stringify(policy.actions),
       );
       audit(req, "permissions.update", uid);
     });
@@ -1219,6 +1232,13 @@ export function createApp(
         fail("Assignee must belong to stable");
       const previous = rid ? record(org, "tasks", rid) : {};
       if (
+        !rid &&
+        b.done === true &&
+        !req.org.isAdmin &&
+        !req.org.actionPermissions.tasks?.includes("edit")
+      )
+        fail("Edit permission is required to mark a task complete", 403);
+      if (
         !mayEditTaskDate(b.dueAt, now(), req.org.isAdmin) ||
         (rid && !mayEditTaskDate(previous.dueAt, now(), req.org.isAdmin))
       )
@@ -1470,6 +1490,7 @@ export function createApp(
     result.userRole = req.org.role;
     result.isAdmin = req.org.isAdmin;
     result.permissions = req.org.permissions;
+    result.actionPermissions = req.org.actionPermissions;
     if (manager && !req.org.isAdmin) {
       const allowed = (p) => req.org.permissions.includes(p);
       for (const [module, collections] of Object.entries({
@@ -1477,9 +1498,14 @@ export function createApp(
         feeding: ["feeding"],
         tasks: ["tasks", "taskHistory"],
         inventory: ["inventory", "stockMovements"],
-        billing: ["proformas", "payments", "creditLedger", "vouchers"],
-        pricing: ["discounts"],
-        horses: ["boarding", "stalls", "breeds"],
+        billing: ["proformas", "payments", "creditLedger"],
+        vouchers: ["vouchers"],
+        discounts: ["discounts"],
+        boarding: ["boarding"],
+        stalls: ["stalls"],
+        breeds: ["breeds"],
+        instructors: ["instructors"],
+        arenas: ["arenas"],
       }))
         if (!allowed(module))
           for (const collection of collections) result[collection] = [];
@@ -1488,8 +1514,24 @@ export function createApp(
         result.bookings = [];
         result.attendance = [];
         result.waitlist = [];
-        result.instructors = [];
-        result.arenas = [];
+      }
+      if (allowed("classes")) {
+        if (!allowed("instructors"))
+          result.instructors = records(org, "instructors").map((i) => ({
+            id: i.id,
+            name: i.name,
+            nameEn: i.nameEn,
+            nameAr: i.nameAr,
+            active: i.active,
+          }));
+        if (!allowed("arenas"))
+          result.arenas = records(org, "arenas").map((a) => ({
+            id: a.id,
+            name: a.name,
+            nameEn: a.nameEn,
+            nameAr: a.nameAr,
+            active: a.active,
+          }));
       }
       if (!allowed("horses"))
         result.horses = result.horses.map((h) => ({

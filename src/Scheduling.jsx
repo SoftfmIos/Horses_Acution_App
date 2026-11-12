@@ -237,6 +237,9 @@ export function MemberTools({
   ar,
   busy = false,
   isAdmin = false,
+  canAdd = true,
+  canEdit = true,
+  canDelete = true,
 }) {
   const [form, setForm] = useState(null);
   const label = (en, arabic) => (ar ? arabic : en);
@@ -245,6 +248,7 @@ export function MemberTools({
       <div className="member-toolbar">
         <button
           className="primary"
+          disabled={!canAdd}
           onClick={() =>
             setForm({
               mode: "create",
@@ -259,6 +263,7 @@ export function MemberTools({
         </button>
         <button
           className="soft"
+          disabled={!canAdd}
           onClick={() => setForm({ mode: "link", email: "" })}
         >
           {label("Add existing member", "إضافة عضو مسجل")}
@@ -414,7 +419,8 @@ export function MemberTools({
               id={m.id}
               name={m.name}
               request={request}
-              editable
+              editable={canEdit}
+              removable={canDelete}
               ar={ar}
             />
             <strong>
@@ -450,6 +456,7 @@ export function MemberTools({
             </label>
             <button
               className="soft"
+              disabled={!canEdit}
               onClick={() =>
                 setForm({
                   mode: "edit",
@@ -463,6 +470,7 @@ export function MemberTools({
             </button>
             <button
               className="text-button"
+              disabled={!canDelete}
               onClick={() => {
                 if (
                   window.confirm(

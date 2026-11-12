@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Home, Plus } from "lucide-react";
 import { localizedName } from "./localization";
 export function StablesManager({
+  canCreate = true,
   stables,
   current,
   ar,
@@ -19,6 +20,7 @@ export function StablesManager({
         </h2>
         <button
           className="primary"
+          disabled={!canCreate}
           onClick={() => setForm({ nameEn: "", nameAr: "" })}
         >
           <Plus size={18} />

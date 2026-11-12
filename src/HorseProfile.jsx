@@ -6,6 +6,9 @@ export function HorseProfile({
   ar,
   request,
   staff,
+  canEdit = staff,
+  canAddDocuments = staff,
+  canDeleteDocuments = staff,
   when,
   busy,
   action,
@@ -97,7 +100,8 @@ export function HorseProfile({
             id={h.id}
             name={localizedName(h, ar)}
             request={request}
-            editable={staff}
+            editable={canEdit}
+            removable={canDeleteDocuments}
             ar={ar}
           />
           <h3>{localizedName(h, ar)}</h3>
@@ -314,7 +318,7 @@ export function HorseProfile({
                   "جوازات وشهادات وتقارير طبية ووثائق ملكية. PDF أو PNG أو JPEG بحد أقصى 2 MB.",
                 )}
               </p>
-              {staff && (
+              {canAddDocuments && (
                 <form className="panel profile-upload" onSubmit={upload}>
                   <label>
                     {l("Document title (English)", "عنوان الوثيقة بالإنجليزية")}
@@ -374,7 +378,7 @@ export function HorseProfile({
                   >
                     {l("Download", "تنزيل")}
                   </button>
-                  {staff && (
+                  {canDeleteDocuments && (
                     <button
                       disabled={busy}
                       onClick={async () => {

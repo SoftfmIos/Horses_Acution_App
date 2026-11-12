@@ -1684,3 +1684,28 @@ pre {
   display: inline;
   margin-inline-start: 12px;
 }
+.permission-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+  margin-top: 16px;
+}
+.permission-matrix th,
+.permission-matrix td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+.permission-matrix th:first-child {
+  text-align: start;
+}
+.permission-matrix input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--navy);
+  cursor: pointer;
+}
+.permission-matrix input:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

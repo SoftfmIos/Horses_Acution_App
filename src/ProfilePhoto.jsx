@@ -6,6 +6,7 @@ export function ProfilePhoto({
   name,
   request,
   editable = false,
+  removable = editable,
   ar = false,
 }) {
   const [photo, setPhoto] = useState(null),
@@ -71,26 +72,32 @@ export function ProfilePhoto({
           <UserRound aria-hidden="true" size={30} />
         )}
       </div>
-      {editable && (
+      {(editable || removable) && (
         <div className="profile-photo-actions">
-          <label className="soft photo-upload-label" htmlFor={inputId}>
-            <Camera size={16} />
-            {busy
-              ? l("Saving…", "جار الحفظ…")
-              : l("Change photo", "تغيير الصورة")}
-          </label>
-          <input
-            id={inputId}
-            aria-label={l("Upload photo for ", "رفع صورة ") + (name || kind)}
-            type="file"
-            accept="image/jpeg,image/png"
-            disabled={busy}
-            onChange={(e) => {
-              upload(e.target.files[0]);
-              e.target.value = "";
-            }}
-          />
-          {photo && (
+          {editable && (
+            <>
+              <label className="soft photo-upload-label" htmlFor={inputId}>
+                <Camera size={16} />
+                {busy
+                  ? l("Saving…", "جار الحفظ…")
+                  : l("Change photo", "تغيير الصورة")}
+              </label>
+              <input
+                id={inputId}
+                aria-label={
+                  l("Upload photo for ", "رفع صورة ") + (name || kind)
+                }
+                type="file"
+                accept="image/jpeg,image/png"
+                disabled={busy}
+                onChange={(e) => {
+                  upload(e.target.files[0]);
+                  e.target.value = "";
+                }}
+              />
+            </>
+          )}
+          {photo && removable && (
             <button
               className="text-button"
               disabled={busy}

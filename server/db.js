@@ -79,5 +79,12 @@ INSERT OR IGNORE INTO system_admins SELECT m.org_id,m.user_id FROM memberships m
   db.exec(
     "INSERT OR IGNORE INTO system_admins SELECT a.org_id,a.actor_id FROM audit a JOIN memberships m ON m.org_id=a.org_id AND m.user_id=a.actor_id WHERE a.action='admin.bootstrap' AND m.role='owner'",
   );
+  if (
+    !db
+      .prepare("PRAGMA table_info(staff_permissions)")
+      .all()
+      .some((c) => c.name === "actions")
+  )
+    db.exec("ALTER TABLE staff_permissions ADD COLUMN actions TEXT");
   return db;
 }

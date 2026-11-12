@@ -2352,3 +2352,158 @@ test("system admins manage module permissions and staff cannot change tasks befo
     200,
   );
 });
+
+test("staff Add Edit Delete permissions are independent and enforced across records and functions", async (t) => {
+  const f = await fixture(t),
+    { horse, cls, plan } = await setup(f),
+    staff = (await f.member.call("/auth/me")).user.id;
+  const grant = async (permissions) => {
+    const modules = Object.keys(permissions);
+    const r = await f.owner.call("/permissions/" + staff, "PUT", {
+      role: "staff",
+      permissions: modules,
+      actionPermissions: permissions,
+    });
+    assert.equal(r.httpStatus, 200, JSON.stringify(r));
+  };
+  await grant({ horses: ["add"] });
+  assert.equal(
+    (await f.member.call("/records/horses", "POST", { name: "Add only" }))
+      .httpStatus,
+    201,
+  );
+  assert.equal(
+    (await f.member.call("/records/horses/" + horse.id)).httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.member.call("/records/horses/" + horse.id, "PUT", {
+        ...horse,
+        name: "Forbidden edit",
+      })
+    ).httpStatus,
+    403,
+  );
+  const content =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF1cAAAAASUVORK5CYII=";
+  assert.equal(
+    (await f.member.call("/photos/horses/" + horse.id, "PUT", { content }))
+      .httpStatus,
+    403,
+  );
+  await grant({ horses: ["edit"] });
+  assert.equal(
+    (await f.member.call("/records/horses", "POST", { name: "No add" }))
+      .httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.member.call("/records/horses/" + horse.id, "PUT", {
+        ...horse,
+        name: "Edit only",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/photos/horses/" + horse.id, "PUT", { content }))
+      .httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/photos/horses/" + horse.id, "DELETE")).httpStatus,
+    403,
+  );
+  await grant({ horses: ["delete"] });
+  assert.equal(
+    (await f.member.call("/photos/horses/" + horse.id, "DELETE")).httpStatus,
+    200,
+  );
+  await grant({ classes: ["add"], billing: ["add"] });
+  assert.equal(
+    (
+      await f.member.call("/records/classes", "POST", {
+        ...cls,
+        sourceClassId: cls.id,
+        repeatMode: "none",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.member.call("/records/instructors", "POST", {
+        name: "Must not inherit classes access",
+      })
+    ).httpStatus,
+    403,
+  );
+  const booking = await f.member.call("/bookings", "POST", {
+    memberId: staff,
+    classId: cls.id,
+  });
+  assert.equal(booking.httpStatus, 201);
+  assert.equal(
+    (await f.member.call("/bookings/" + booking.id + "/cancel", "POST"))
+      .httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.member.call(
+        "/proformas/" + booking.proformaId + "/payment",
+        "POST",
+        { amount: plan.amount, reference: "NO-EDIT", externalRef: "NO-EDIT" },
+      )
+    ).httpStatus,
+    403,
+  );
+  await grant({ classes: ["delete"] });
+  assert.equal(
+    (await f.member.call("/bookings/" + booking.id + "/cancel", "POST"))
+      .httpStatus,
+    200,
+  );
+  assert.equal(
+    (
+      await f.member.call("/bookings", "POST", {
+        memberId: staff,
+        classId: cls.id,
+      })
+    ).httpStatus,
+    403,
+  );
+  await grant({ tasks: ["add"] });
+  assert.equal(
+    (
+      await f.member.call("/records/tasks", "POST", {
+        title: "Cannot complete with Add",
+        dueAt: "2026-11-12T08:00:00Z",
+        done: true,
+      })
+    ).httpStatus,
+    403,
+  );
+  await grant({ horses: [] });
+  assert.equal(
+    (await f.member.call("/records/horses/" + horse.id)).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/records/horses", "POST", { name: "Read only" }))
+      .httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/permissions/" + staff, "PUT", {
+        role: "staff",
+        permissions: ["horses"],
+        actionPermissions: { horses: ["unknown"] },
+      })
+    ).httpStatus,
+    400,
+  );
+});

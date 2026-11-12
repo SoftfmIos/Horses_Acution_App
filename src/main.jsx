@@ -1,5 +1,9 @@
 import { UserPermissions } from "./UserPermissions";
-import { STAFF_MODULES, mayEditTaskDate } from "../shared/permissions";
+import {
+  PERMISSION_PAGES,
+  staffPolicy,
+  mayEditTaskDate,
+} from "../shared/permissions";
 import { ProfilePhoto } from "./ProfilePhoto";
 import { DEFAULT_HOLD_HOURS } from "../shared/booking-policy";
 import { discountCodeForForm } from "../shared/discount-code";
@@ -622,25 +626,23 @@ function App() {
     );
   const isSystemAdmin = rawData.isAdmin ?? stable?.isAdmin ?? false;
   const allowedModules =
-    rawData.permissions || stable?.permissions || STAFF_MODULES;
+    rawData.permissions || stable?.permissions || PERMISSION_PAGES;
   const moduleFor = (kind) =>
-    ({
-      plans: "pricing",
-      discounts: "pricing",
-      vouchers: "billing",
-      instructors: "classes",
-      arenas: "classes",
-      breeds: "horses",
-      stalls: "horses",
-      boardingManagement: "horses",
-    })[kind] || kind;
-  const permitted = (kind) =>
-    isSystemAdmin || allowedModules.includes(moduleFor(kind));
+    ({ plans: "pricing", boardingManagement: "boarding" })[kind] || kind;
+  const actionGrants =
+    rawData.actionPermissions ||
+    stable?.actionPermissions ||
+    staffPolicy(allowedModules).actions;
+  const permitted = (kind, action) =>
+    isSystemAdmin ||
+    (allowedModules.includes(moduleFor(kind)) &&
+      (!action || actionGrants[moduleFor(kind)]?.includes(action)));
   const canComplete = (task) =>
     manager &&
-    permitted("tasks") &&
+    permitted("tasks", "edit") &&
     mayEditTaskDate(task.dueAt, new Date().toISOString(), isSystemAdmin);
-  const canManage = (kind) => manager && permitted(kind);
+  const canManage = (kind, action = "add") =>
+    manager && permitted(kind, action);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = ar ? "rtl" : "ltr";
@@ -789,7 +791,9 @@ function App() {
           ["boardingManagement", HorseHead],
           ["reports", BarChart3],
           ["members", Users],
-          ["settings", SettingsIcon],
+          ...(permitted("settings") || permitted("stables")
+            ? [["settings", SettingsIcon]]
+            : []),
           ...(isSystemAdmin ? [["permissions", Users]] : []),
         ]
       : []),
@@ -824,7 +828,9 @@ function App() {
     if (
       manager &&
       !["overview", "notifications", "permissions"].includes(nav[i][0]) &&
-      !permitted(nav[i][0])
+      !(nav[i][0] === "settings"
+        ? permitted("settings") || permitted("stables")
+        : permitted(nav[i][0]))
     )
       nav.splice(i, 1);
   if (staff)
@@ -1337,13 +1343,14 @@ function App() {
             id={r.id}
             name={r.name}
             request={request}
-            editable={manager}
+            editable={canManage(kind, "edit")}
+            removable={canManage(kind, "delete")}
             ar={ar}
           />
         )}
         <div className="section-heading">
           <h3>{r.name || r.title || r.code || labelHorse(r.horseId)}</h3>
-          {canManage(kind) &&
+          {canManage(kind, "edit") &&
             kind !== "vouchers" &&
             !(kind === "tasks" && (r.medicalId || r.feedingPlanId)) && (
               <button
@@ -1809,7 +1816,7 @@ function App() {
                   {t.add}
                 </button>
               )}
-            {page === "billing" && manager && (
+            {page === "billing" && canManage("billing", "add") && (
               <button
                 className="primary"
                 onClick={() => setModal({ kind: "manualBilling", form: {} })}
@@ -1817,7 +1824,7 @@ function App() {
                 {t.createRequest}
               </button>
             )}
-            {page === "members" && manager && (
+            {page === "members" && canManage("members", "add") && (
               <button
                 className="primary"
                 onClick={() =>
@@ -1847,12 +1854,14 @@ function App() {
               request={request}
               action={action}
               busy={busy}
+              can={canManage}
               openForm={openForm}
               money={money}
             />
           )}
           {page === "inventory" && manager && (
             <FeedStock
+              canReceive={canManage("inventory", "add")}
               data={data}
               ar={ar}
               request={request}
@@ -1889,6 +1898,7 @@ function App() {
           )}
           {page === "settings" && manager && (
             <StablesManager
+              canCreate={canManage("stables", "add")}
               stables={auth.stables}
               current={stable.id}
               ar={ar}
@@ -1919,6 +1929,8 @@ function App() {
           )}
           {page === "settings" && manager && (
             <SettingsHub
+              can={canManage}
+              canView={permitted}
               settings={data.settings}
               stableName={localizedName(
                 {
@@ -2215,6 +2227,14 @@ function App() {
                   horses={data.horses}
                   ar={ar}
                   onSelect={(c) => {
+                    if (manager && !canManage("classes", "add")) {
+                      notify(
+                        ar
+                          ? "ليست لديك صلاحية إضافة حجز."
+                          : "You do not have Add permission to book a slot.",
+                      );
+                      return;
+                    }
                     const existing = data.bookings.find(
                       (b) =>
                         b.class_id === c.id &&
@@ -2294,7 +2314,11 @@ function App() {
                         <div className="session-bottom">
                           <button
                             className="primary"
-                            disabled={busy}
+                            disabled={
+                              busy ||
+                              (manager && !b && !canManage("classes", "add")) ||
+                              (manager && b && !canManage("classes", "delete"))
+                            }
                             onClick={() =>
                               !b && c.places <= 0
                                 ? action(() =>
@@ -2325,47 +2349,50 @@ function App() {
                                   : "Join waitlist"
                                 : t.book}
                           </button>
-                          {manager && !c.seriesId && (
-                            <button
-                              className="soft"
-                              onClick={() =>
-                                setModal({
-                                  kind: "classes",
-                                  form: {
-                                    ...defaults("classes"),
-                                    ...c,
-                                    id: undefined,
-                                    sourceClassId: c.id,
-                                    instructorIds: c.instructorId
-                                      ? [c.instructorId]
-                                      : data.instructors
-                                          .filter(
-                                            (i) =>
-                                              i.nameEn === c.instructorEn ||
-                                              i.name === c.instructor,
-                                          )
-                                          .map((i) => i.id),
-                                    repeatMode: "weekdays",
-                                    repeatDays: [
-                                      new Date(
-                                        riyadhDay(c.startsAt) + "T12:00:00Z",
-                                      ).getUTCDay(),
-                                    ],
-                                    repeatUntil: riyadhDay(
-                                      new Date(
-                                        Date.parse(c.startsAt) + 28 * 86400000,
+                          {canManage("classes", "add") &&
+                            canManage("classes", "edit") &&
+                            !c.seriesId && (
+                              <button
+                                className="soft"
+                                onClick={() =>
+                                  setModal({
+                                    kind: "classes",
+                                    form: {
+                                      ...defaults("classes"),
+                                      ...c,
+                                      id: undefined,
+                                      sourceClassId: c.id,
+                                      instructorIds: c.instructorId
+                                        ? [c.instructorId]
+                                        : data.instructors
+                                            .filter(
+                                              (i) =>
+                                                i.nameEn === c.instructorEn ||
+                                                i.name === c.instructor,
+                                            )
+                                            .map((i) => i.id),
+                                      repeatMode: "weekdays",
+                                      repeatDays: [
+                                        new Date(
+                                          riyadhDay(c.startsAt) + "T12:00:00Z",
+                                        ).getUTCDay(),
+                                      ],
+                                      repeatUntil: riyadhDay(
+                                        new Date(
+                                          Date.parse(c.startsAt) +
+                                            28 * 86400000,
+                                        ),
                                       ),
-                                    ),
-                                  },
-                                })
-                              }
-                            >
-                              {ar
-                                ? "جدولة أيام إضافية"
-                                : "Schedule selected days"}
-                            </button>
-                          )}
-                          {canManage("classes") && (
+                                    },
+                                  })
+                                }
+                              >
+                                {ar
+                                  ? "جدولة أيام إضافية"
+                                  : "Schedule selected days"}
+                              </button>
+                            )}
+                          {canManage("classes", "edit") && (
                             <button
                               className="text-button"
                               onClick={() => openForm("classes", c)}
@@ -2399,7 +2426,7 @@ function App() {
                 ))}
               </section>
               <h2 className="subheading booking-table-heading">
-                {canManage("classes") ? t.allBookings : t.myBookings}
+                {manager ? t.allBookings : t.myBookings}
               </h2>
               <div className="panel table-wrap classes-booking-table">
                 <table>
@@ -2420,45 +2447,44 @@ function App() {
                         <td>
                           {data.classes.find((c) => c.id === b.class_id)?.title}
                         </td>
-                        {canManage("classes") && (
-                          <td>{memberName(b.member_id)}</td>
-                        )}
+                        {manager && <td>{memberName(b.member_id)}</td>}
                         <td>{labelHorse(b.horse_id)}</td>
                         <td>
                           {t[b.status] || b.status}
-                          {canManage("classes") && b.status === "confirmed" && (
-                            <label>
-                              {ar ? "الحضور" : "Attendance"}
-                              <select
-                                aria-label={ar ? "الحضور" : "Attendance"}
-                                value={
-                                  data.attendance?.find(
-                                    (a) => a.reservation_id === b.id,
-                                  )?.status || ""
-                                }
-                                onChange={(e) =>
-                                  e.target.value &&
-                                  action(() =>
-                                    request("/attendance/" + b.id, {
-                                      method: "PUT",
-                                      body: { status: e.target.value },
-                                    }),
-                                  )
-                                }
-                              >
-                                <option value="">—</option>
-                                <option value="present">
-                                  {ar ? "حاضر" : "Present"}
-                                </option>
-                                <option value="absent">
-                                  {ar ? "غائب" : "Absent"}
-                                </option>
-                                <option value="excused">
-                                  {ar ? "بعذر" : "Excused"}
-                                </option>
-                              </select>
-                            </label>
-                          )}
+                          {canManage("classes", "edit") &&
+                            b.status === "confirmed" && (
+                              <label>
+                                {ar ? "الحضور" : "Attendance"}
+                                <select
+                                  aria-label={ar ? "الحضور" : "Attendance"}
+                                  value={
+                                    data.attendance?.find(
+                                      (a) => a.reservation_id === b.id,
+                                    )?.status || ""
+                                  }
+                                  onChange={(e) =>
+                                    e.target.value &&
+                                    action(() =>
+                                      request("/attendance/" + b.id, {
+                                        method: "PUT",
+                                        body: { status: e.target.value },
+                                      }),
+                                    )
+                                  }
+                                >
+                                  <option value="">—</option>
+                                  <option value="present">
+                                    {ar ? "حاضر" : "Present"}
+                                  </option>
+                                  <option value="absent">
+                                    {ar ? "غائب" : "Absent"}
+                                  </option>
+                                  <option value="excused">
+                                    {ar ? "بعذر" : "Excused"}
+                                  </option>
+                                </select>
+                              </label>
+                            )}
                         </td>
                         <td>
                           {["confirmed", "pending_payment"].includes(
@@ -2466,7 +2492,10 @@ function App() {
                           ) && (
                             <button
                               className="text-button"
-                              disabled={busy}
+                              disabled={
+                                busy ||
+                                (manager && !canManage("classes", "delete"))
+                              }
                               onClick={() =>
                                 action(() =>
                                   request("/bookings/" + b.id + "/cancel", {
@@ -2591,7 +2620,7 @@ function App() {
                           >
                             {t.view}
                           </button>
-                          {manager && p.paid > 0 && (
+                          {canManage("billing", "edit") && p.paid > 0 && (
                             <button
                               className="text-button"
                               onClick={() =>
@@ -2605,20 +2634,21 @@ function App() {
                               {t.refund}
                             </button>
                           )}
-                          {manager && p.status === "open" && (
-                            <button
-                              className="text-button"
-                              onClick={() =>
-                                setModal({
-                                  kind: "payment",
-                                  record: p,
-                                  form: {},
-                                })
-                              }
-                            >
-                              {t.payment}
-                            </button>
-                          )}
+                          {canManage("billing", "edit") &&
+                            p.status === "open" && (
+                              <button
+                                className="text-button"
+                                onClick={() =>
+                                  setModal({
+                                    kind: "payment",
+                                    record: p,
+                                    form: {},
+                                  })
+                                }
+                              >
+                                {t.payment}
+                              </button>
+                            )}
                         </td>
                       </tr>
                     ))}
@@ -2662,6 +2692,9 @@ function App() {
           {page === "members" && manager && (
             <MemberTools
               key={stable.id}
+              canAdd={canManage("members", "add")}
+              canEdit={canManage("members", "edit")}
+              canDelete={canManage("members", "delete")}
               isAdmin={isSystemAdmin}
               members={data.members}
               busy={busy}
@@ -2789,6 +2822,9 @@ function App() {
                 ar={ar}
                 request={request}
                 staff={manager}
+                canEdit={canManage("horses", "edit")}
+                canAddDocuments={canManage("horses", "add")}
+                canDeleteDocuments={canManage("horses", "delete")}
                 when={when}
                 busy={busy}
                 action={action}

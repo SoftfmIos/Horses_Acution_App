@@ -122,8 +122,18 @@ try {
     .getByLabel("Permissions user", { exact: true })
     .selectOption(seed.worker.id);
   await page.getByLabel("Access level", { exact: true }).selectOption("staff");
+  await page.getByRole("checkbox", { name: "Prices", exact: true }).uncheck();
   await page
-    .getByRole("checkbox", { name: "Prices & discounts", exact: true })
+    .getByRole("checkbox", {
+      name: "Horse profiles & history — Edit",
+      exact: true,
+    })
+    .uncheck();
+  await page
+    .getByRole("checkbox", {
+      name: "Horse profiles & history — Delete",
+      exact: true,
+    })
     .uncheck();
   await page
     .getByRole("button", { name: "Save permissions", exact: true })
@@ -141,6 +151,37 @@ try {
     ).includes("pricing"),
     false,
   );
+  assert.deepEqual(
+    JSON.parse(
+      db
+        .prepare("SELECT actions FROM staff_permissions WHERE user_id=?")
+        .get(seed.worker.id).actions,
+    ).horses,
+    ["add"],
+  );
+  const workerContext = await browser.newContext();
+  const workerPage = await workerContext.newPage();
+  await workerPage.goto(base);
+  await workerPage.locator("input[name=email]").fill("worker@test.com");
+  await workerPage.locator("input[name=password]").fill("123456");
+  await workerPage.locator("button[type=submit]").click();
+  await workerPage
+    .getByRole("heading", { name: "Overview", exact: true })
+    .waitFor();
+  await workerPage
+    .locator("nav")
+    .getByRole("button", { name: "Horses", exact: true })
+    .click();
+  await workerPage.getByRole("button", { name: "Add", exact: true }).waitFor();
+  assert.equal(
+    await workerPage.getByRole("button", { name: "Edit", exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await workerPage.locator(".profile-photo input[type=file]").count(),
+    0,
+  );
+  await workerContext.close();
   await nav("Classes & riding");
   await page
     .getByRole("region", { name: "Booking calendar" })

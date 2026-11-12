@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { HorseHead } from "./HorseHead";
 export function SettingsHub({
+  can = () => true,
+  canView = () => true,
   settings,
   stableName,
   data,
@@ -146,6 +148,7 @@ export function SettingsHub({
             <label key={key}>
               {title}
               <input
+                disabled={!can("settings", "edit")}
                 aria-label={title}
                 type={type}
                 required={key === "academyNameEn" || type === "number"}
@@ -179,6 +182,7 @@ export function SettingsHub({
                 "Default calendar view",
                 "عرض التقويم الافتراضي",
               )}
+              disabled={!can("settings", "edit")}
               value={form.calendarView}
               onChange={(e) =>
                 setDraft({ ...form, calendarView: e.target.value })
@@ -202,7 +206,10 @@ export function SettingsHub({
               "العملة: ريال سعودي · التوقيت: الرياض (UTC+3)",
             )}
           </p>
-          <button className="primary" disabled={busy}>
+          <button
+            className="primary"
+            disabled={busy || !can("settings", "edit")}
+          >
             {t.save}
           </button>
         </form>
@@ -230,11 +237,16 @@ export function SettingsHub({
                 </p>
               )}
               <div>
-                <button className="soft" onClick={() => go(key)}>
+                <button
+                  className="soft"
+                  disabled={!canView(module)}
+                  onClick={() => go(key)}
+                >
                   {label("Manage", "إدارة")}
                 </button>
                 <button
                   className="primary"
+                  disabled={!can(module, "add")}
                   onClick={() =>
                     ["members", "boardingManagement"].includes(key)
                       ? go(key)

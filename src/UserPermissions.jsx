@@ -1,3 +1,4 @@
+import { actionsForPage } from "../shared/permissions";
 import React, { useEffect, useState } from "react";
 export function UserPermissions({ request, ar, onSaved }) {
   const [data, setData] = useState(null),
@@ -12,12 +13,20 @@ export function UserPermissions({ request, ar, onSaved }) {
     medical: l("Medical care", "الرعاية الطبية"),
     feeding: l("Feeding plans", "خطط التغذية"),
     tasks: l("Tasks", "المهام"),
-    pricing: l("Prices & discounts", "الأسعار والخصومات"),
+    pricing: l("Prices", "الأسعار"),
     billing: l("Invoices & payments", "الفواتير والمدفوعات"),
     inventory: l("Inventory", "المخزون"),
     reports: l("Reports", "التقارير"),
     members: l("Members", "الأعضاء"),
     settings: l("Settings", "الإعدادات"),
+    instructors: l("Instructors", "المدربون"),
+    arenas: l("Training locations & arenas", "مواقع التدريب والميادين"),
+    breeds: l("Horse breeds", "سلالات الخيول"),
+    stalls: l("Stalls", "المرابط"),
+    boarding: l("Boarding", "الإيواء"),
+    discounts: l("Discount codes", "رموز الخصم"),
+    vouchers: l("Vouchers", "القسائم"),
+    stables: l("Stable management", "إدارة الإسطبلات"),
   };
   const load = () =>
     request("/permissions")
@@ -29,9 +38,14 @@ export function UserPermissions({ request, ar, onSaved }) {
   const select = (id) => {
     setSelected(id);
     const u = data.users.find((u) => u.id === id);
+    if (!u) {
+      setDraft(null);
+      return;
+    }
     setDraft({
       role: u.isAdmin ? "admin" : u.role === "owner" ? "staff" : "member",
       permissions: u.permissions,
+      actionPermissions: u.actionPermissions || {},
     });
     setError("");
   };
@@ -73,6 +87,13 @@ export function UserPermissions({ request, ar, onSaved }) {
             setBusy(true);
             setError("");
             try {
+              if (data.permissionVersion !== 2)
+                throw new Error(
+                  l(
+                    "Update the cPanel backend before saving Add/Edit/Delete permissions.",
+                    "حدّث خادم cPanel قبل حفظ صلاحيات الإضافة والتعديل والحذف.",
+                  ),
+                );
               await request("/permissions/" + selected, {
                 method: "PUT",
                 body: draft,
@@ -116,24 +137,115 @@ export function UserPermissions({ request, ar, onSaved }) {
             </p>
           ) : (
             <fieldset>
-              <legend>{l("Allowed modules", "الأقسام المسموحة")}</legend>
-              {data.modules.map((module) => (
-                <label className="check-label" key={module}>
-                  <input
-                    type="checkbox"
-                    checked={draft.permissions.includes(module)}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        permissions: e.target.checked
-                          ? [...draft.permissions, module]
-                          : draft.permissions.filter((p) => p !== module),
-                      })
-                    }
-                  />
-                  {labels[module]}
-                </label>
-              ))}
+              <legend>
+                {l("Page & function permissions", "صلاحيات الصفحات والوظائف")}
+              </legend>
+              <p>
+                {l(
+                  "Enable page access for viewing, then grant Add, Edit and Delete independently. Delete also controls cancellations; Edit includes completion, attendance, payments and photos. Administrator-only operations stay protected.",
+                  "فعّل عرض الصفحة، ثم امنح الإضافة والتعديل والحذف بشكل مستقل. الحذف يشمل الإلغاء، والتعديل يشمل الإنجاز والحضور والمدفوعات والصور. تبقى عمليات مسؤول النظام محمية.",
+                )}
+              </p>
+              <div className="table-wrap">
+                <table className="permission-matrix">
+                  <thead>
+                    <tr>
+                      <th>{l("Page / function", "الصفحة / الوظيفة")}</th>
+                      <th>{l("Page access", "عرض الصفحة")}</th>
+                      {(data.actions || ["add", "edit", "delete"]).map((a) => (
+                        <th key={a}>
+                          {
+                            {
+                              add: l("Add", "إضافة"),
+                              edit: l("Edit", "تعديل"),
+                              delete: l("Delete", "حذف"),
+                            }[a]
+                          }
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.modules.map((module) => (
+                      <tr key={module}>
+                        <th>{labels[module]}</th>
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={labels[module]}
+                            checked={draft.permissions.includes(module)}
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                permissions: e.target.checked
+                                  ? [...draft.permissions, module]
+                                  : draft.permissions.filter(
+                                      (p) => p !== module,
+                                    ),
+                                actionPermissions: e.target.checked
+                                  ? draft.actionPermissions
+                                  : {
+                                      ...draft.actionPermissions,
+                                      [module]: [],
+                                    },
+                              })
+                            }
+                          />
+                        </td>
+                        {(data.actions || ["add", "edit", "delete"]).map(
+                          (a) => (
+                            <td key={a}>
+                              <input
+                                type="checkbox"
+                                aria-label={
+                                  labels[module] +
+                                  " — " +
+                                  {
+                                    add: l("Add", "إضافة"),
+                                    edit: l("Edit", "تعديل"),
+                                    delete: l("Delete", "حذف"),
+                                  }[a]
+                                }
+                                disabled={
+                                  !draft.permissions.includes(module) ||
+                                  !actionsForPage(module).includes(a)
+                                }
+                                checked={
+                                  draft.permissions.includes(module) &&
+                                  Boolean(
+                                    draft.actionPermissions[module]?.includes(
+                                      a,
+                                    ),
+                                  )
+                                }
+                                onChange={(e) =>
+                                  setDraft({
+                                    ...draft,
+                                    actionPermissions: {
+                                      ...draft.actionPermissions,
+                                      [module]: e.target.checked
+                                        ? [
+                                            ...(draft.actionPermissions[
+                                              module
+                                            ] || []),
+                                            a,
+                                          ]
+                                        : (
+                                            draft.actionPermissions[module] ||
+                                            []
+                                          ).filter((v) => v !== a),
+                                    },
+                                  })
+                                }
+                              />
+                            </td>
+                          ),
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </fieldset>
           )}
           <button className="primary" disabled={busy}>
