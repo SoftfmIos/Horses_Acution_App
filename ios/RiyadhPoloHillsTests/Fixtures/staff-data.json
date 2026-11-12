@@ -1,0 +1,318 @@
+{
+  "instructors": [],
+  "arenas": [],
+  "breeds": [],
+  "horses": [
+    {
+      "id": "f13a75d0-419c-4461-b639-c9e066089bc2",
+      "name": "Test Horse",
+      "breed": "",
+      "birthDate": "",
+      "microchip": "",
+      "ownerId": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "instructorId": "",
+      "status": "ready",
+      "notes": "",
+      "breedEn": "",
+      "breedAr": "",
+      "nameEn": "Test Horse",
+      "nameAr": ""
+    }
+  ],
+  "plans": [
+    {
+      "id": "9d50844d-ce6f-4c2d-b636-c26af3798179",
+      "name": "Test Lesson",
+      "amount": 10000,
+      "credits": 0,
+      "kind": "class",
+      "active": true,
+      "nameEn": "Test Lesson",
+      "nameAr": ""
+    }
+  ],
+  "discounts": [],
+  "vouchers": [],
+  "classes": [
+    {
+      "id": "92ec54bb-32e8-48ea-9700-3b669e6aeff6",
+      "title": "Test Session",
+      "startsAt": "2026-11-13T10:00:00.000Z",
+      "endsAt": "2026-11-13T11:00:00.000Z",
+      "capacity": 1,
+      "horseIds": [
+        "f13a75d0-419c-4461-b639-c9e066089bc2"
+      ],
+      "instructorId": "",
+      "instructor": "Test Instructor",
+      "arena": "Test Arena",
+      "planId": "9d50844d-ce6f-4c2d-b636-c26af3798179",
+      "creditCost": 1,
+      "titleEn": "Test Session",
+      "titleAr": "",
+      "instructorEn": "Test Instructor",
+      "instructorAr": "",
+      "arenaEn": "Test Arena",
+      "arenaAr": "",
+      "placeType": "arena",
+      "confirmedPlaces": 0,
+      "heldPlaces": 1,
+      "holdExpiresAt": "2026-11-13T10:00:00.000Z",
+      "places": 0
+    }
+  ],
+  "medical": [],
+  "feeding": [],
+  "tasks": [
+    {
+      "id": "9cf11625-aca3-4955-b0c1-ca1914a605bb",
+      "title": "Test Care Task",
+      "dueAt": "2026-11-13T08:00:00.000Z",
+      "assigneeId": "c15ac9f4-e166-425d-96cd-6b18ddd2ff04",
+      "done": false,
+      "completedBy": "",
+      "completedAt": "",
+      "notes": "",
+      "titleEn": "Test Care Task",
+      "titleAr": ""
+    }
+  ],
+  "inventory": [],
+  "stalls": [],
+  "settings": {
+    "academyName": "Test Academy",
+    "contactEmail": "",
+    "phone": "",
+    "address": "",
+    "calendarView": "month",
+    "lessonDuration": 60,
+    "defaultCapacity": 1,
+    "defaultCreditCost": 1,
+    "bookingHoldHours": 72,
+    "id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad:settings",
+    "academyNameEn": "Test Academy",
+    "academyNameAr": "",
+    "currency": "SAR",
+    "timeZone": "Asia/Riyadh"
+  },
+  "bookings": [
+    {
+      "id": "7a5fc6e8-fbd6-4b07-9fdf-00009f69bb4f",
+      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
+      "member_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "class_id": "92ec54bb-32e8-48ea-9700-3b669e6aeff6",
+      "horse_id": "f13a75d0-419c-4461-b639-c9e066089bc2",
+      "status": "pending_payment",
+      "created_at": "2026-11-12T07:00:00.000Z",
+      "hold_expires_at": "2026-11-13T10:00:00.000Z"
+    }
+  ],
+  "proformas": [
+    {
+      "id": "d6b36169-321f-44c3-a99e-aa6589251557",
+      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
+      "member_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "reservation_id": "7a5fc6e8-fbd6-4b07-9fdf-00009f69bb4f",
+      "description": "Test Session",
+      "gross": 10000,
+      "discount": 0,
+      "voucher": 0,
+      "due": 10000,
+      "paid": 4000,
+      "status": "open",
+      "discount_id": null,
+      "voucher_id": null,
+      "external_ref": "Test voucher",
+      "created_at": "2026-11-12T07:00:00.000Z",
+      "credit_quantity": 0,
+      "credit_awarded": 0,
+      "credit_used": 0,
+      "descriptionEn": "Test Session",
+      "descriptionAr": "",
+      "activation": "pending_payment"
+    }
+  ],
+  "members": [
+    {
+      "id": "c15ac9f4-e166-425d-96cd-6b18ddd2ff04",
+      "name": "Test Manager",
+      "email": "manager@example.com",
+      "role": "owner",
+      "nameEn": "Test Manager",
+      "nameAr": "",
+      "userType": "staff",
+      "creditBalance": 0
+    },
+    {
+      "id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "name": "Test Rider",
+      "email": "rider@example.com",
+      "role": "member",
+      "nameEn": "Test Rider",
+      "nameAr": "",
+      "userType": "member",
+      "creditBalance": 0
+    }
+  ],
+  "creditBalance": 0,
+  "creditLedger": [],
+  "notifications": [
+    {
+      "id": "e301dfa4-ef17-4efd-b809-162679e2e090",
+      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
+      "user_id": "c15ac9f4-e166-425d-96cd-6b18ddd2ff04",
+      "title": "Welcome / مرحباً",
+      "message": "Your academy workspace is ready. مساحة الأكاديمية جاهزة.",
+      "read_at": null,
+      "dedupe": null,
+      "created_at": "2026-11-12T07:00:00.000Z"
+    },
+    {
+      "id": "dd1d259b-09ac-471f-ac7e-674becfa767a",
+      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
+      "user_id": "c15ac9f4-e166-425d-96cd-6b18ddd2ff04",
+      "title": "New booking / حجز جديد",
+      "message": "Test Rider · Test Session",
+      "read_at": null,
+      "dedupe": null,
+      "created_at": "2026-11-12T07:00:00.000Z"
+    }
+  ],
+  "payments": [
+    {
+      "id": "931d454e-5b6c-4c4d-8de0-495967ebc9f4",
+      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
+      "proforma_id": "d6b36169-321f-44c3-a99e-aa6589251557",
+      "amount": 4000,
+      "reference": "TEST-REFERENCE",
+      "created_at": "2026-11-12T07:00:00.000Z",
+      "external_ref": "Test voucher"
+    }
+  ],
+  "waitlist": [],
+  "attendance": [],
+  "taskHistory": [],
+  "boarding": [],
+  "stockMovements": [],
+  "userRole": "owner",
+  "isAdmin": true,
+  "permissions": [
+    "classes",
+    "instructors",
+    "arenas",
+    "horses",
+    "breeds",
+    "stalls",
+    "boarding",
+    "medical",
+    "feeding",
+    "tasks",
+    "pricing",
+    "discounts",
+    "billing",
+    "vouchers",
+    "inventory",
+    "reports",
+    "members",
+    "settings",
+    "stables",
+    "emailSettings"
+  ],
+  "actionPermissions": {
+    "classes": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "horses": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "medical": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "feeding": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "tasks": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "pricing": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "billing": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "inventory": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "reports": [],
+    "members": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "settings": [
+      "edit"
+    ],
+    "instructors": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "arenas": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "breeds": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "stalls": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "boarding": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "discounts": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "vouchers": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "stables": [
+      "add",
+      "edit",
+      "delete"
+    ],
+    "emailSettings": [
+      "edit"
+    ]
+  },
+  "backendVersion": "1.21.0",
+  "emailConfigured": false,
+  "emailSettings": null
+}

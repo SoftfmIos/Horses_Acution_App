@@ -160,3 +160,7 @@ Settings opens a hub with separate **System settings** and **Email settings** pa
 New account welcome emails include the login link; managers can opt in to including the generated password, resend the known password from the account card, or send an existing user their login details. Queued passwords are encrypted server-side and removed after delivery. Booking/payment emails include the academy logo, Arabic and English content, Riyadh dates, complete booking and invoice details, and payment history. Confirmed bookings include Google Calendar links and ICS attachments. Pro forma emails include printable HTML copies (open and print/save as PDF). Payment confirmations distinguish partial payments from full settlement. Boarding creation/end emails include stay details. Pro formas and payment confirmations can be resent from the payment-request dialog.
 
 **Payment requests → Payments & reports** supports grouping by pro forma or user, search by user/invoice/reference/details, Riyadh date filters, refunds, net payment totals, lifetime invoice balances, and a printable report. Search/date filters select payment rows; invoice balances remain lifetime totals. The report is an operational record, not an official tax invoice.
+
+### Native iOS app
+
+The `iOSApp` branch contains the native **Riyadh Polo Hills** app for members and staff. Open `ios/RiyadhPoloHills.xcodeproj` on a Mac. See [iOS setup, features and signing](ios/README.md). Administrative settings remain in the web portal.

@@ -1,0 +1,135 @@
+{
+  "user": {
+    "id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+    "email": "rider@example.com",
+    "name": "Test Rider",
+    "nameEn": "Test Rider",
+    "nameAr": ""
+  },
+  "stables": [
+    {
+      "id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
+      "name": "Test Academy",
+      "role": "member",
+      "isAdmin": false,
+      "permissions": [
+        "classes",
+        "instructors",
+        "arenas",
+        "horses",
+        "breeds",
+        "stalls",
+        "boarding",
+        "medical",
+        "feeding",
+        "tasks",
+        "pricing",
+        "discounts",
+        "billing",
+        "vouchers",
+        "inventory",
+        "reports",
+        "members",
+        "settings",
+        "stables",
+        "emailSettings"
+      ],
+      "actionPermissions": {
+        "classes": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "horses": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "medical": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "feeding": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "tasks": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "pricing": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "billing": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "inventory": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "reports": [],
+        "members": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "settings": [
+          "edit"
+        ],
+        "instructors": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "arenas": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "breeds": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "stalls": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "boarding": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "discounts": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "vouchers": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "stables": [
+          "add",
+          "edit",
+          "delete"
+        ],
+        "emailSettings": [
+          "edit"
+        ]
+      },
+      "nameEn": "Test Academy",
+      "nameAr": ""
+    }
+  ]
+}

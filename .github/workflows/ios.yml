@@ -1,0 +1,44 @@
+name: iOS build and tests
+on:
+  push:
+    branches: [iOSApp]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate project generation
+        run: |
+          python3 ios/scripts/generate_project.py
+          git diff --exit-code -- ios/RiyadhPoloHills.xcodeproj
+          plutil -lint ios/RiyadhPoloHills/Resources/Info.plist ios/RiyadhPoloHills/Resources/PrivacyInfo.xcprivacy
+      - name: Select available iPhone simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for values in d["devices"].values() for x in values if x["name"].startswith("iPhone")))')
+          echo "IOS_SIMULATOR_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+      - name: Build and test without signing
+        run: |
+          xcodebuild test \
+            -project ios/RiyadhPoloHills.xcodeproj \
+            -scheme RiyadhPoloHills \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
+            -derivedDataPath ios/DerivedData \
+            -resultBundlePath ios/TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Save test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: ios/TestResults.xcresult
+          if-no-files-found: ignore
