@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { inPeriod } from "./taskPlanner";
+import { inPeriod, taskCategoryGroups } from "./taskPlanner";
 export function CareTasks({
   tasks,
   history = [],
@@ -12,37 +12,48 @@ export function CareTasks({
   canComplete = () => true,
   period = null,
 }) {
-  const [filter, setFilter] = useState("pending"),
+  const [filter, setFilter] = useState(compact ? "pending" : "all"),
     [pending, setPending] = useState({});
   const label = (en, arabic) => (ar ? arabic : en);
   const name = (id) => members.find((m) => m.id === id)?.name || "—";
   const shown = tasks
     .filter(
       (t) =>
+        !t.cancelled &&
         (!period || inPeriod(t, period)) &&
         (filter === "all" || (filter === "done" ? t.done : !t.done)),
     )
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
-  const completed = tasks.filter((task) => task.done).length;
-  const percent = tasks.length
-    ? Math.round((completed / tasks.length) * 100)
+  const eligible = tasks.filter(
+    (t) => !t.cancelled && (!period || inPeriod(t, period)),
+  );
+  const categories = taskCategoryGroups(eligible);
+  const categoryName = (id) =>
+    ({
+      feeding: label("Feeding", "التغذية"),
+      medical: label("Medical", "الرعاية الطبية"),
+      other: label("Other tasks", "مهام أخرى"),
+    })[id];
+  const completed = eligible.filter((task) => task.done).length;
+  const percent = eligible.length
+    ? Math.round((completed / eligible.length) * 100)
     : 0;
   const table = (
     <>
       <div className="care-progress">
         <strong>
-          {label("Completion", "نسبة الإنجاز")}: {completed}/{tasks.length} (
+          {label("Completion", "نسبة الإنجاز")}: {completed}/{eligible.length} (
           {percent}%)
         </strong>
         <progress
           aria-label={label("Completion rate", "نسبة الإنجاز")}
           value={completed}
-          max={tasks.length || 1}
+          max={eligible.length || 1}
         />
       </div>
       <div className="care-toolbar">
         <strong>
-          {tasks.length} {label("scheduled tasks", "مهام مجدولة")}
+          {eligible.length} {label("scheduled tasks", "مهام مجدولة")}
         </strong>
         <label>
           {label("Show", "عرض")}
@@ -57,65 +68,84 @@ export function CareTasks({
           </select>
         </label>
       </div>
-      <div className="table-wrap">
-        <table className="care-table">
-          <thead>
-            <tr>
-              <th>{label("Done", "تم")}</th>
-              <th>{label("Task / dose", "المهمة / الجرعة")}</th>
-              <th>{label("Scheduled time", "الموعد المجدول")}</th>
-              <th>{label("Assigned to", "المسؤول")}</th>
-              <th>{label("Completed by / at", "نفذها / وقت التنفيذ")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((task) => (
-              <tr key={task.id}>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={pending[task.id] ?? Boolean(task.done)}
-                    aria-label={
-                      label("Complete ", "إتمام ") +
-                      task.title +
-                      " " +
-                      when(task.dueAt)
-                    }
-                    disabled={busy || !canComplete(task)}
-                    onChange={(e) => {
-                      const done = e.target.checked;
-                      setPending((p) => ({ ...p, [task.id]: done }));
-                      Promise.resolve(toggle(task, done)).finally(() =>
-                        setPending((p) => {
-                          const next = { ...p };
-                          delete next[task.id];
-                          return next;
-                        }),
-                      );
-                    }}
-                  />
-                </td>
-                <td>
-                  {task.title}
-                  {task.medication && (
-                    <small className="record-id">
-                      {task.medication} · {task.dose}
-                    </small>
-                  )}
-                </td>
-                <td>{when(task.dueAt)}</td>
-                <td>{name(task.assigneeId)}</td>
-                <td>
-                  {task.done
-                    ? name(task.completedBy) + " · " + when(task.completedAt)
-                    : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!shown.length && (
+      {categories.map((group) => {
+        const ids = new Set(group.tasks.map((t) => t.id));
+        const groupShown = shown.filter((t) => ids.has(t.id));
+        if (!groupShown.length) return null;
+        return (
+          <details
+            className={"task-checklist-group category-" + group.id}
+            key={group.id}
+            open
+          >
+            <summary>
+              <strong>{categoryName(group.id)}</strong> · {group.done}/
+              {group.total} · {group.percent}%
+            </summary>
+            <div className="table-wrap">
+              <table className="care-table">
+                <thead>
+                  <tr>
+                    <th>{label("Done", "تم")}</th>
+                    <th>{label("Task / dose", "المهمة / الجرعة")}</th>
+                    <th>{label("Scheduled time", "الموعد المجدول")}</th>
+                    <th>{label("Assigned to", "المسؤول")}</th>
+                    <th>{label("Completed by / at", "نفذها / وقت التنفيذ")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupShown.map((task) => (
+                    <tr key={task.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={pending[task.id] ?? Boolean(task.done)}
+                          aria-label={
+                            label("Complete ", "إتمام ") +
+                            task.title +
+                            " " +
+                            when(task.dueAt)
+                          }
+                          disabled={busy || !canComplete(task)}
+                          onChange={(e) => {
+                            const done = e.target.checked;
+                            setPending((p) => ({ ...p, [task.id]: done }));
+                            Promise.resolve(toggle(task, done)).finally(() =>
+                              setPending((p) => {
+                                const next = { ...p };
+                                delete next[task.id];
+                                return next;
+                              }),
+                            );
+                          }}
+                        />
+                      </td>
+                      <td>
+                        {task.title}
+                        {task.medication && (
+                          <small className="record-id">
+                            {task.medication} · {task.dose}
+                          </small>
+                        )}
+                      </td>
+                      <td>{when(task.dueAt)}</td>
+                      <td>{name(task.assigneeId)}</td>
+                      <td>
+                        {task.done
+                          ? name(task.completedBy) +
+                            " · " +
+                            when(task.completedAt)
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        );
+      })}
+      {!shown.filter((t) => !t.cancelled).length && (
         <p className="empty">
           {label("No tasks in this view.", "لا توجد مهام في هذا العرض.")}
         </p>
@@ -140,7 +170,7 @@ export function CareTasks({
     <details className="care-ledger">
       <summary>
         {label("Treatment / feeding schedule", "جدول العلاج / التغذية")} (
-        {tasks.length})
+        {eligible.length})
       </summary>
       {table}
     </details>

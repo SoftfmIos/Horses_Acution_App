@@ -213,6 +213,37 @@ try {
       .get().member_id,
     seed.rider.id,
   );
+  await page.locator(".booking-planner > summary").click();
+  const bookingPrint = page.getByRole("region", {
+    name: "Printable booking calendar",
+  });
+  await page
+    .getByLabel("Booking planner date", { exact: true })
+    .fill(seed.slot.startsAt.slice(0, 10));
+  await page
+    .getByLabel("Booking planner member", { exact: true })
+    .selectOption(seed.rider.id);
+  await page
+    .getByLabel("Booking planner instructor", { exact: true })
+    .selectOption("Trainer");
+  for (const period of ["day", "week", "month"]) {
+    await page
+      .getByLabel("Booking planner view", { exact: true })
+      .selectOption(period);
+    assert.equal(
+      await bookingPrint.locator(".booking-planner-entry").count(),
+      1,
+    );
+    await page.emulateMedia({ media: "print" });
+    assert.equal(await bookingPrint.isVisible(), true);
+    mkdirSync("test-results", { recursive: true });
+    await page.pdf({
+      path: "test-results/bookings-" + period + ".pdf",
+      format: "A4",
+      landscape: true,
+    });
+    await page.emulateMedia({ media: "screen" });
+  }
   await nav("Stalls & boarding");
   await page.getByRole("button", { name: "Add stall", exact: true }).click();
   await dialog()
@@ -449,8 +480,28 @@ try {
     path: "test-results/task-calendar.png",
     fullPage: true,
   });
+  await page.getByLabel("Task layout", { exact: true }).selectOption("list");
+  await page
+    .locator(".staff-workload .task-checklist-group.category-feeding > summary")
+    .waitFor();
+  await page
+    .locator(".staff-workload .task-checklist-group.category-medical > summary")
+    .waitFor();
+  await page.evaluate(() => {
+    window.print = () => {};
+  });
+  await page
+    .getByRole("button", { name: "Print daily handout", exact: true })
+    .click();
   await page.emulateMedia({ media: "print" });
   assert.equal(await page.locator(".planner-print-sheet").isVisible(), true);
+  assert.ok((await page.locator(".task-handout .signature-cell").count()) > 0);
+  await page
+    .getByRole("heading", {
+      name: "Daily task follow-up & signatures",
+      exact: true,
+    })
+    .waitFor();
   mkdirSync("test-results", { recursive: true });
   await page.pdf({ path: "test-results/staff-planner.pdf", format: "A4" });
   await page.emulateMedia({ media: "screen" });

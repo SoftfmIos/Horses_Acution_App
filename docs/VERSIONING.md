@@ -52,3 +52,9 @@ Users & Permissions now separates page access (viewing) from independent Add, Ed
 The API checks the action for every protected function, including POST-based operations: booking cancellation and ending boarding require Delete; task completion/reopening, attendance, payments, refunds and profile-photo changes require Edit; invitations, documents, stock receipts and new bookings require Add. Expanding an existing class requires both Add and Edit. Administrator-only controls and task-date locks remain additional restrictions.
 
 Existing staff page grants migrate to their previous full actions and associated function pages. A new nullable SQLite column stores explicit action grants without replacing existing data. Older module-only permission clients retain their previous semantics; the new matrix refuses to save against a backend that does not advertise permissionVersion 2. Update and restart cPanel together with the frontend.
+
+## 1.17.0
+
+Task checklists now use Feeding, Medical and Other task groups with accurate period completion. Tasks → Print daily handout prints the selected date's filtered tasks, grouped by type, with assigned staff, instructions, completion checkbox, existing digital completion, and a blank actual-time/signature field beside every task. Supervisor review/signature and staff-name fields document handover. Print planner produces the same signed follow-up layout for the selected week/month. Paper signatures do not update electronic completion automatically.
+
+Classes & riding includes a separate Member & instructor booking calendar section. Staff can filter by member, instructor, status and daily/weekly/monthly period; members see only their own server-authorised bookings. Print booking calendar prints the exact selected schedule in a landscape calendar with rider, horse, instructor, location, time and booking status. Task handouts use portrait paper; printing a pro forma does not accidentally include the booking calendar.

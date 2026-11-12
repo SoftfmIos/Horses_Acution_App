@@ -1709,3 +1709,287 @@ pre {
   opacity: 0.35;
   cursor: not-allowed;
 }
+.task-checklist-group {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+}
+.task-checklist-group > summary {
+  cursor: pointer;
+  padding: 12px;
+  background: var(--stone);
+  border-inline-start: 4px solid var(--gold-text);
+}
+.task-checklist-group.category-feeding > summary {
+  background: #e6f1e8;
+  border-color: #347749;
+}
+.task-checklist-group.category-medical > summary {
+  background: #e6eef6;
+  border-color: #326a90;
+}
+.booking-planner {
+  margin: 18px 0;
+}
+.booking-planner > summary {
+  cursor: pointer;
+  font-size: 18px;
+}
+.booking-planner-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin: 18px 0;
+}
+.booking-planner-controls label {
+  display: grid;
+  gap: 6px;
+}
+.booking-planner-controls input,
+.booking-planner-controls select {
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+  min-height: 44px;
+  max-width: 220px;
+}
+.booking-planner-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
+}
+.booking-planner-grid.booking-view-day {
+  grid-template-columns: 1fr;
+}
+.booking-planner-day,
+.booking-padding {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  min-height: 110px;
+}
+.booking-planner-day h4 {
+  margin: 0 0 10px;
+}
+.booking-planner-entry {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  margin: 8px 0;
+  border: 1px solid #d0b14d;
+  background: #fff4c8;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.booking-status-confirmed {
+  background: #f9dddd;
+  border-color: #d7a1a1;
+}
+.booking-status-cancelled,
+.booking-status-expired {
+  background: #eee;
+  border-color: #bbb;
+}
+.print-document-heading {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 18px 0;
+}
+.print-document-heading img {
+  width: 65px;
+  height: 75px;
+  object-fit: contain;
+}
+.signature-cell {
+  min-width: 120px;
+}
+.signature-cell span {
+  display: block;
+  white-space: nowrap;
+  margin: 12px 0;
+}
+.handout-identity,
+.handout-supervisor {
+  margin: 20px 0;
+}
+.handout-day h3,
+.handout-day h4 {
+  margin: 16px 0 8px;
+}
+@media (max-width: 760px) {
+  .booking-planner-grid {
+    grid-template-columns: 1fr;
+  }
+  .booking-padding {
+    display: none;
+  }
+  .booking-planner-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .booking-planner-controls label {
+    min-width: 0;
+  }
+  .booking-planner-controls input,
+  .booking-planner-controls select {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+@page taskHandout {
+  size: A4 portrait;
+  margin: 12mm;
+}
+@page bookingCalendar {
+  size: A4 landscape;
+  margin: 10mm;
+}
+@media print {
+  .planner-print-sheet {
+    page: taskHandout;
+  }
+  .booking-print-sheet {
+    page: bookingCalendar;
+  }
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) .workspace {
+    display: block !important;
+  }
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) .workspace * {
+    visibility: hidden;
+  }
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    .booking-print-sheet,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    .booking-print-sheet
+    * {
+    visibility: visible;
+  }
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    .booking-print-sheet {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    background: white;
+    padding: 0;
+  }
+  .booking-planner-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    overflow: visible;
+    font-size: 10px;
+    border-color: #aaa;
+  }
+  .booking-planner-grid.booking-view-day {
+    grid-template-columns: 1fr;
+  }
+  .booking-planner-day,
+  .booking-padding {
+    min-height: 90px;
+    border-color: #aaa;
+    break-inside: avoid;
+  }
+  .booking-planner-entry {
+    font-size: 9pt;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    break-inside: avoid;
+  }
+  .booking-planner-entry span,
+  .booking-planner-entry small {
+    display: block;
+  }
+  .task-handout table {
+    width: 100%;
+    font-size: 10pt;
+    border-collapse: collapse;
+  }
+  .task-handout th,
+  .task-handout td {
+    border: 1px solid #888;
+    padding: 8px;
+    text-align: start;
+  }
+  .task-handout tr {
+    break-inside: avoid;
+  }
+  .task-handout thead {
+    display: table-header-group;
+  }
+  .signature-cell {
+    min-width: 100px;
+    height: 60px;
+  }
+  .task-handout h3,
+  .task-handout h4 {
+    break-after: avoid;
+  }
+  .print-document-heading {
+    break-inside: avoid;
+  }
+  .handout-supervisor {
+    break-inside: avoid;
+  }
+}
+@media print {
+  body:has(.task-planner) {
+    page: taskHandout;
+    min-height: 0;
+    height: auto;
+  }
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) {
+    page: bookingCalendar;
+    min-height: 0;
+    height: auto;
+  }
+  body:has(.task-planner) #root,
+  body:has(.task-planner) #root > div,
+  body:has(.task-planner) .workspace,
+  body:has(.task-planner) main,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) #root,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) #root > div,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) .workspace,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) main {
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+  body:has(.task-planner) .workspace > header,
+  body:has(.task-planner) main > :not(.task-planner),
+  body:has(.task-planner) .task-planner > :not(.planner-print-sheet),
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    .workspace
+    > header,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    main
+    > :not(.booking-planner),
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    .booking-planner
+    > :not(.booking-print-sheet) {
+    display: none !important;
+  }
+  body:has(.task-planner) .planner-print-sheet,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop))
+    .booking-print-sheet {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  body:has(.task-planner) .task-planner,
+  body:has(.booking-planner[open]):not(:has(.modal-backdrop)) .booking-planner {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}

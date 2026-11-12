@@ -63,3 +63,13 @@ System admin → Users & Permissions → select a staff account. Enable Page acc
 Delete also controls cancellations and ending stays. Edit controls completion/reopening, attendance, recording payments/refunds and changing profile photos; deleting a photo requires Delete separately. Stock receipts use Inventory Add. Uploading a horse document uses Horses Add; removing it uses Horses Delete. Personal member-photo access in the member portal remains governed by ownership. Member roles and historical task limits cannot be bypassed by checking all actions. System administrators retain full access, and only they can grant permissions or administrator status.
 
 The UI hides or disables unavailable operations and the API independently rejects them. Existing grants retain their prior access during migration; no records are deleted by this permission update.
+
+## Grouped checklists and signed handouts (1.17.0)
+
+Choose Tasks → Layout → Checklist to expand Feeding, Medical or Other work. Completion remains a one-click checkbox with the existing actor/time audit and historical-date restrictions.
+
+For paper documentation, choose the date, employee and optional care-plan filters, then Print daily handout. Every task has a checkbox plus actual-time and signature spaces. The printed form includes instructions, assignee, any recorded digital completion and a supervisor signature area. Print planner uses the currently selected daily/weekly/monthly range instead. Staff sign only after performing the task; paper signatures are documentation and do not automatically mark digital tasks complete.
+
+## Booking print calendars
+
+Classes & riding → expand Member & instructor booking calendar. Select a member (staff only), instructor, status, day/week/month and anchor date. Next booked session jumps to the next active booking matching the person filters. Print booking calendar prints that exact filtered schedule. Members have no member selector and receive only their own authorised bookings from the backend. Booking calendars use landscape pages; task handouts use portrait pages. An open invoice prints separately.

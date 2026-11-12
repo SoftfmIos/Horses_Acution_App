@@ -1,3 +1,5 @@
+import { flushSync } from "react-dom";
+import { TaskHandout } from "./TaskHandout";
 import { TaskCalendar } from "./TaskCalendar";
 import React, { useState } from "react";
 import {
@@ -30,6 +32,7 @@ export function TaskPlanner({
   const [selected, setSelected] = useState(initialGroup),
     [view, setView] = useState("week"),
     [layout, setLayout] = useState("calendar"),
+    [printDaily, setPrintDaily] = useState(false),
     [date, setDate] = useState(riyadhDay(new Date())),
     [assignee, setAssignee] = useState(""),
     [search, setSearch] = useState("");
@@ -131,9 +134,25 @@ export function TaskPlanner({
             ))}
           </select>
         </label>
-        <button className="primary" onClick={() => window.print()}>
+        <button
+          className="primary"
+          onClick={() => {
+            flushSync(() => setPrintDaily(false));
+            window.print();
+          }}
+        >
           <Printer size={18} />
           {label("Print planner", "طباعة المخطط")}
+        </button>
+        <button
+          className="soft"
+          onClick={() => {
+            flushSync(() => setPrintDaily(true));
+            window.print();
+          }}
+        >
+          <Printer size={18} />
+          {label("Print daily handout", "طباعة نموذج المتابعة اليومية")}
         </button>
       </div>
       <div className="period-completion record-grid">
@@ -295,56 +314,16 @@ export function TaskPlanner({
           )}
         </>
       )}
-      <section className="planner-print-sheet">
-        <h1>{stableName}</h1>
-        <h2>
-          {group?.title || label("Care task planner", "مخطط مهام الرعاية")}
-        </h2>
-        <p>
-          {range.start} – {range.end} · {label("Riyadh time", "توقيت الرياض")}
-        </p>
-        {group && (
-          <p>
-            {group.completed}/{group.tasks.length} · {group.percent}%
-          </p>
-        )}
-        <table>
-          <thead>
-            <tr>
-              <th>{label("Date / time", "التاريخ / الوقت")}</th>
-              <th>{label("Task", "المهمة")}</th>
-              <th>{label("Assignee", "المسؤول")}</th>
-              <th>{label("Done", "تم")}</th>
-              <th>{label("Completed by / at", "نفذها / وقت التنفيذ")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible
-              .sort((a, b) => a.dueAt.localeCompare(b.dueAt))
-              .map((t) => (
-                <tr key={t.id}>
-                  <td>{when(t.dueAt)}</td>
-                  <td>{t.title}</td>
-                  <td>{actor(t.assigneeId)}</td>
-                  <td>{t.done ? "✓" : "□"}</td>
-                  <td>
-                    {t.done
-                      ? actor(t.completedBy) + " · " + when(t.completedAt)
-                      : ""}
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-        {!visible.length && (
-          <p>
-            {label(
-              "No scheduled tasks in this period.",
-              "لا توجد مهام مجدولة في هذه الفترة.",
-            )}
-          </p>
-        )}
-      </section>
+      <TaskHandout
+        tasks={group ? group.tasks : all}
+        range={printDaily ? plannerRange(date, "day") : range}
+        members={members}
+        ar={ar}
+        when={when}
+        stableName={stableName}
+        title={group?.title || ""}
+        daily={printDaily}
+      />
     </section>
   );
 }

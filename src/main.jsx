@@ -1,3 +1,4 @@
+import { BookingPlanner } from "./BookingPlanner";
 import { UserPermissions } from "./UserPermissions";
 import {
   PERMISSION_PAGES,
@@ -2053,6 +2054,7 @@ function App() {
                     );
                   })}
               </div>
+
               <p className="notice">{t.cancelPolicy}</p>
             </>
           )}
@@ -2262,6 +2264,13 @@ function App() {
                 />
               </details>
 
+              <BookingPlanner
+                data={data}
+                ar={ar}
+                staff={manager}
+                stableName={localizedName(stable, ar)}
+                when={when}
+              />
               <p className="notice">{t.cancelPolicy}</p>
               <label className="instructor-filter">
                 {t.filterInstructor}
