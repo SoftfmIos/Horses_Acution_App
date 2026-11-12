@@ -1,3 +1,4 @@
+import { MemberTools } from "./Scheduling";
 import { actionsForPage } from "../shared/permissions";
 import React, { useEffect, useState } from "react";
 export function UserPermissions({ request, ar, onSaved }) {
@@ -58,6 +59,30 @@ export function UserPermissions({ request, ar, onSaved }) {
           "فقط مسؤولو النظام يمكنهم تعديل الصلاحيات. يمكن للموظفين تحديث مهام الأمس وما بعده، والمهام الأقدم متاحة لمسؤول النظام فقط.",
         )}
       </p>
+      {data && (
+        <MemberTools
+          members={data.users}
+          request={request}
+          ar={ar}
+          busy={busy}
+          isAdmin={true}
+          action={async (fn) => {
+            setBusy(true);
+            setError("");
+            try {
+              await fn();
+              await load();
+              await onSaved();
+              return true;
+            } catch (e) {
+              setError(e.message);
+              return false;
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      )}
       {error && (
         <p role="alert" className="notice">
           {error}

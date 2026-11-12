@@ -2590,3 +2590,64 @@ test("email settings are manager-only, encrypted, stable-scoped and preserve bla
   );
   assert.equal(f.app.locals.emailSettings.config(f.owner.stable), null);
 });
+
+test("administrators edit user names and login emails atomically with access boundaries", async (t) => {
+  const f = await fixture(t);
+  const uid = (await f.member.call("/auth/me")).user.id;
+  assert.equal(
+    (await f.owner.call("/permissions")).users.find((u) => u.id === uid).email,
+    "member@test.com",
+  );
+  const updated = await f.owner.call("/members/" + uid, "PUT", {
+    nameEn: "Updated User",
+    nameAr: "مستخدم",
+    email: "UPDATED@test.com",
+  });
+  assert.equal(updated.httpStatus, 200);
+  assert.equal((await f.member.call("/auth/me")).httpStatus, 401);
+  assert.equal(
+    f.db.prepare("SELECT email FROM users WHERE id=?").get(uid).email,
+    "updated@test.com",
+  );
+  assert.equal(
+    (
+      await f.owner.call("/members/" + uid, "PUT", {
+        nameEn: "Should rollback",
+        email: "owner@test.com",
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal(
+    f.db.prepare("SELECT name FROM users WHERE id=?").get(uid).name,
+    "Updated User",
+  );
+  assert.equal(
+    (
+      await f.other.call("/members/" + uid, "PUT", {
+        nameEn: "Foreign",
+        email: "foreign@test.com",
+      })
+    ).httpStatus,
+    404,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/members/" + uid, "PUT", {
+        nameEn: "Invalid",
+        email: "invalid",
+      })
+    ).httpStatus,
+    400,
+  );
+  await f.other.call("/members/link", "POST", { email: "updated@test.com" });
+  assert.equal(
+    (
+      await f.owner.call("/members/" + uid, "PUT", {
+        nameEn: "Shared",
+        email: "shared@test.com",
+      })
+    ).httpStatus,
+    409,
+  );
+});

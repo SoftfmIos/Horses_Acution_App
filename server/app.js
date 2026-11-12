@@ -713,10 +713,11 @@ export function createApp(
       actions: PERMISSION_ACTIONS,
       permissionVersion: 2,
       users: all(
-        "SELECT u.id,u.name,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.org_id=?",
+        "SELECT u.id,u.name,u.email,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.org_id=?",
         req.org.id,
       ).map((u) => ({
         ...u,
+        ...profileName(u.id, u.name),
         isAdmin: adminUser(req.org.id, u.id),
         permissions: userModules(req.org.id, u.id),
         actionPermissions: userPolicy(req.org.id, u.id).actions,
@@ -1332,7 +1333,7 @@ export function createApp(
     const org = req.org.id,
       manager = req.org.role === "owner";
     const members = all(
-      "SELECT u.id,u.name,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
+      "SELECT u.id,u.name,u.email,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
       org,
     ).map((m) => ({ ...m, ...profileName(m.id, m.name) }));
     const result = {};
@@ -2692,10 +2693,24 @@ export function createApp(
     // Names belong to the global account; do not modify another academy's account.
     if (get("SELECT count(*) AS n FROM memberships WHERE user_id=?", uid).n > 1)
       fail("Shared accounts must update their own profile", 409);
+    const account = get("SELECT email FROM users WHERE id=?", uid);
+    let email = account.email;
+    if (req.body.email !== undefined) {
+      email = text(req.body.email, "email", 254).toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Invalid email");
+      if (email !== account.email && !req.org.isAdmin)
+        fail("Only system administrators can change login emails", 403);
+    }
     const previous = profileName(uid, name);
-    saveProfileName(uid, { ...previous, ...req.body }, name);
-    run("UPDATE users SET name=? WHERE id=?", name, uid);
-    audit(req, "member.update", uid);
+    transaction(() => {
+      if (get("SELECT id FROM users WHERE email=? AND id<>?", email, uid))
+        fail("Email already registered", 409);
+      saveProfileName(uid, { ...previous, ...req.body }, name);
+      run("UPDATE users SET name=?,email=? WHERE id=?", name, email, uid);
+      if (email !== account.email)
+        run("DELETE FROM sessions WHERE user_id=?", uid);
+      audit(req, "member.update", uid);
+    });
     res.json({ ok: true });
   });
   app.delete("/api/members/:id", owner, (req, res) => {

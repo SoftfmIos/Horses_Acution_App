@@ -284,7 +284,7 @@ export function MemberTools({
             <div className="section-heading">
               <h2 id="member-dialog-title">
                 {form.mode === "edit"
-                  ? label("Edit member", "تعديل العضو")
+                  ? label("Edit user", "تعديل المستخدم")
                   : form.mode === "link"
                     ? label("Add existing member", "إضافة عضو مسجل")
                     : label("Add user", "إضافة مستخدم")}
@@ -346,7 +346,7 @@ export function MemberTools({
                   </label>
                 </>
               )}
-              {form.mode !== "edit" && (
+              {(form.mode !== "edit" || form.email !== undefined) && (
                 <label>
                   {label("Email", "البريد الإلكتروني")}
                   <input
@@ -523,6 +523,11 @@ export function MemberTools({
             />
             <strong>
               {m.name}
+              {m.email && (
+                <small className="record-id" dir="ltr">
+                  {m.email}
+                </small>
+              )}
               <small className="record-id">
                 {m.creditBalance || 0} {label("lesson credits", "رصيد حصص")}
               </small>
@@ -561,10 +566,11 @@ export function MemberTools({
                   id: m.id,
                   nameEn: m.nameEn ?? m.name,
                   nameAr: m.nameAr || "",
+                  email: m.email,
                 })
               }
             >
-              {label("Edit name", "تعديل الاسم")}
+              {label("Edit user", "تعديل المستخدم")}
             </button>
             <button
               className="text-button"

@@ -64,3 +64,7 @@ Classes & riding includes a separate Member & instructor booking calendar sectio
 Adds secure password generation and printable account details when creating users. Settings now includes outgoing SMTP configuration per stable, with notifications@riyadhpolohills.com as the default sender and support@riyadhpolohills.com as Reply-to. Passwords are encrypted server-side and retained when an edit leaves the password blank. The notification worker picks up saved configuration without restarting. SMTP settings respect existing Settings edit permissions. Database backups include the email encryption key when present; restore the matching `.email-key` file alongside the database.
 
 Deploy the same release to the frontend and backend; pull the repository and restart the backend. Schema changes apply automatically. Saving SMTP settings does not verify credentials or send a test message.
+
+## 1.19.0
+
+Users & Permissions now includes Add user, password generation, printable account details and Edit user alongside the permissions editor. User lists show email addresses; administrators can edit English/Arabic names and login emails. Email changes reject duplicates and shared accounts and invalidate existing sessions. Deploy matching frontend and backend versions so the new profile fields and email updates are available together.
