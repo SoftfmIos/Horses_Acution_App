@@ -13,7 +13,8 @@
     "test:browser": "node tests/browser.mjs",
     "db:backup": "node --env-file-if-exists=.env scripts/backup.mjs",
     "admin:create": "node --env-file-if-exists=.env scripts/create-admin.mjs",
-    "test:save-race": "node tests/save-race.mjs"
+    "test:save-race": "node tests/save-race.mjs",
+    "test:stable-browser": "node tests/stable-features.mjs"
   },
   "dependencies": {
     "express": "^5.3.0",

@@ -71,6 +71,9 @@ export default async function handler(req, res) {
   ]) {
     if (typeof req.headers[key] === "string") headers[key] = req.headers[key];
   }
+  const bodyLimit = /^\/api\/horses\/[^/]+\/documents$/.test(incoming.pathname)
+    ? 3 * 1024 * 1024
+    : 100 * 1024;
   let body;
   if (!["GET", "HEAD"].includes(req.method)) {
     if (req.body !== undefined)
@@ -83,13 +86,13 @@ export default async function handler(req, res) {
       let size = 0;
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 100 * 1024)
+        if (size > bodyLimit)
           return res.status(413).json({ error: "Request too large" });
         chunks.push(chunk);
       }
       body = Buffer.concat(chunks);
     }
-    if (Buffer.byteLength(body) > 100 * 1024)
+    if (Buffer.byteLength(body) > bodyLimit)
       return res.status(413).json({ error: "Request too large" });
   }
   try {

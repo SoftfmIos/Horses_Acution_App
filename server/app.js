@@ -1,3 +1,4 @@
+import { stableOperations } from "./stable-operations.js";
 import { recurrenceSlots, treatmentSlots } from "../shared/recurrence.js";
 import {
   feedingConflict,
@@ -90,6 +91,7 @@ export function createApp(
       },
     }),
   );
+  app.use("/api/horses/:id/documents", express.json({ limit: "3mb" }));
   app.use(express.json({ limit: "100kb" }));
   const now = () => clock().toISOString();
   const get = (sql, ...args) => db.prepare(sql).get(...args);
@@ -624,6 +626,7 @@ export function createApp(
         "instructors",
         "arenas",
         "breeds",
+        "stalls",
       ].includes(kind),
       titles = ["classes", "tasks", "discounts"].includes(kind);
     const body = { ...b };
@@ -684,6 +687,7 @@ export function createApp(
     return result;
   }
   function validateBase(req, kind, b, rid) {
+    if (kind === "stalls") return operations.validate(req, kind, b, rid);
     const org = req.org.id;
     const optional = (v) =>
       typeof v === "string" ? v.trim().slice(0, 2000) : "";
@@ -978,7 +982,13 @@ export function createApp(
         )
           fail("Feeding time conflicts with an existing horse booking", 409);
       }
+      if (b.inventoryId) record(org, "inventory", b.inventoryId);
+      const stockUnits = b.inventoryId
+        ? integer(b.stockUnits, "stock units per feeding", 1)
+        : 0;
       return {
+        inventoryId: b.inventoryId || "",
+        stockUnits,
         ...candidate,
         horseId: b.horseId,
         feed: text(b.feed, "feed", 100),
@@ -1014,7 +1024,13 @@ export function createApp(
         notes: optional(b.notes),
       };
     }
-    if (kind === "inventory")
+    if (kind === "inventory") {
+      if (
+        rid &&
+        record(org, kind, rid).unit !== b.unit &&
+        records(org, "feeding").some((f) => f.inventoryId === rid)
+      )
+        fail("Keep the stock unit while feeding plans use this item", 409);
       return {
         name: text(b.name, "item name", 100),
         unit: text(b.unit, "unit", 30),
@@ -1022,6 +1038,7 @@ export function createApp(
         reorderAt: integer(b.reorderAt || 0, "reorder point"),
         expiresAt: b.expiresAt ? iso(b.expiresAt) : "",
       };
+    }
     fail("Unknown module", 404);
   }
   const kinds = [
@@ -1037,6 +1054,7 @@ export function createApp(
     "feeding",
     "tasks",
     "inventory",
+    "stalls",
   ];
   function safeClass(req, c) {
     const total = get(
@@ -1218,6 +1236,19 @@ export function createApp(
         : [org, org, req.user.id]),
     );
     if (!manager) result.taskHistory = [];
+    result.boarding = manager
+      ? records(org, "boarding").map((b) => ({
+          ...b,
+          paymentStatus:
+            get(
+              "SELECT status FROM proformas WHERE org_id=? AND id=?",
+              org,
+              b.invoiceId,
+            )?.status || "open",
+        }))
+      : [];
+    result.stockMovements = manager ? records(org, "stockMovements") : [];
+    if (!manager) result.stalls = [];
     result.emailConfigured = emailEnabled;
     res.json(result);
   });
@@ -1250,6 +1281,25 @@ export function createApp(
         );
     }
   }
+  const operations = stableOperations({
+    app,
+    owner,
+    records,
+    record,
+    put,
+    get,
+    all,
+    run,
+    transaction,
+    fail,
+    text,
+    integer,
+    iso,
+    id,
+    now,
+    audit,
+    createPaymentRequest,
+  });
   app.get("/api/records/:kind/:id", owner, (req, res) => {
     if (!kinds.includes(req.params.kind)) fail("Unknown module", 404);
     res.json(record(req.org.id, req.params.kind, req.params.id));
@@ -1261,10 +1311,14 @@ export function createApp(
       const slots =
         kind === "classes"
           ? recurrenceSlots(req.body)
-          : kind === "feeding" && Array.isArray(req.body.horseIds)
+          : ["feeding", "medical"].includes(kind) &&
+              Array.isArray(req.body.horseIds)
             ? [...new Set(req.body.horseIds)].map((horseId) => ({ horseId }))
             : [null];
-      if (kind === "feeding" && (!slots.length || slots.length > 100))
+      if (
+        ["feeding", "medical"].includes(kind) &&
+        (!slots.length || slots.length > 100)
+      )
         fail("Choose between 1 and 100 horses");
       const seriesId = slots.length > 1 ? id() : null;
       return slots.map((slot) => {
@@ -1275,7 +1329,9 @@ export function createApp(
           ...(seriesId
             ? {
                 seriesId,
-                repeatMode: req.body.repeatMode || "weekly",
+                repeatMode:
+                  req.body.repeatMode ||
+                  (kind === "classes" ? "weekly" : "none"),
                 repeatEvery: req.body.repeatEvery || 1,
                 repeatDays: req.body.repeatDays || [],
                 repeatUntil: req.body.repeatUntil || "",
@@ -1302,7 +1358,7 @@ export function createApp(
   app.put("/api/records/:kind/:id", owner, (req, res) => {
     const { kind, id: rid } = req.params;
     if (!kinds.includes(kind)) fail("Unknown module", 404);
-    record(req.org.id, kind, rid);
+    const previous = record(req.org.id, kind, rid);
     const data = validate(req, kind, req.body, rid);
     transaction(() => {
       if (
@@ -1320,6 +1376,14 @@ export function createApp(
         )
       )
         fail("Complete medical restrictions before returning horse to riding");
+      if (kind === "inventory" && previous.quantity !== data.quantity)
+        put(req.org.id, "stockMovements", id(), {
+          itemId: rid,
+          delta: data.quantity - previous.quantity,
+          reference: "Manual stock adjustment",
+          createdAt: now(),
+          actorId: req.user.id,
+        });
       put(req.org.id, kind, rid, data);
       if (kind === "medical") restrictHorse(req, data, rid);
       if (["medical", "feeding"].includes(kind))
@@ -1353,6 +1417,7 @@ export function createApp(
       const done = req.body.done === undefined ? !task.done : req.body.done;
       if (typeof done !== "boolean") fail("Invalid completion state");
       if (done === task.done) return;
+      operations.stockForTask(req, task, done);
       put(req.org.id, "tasks", task.id, {
         ...task,
         done,
@@ -2284,7 +2349,14 @@ export function createApp(
               record(org.id, "horses", medical.horseId).name +
                 " · " +
                 medical.type,
-              "medical:" + medical.id + ":" + medical.dueAt + ":" + u,
+              "medical:" +
+                medical.id +
+                ":" +
+                medical.dueAt +
+                ":" +
+                (medical.dueAt < now() ? "overdue" : "upcoming") +
+                ":" +
+                u,
             ),
           );
         for (const item of records(org.id, "inventory").filter(

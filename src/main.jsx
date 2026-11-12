@@ -1,3 +1,5 @@
+import { HorseProfile, CareReminders } from "./HorseProfile";
+import { Boarding, FeedStock } from "./Boarding";
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -102,6 +104,11 @@ const dict = {
     vouchers: "Vouchers",
     billing: "Payment requests",
     inventory: "Inventory",
+    stalls: "Stalls",
+    boardingManagement: "Stalls & boarding",
+    horseProfile: "Horse profile",
+    inventoryId: "Feed stock item (optional)",
+    stockUnits: "Stock units per feeding",
     reports: "Reports",
     members: "Members",
     notifications: "Notifications",
@@ -332,6 +339,11 @@ const dict = {
     vouchers: "القسائم",
     billing: "طلبات الدفع",
     inventory: "المخزون",
+    stalls: "المرابط",
+    boardingManagement: "المرابط والإيواء",
+    horseProfile: "ملف الحصان",
+    inventoryId: "صنف العلف بالمخزون (اختياري)",
+    stockUnits: "وحدات المخزون لكل وجبة",
     reports: "التقارير",
     members: "الأعضاء",
     notifications: "الإشعارات",
@@ -521,6 +533,9 @@ const fresh = {
   discounts: [],
   vouchers: [],
   inventory: [],
+  stalls: [],
+  boarding: [],
+  stockMovements: [],
   bookings: [],
   proformas: [],
   members: [],
@@ -734,6 +749,7 @@ function App() {
     ...(manager
       ? [
           ["inventory", Package],
+          ["boardingManagement", HorseHead],
           ["reports", BarChart3],
           ["members", Users],
           ["settings", SettingsIcon],
@@ -807,6 +823,13 @@ function App() {
             ),
           ],
           ["address", "text"],
+          ["active", "checkbox"],
+          ["notes", "textarea"],
+        ],
+        stalls: [
+          ["nameEn", "text", true],
+          ["nameAr", "text"],
+          ["capacity", "number", true],
           ["active", "checkbox"],
           ["notes", "textarea"],
         ],
@@ -890,7 +913,9 @@ function App() {
           ],
         ],
         medical: [
-          ["horseId", "select", true, horses],
+          modal?.record
+            ? ["horseId", "select", true, horses]
+            : ["horseIds", "multi", true, horses],
           ["type", "text", true],
           ["date", "datetime-local", true],
           ["dueAt", "datetime-local"],
@@ -910,6 +935,13 @@ function App() {
             ? ["horseId", "select", true, horses]
             : ["horseIds", "multi", true, horses],
           ["feed", "text", true],
+          [
+            "inventoryId",
+            "select",
+            false,
+            data.inventory.map((i) => [i.id, i.name + " · " + i.unit]),
+          ],
+          ["stockUnits", "number"],
           ["quantity", "text", true],
           ["time", "time", true],
           ["durationMinutes", "number", true],
@@ -1169,6 +1201,12 @@ function App() {
           </>
         ) : kind === "horses" ? (
           <>
+            <button
+              className="primary"
+              onClick={() => setModal({ kind: "horseProfile", record: r })}
+            >
+              {ar ? "فتح ملف الحصان" : "Open horse profile"}
+            </button>
             <p>{r.breed}</p>
             <span className={"pill " + (r.status === "rest" ? "warning" : "")}>
               {t[r.status]}
@@ -1568,6 +1606,7 @@ function App() {
                 "arenas",
                 "breeds",
                 "horses",
+                "stalls",
                 "medical",
                 "feeding",
                 "tasks",
@@ -1607,6 +1646,34 @@ function App() {
             )}
           </div>
 
+          {page === "boardingManagement" && manager && (
+            <Boarding
+              data={data}
+              ar={ar}
+              request={request}
+              action={action}
+              busy={busy}
+              openForm={openForm}
+              money={money}
+            />
+          )}
+          {page === "inventory" && manager && (
+            <FeedStock
+              data={data}
+              ar={ar}
+              request={request}
+              action={action}
+              busy={busy}
+            />
+          )}
+          {["overview", "medical"].includes(page) && manager && (
+            <CareReminders
+              medical={data.medical}
+              horses={data.horses}
+              ar={ar}
+              when={when}
+            />
+          )}
           {page === "overview" && client && (
             <ClientHome
               data={data}
@@ -2198,6 +2265,7 @@ function App() {
             "arenas",
             "breeds",
             "horses",
+            "stalls",
             "medical",
             "feeding",
             "pricing",
@@ -2437,7 +2505,17 @@ function App() {
                                 modal.kind === "plans" ? "pricing" : modal.kind
                               ]}
             </h2>
-            {modal.kind === "voucherPrint" ? (
+            {modal.kind === "horseProfile" ? (
+              <HorseProfile
+                horseId={modal.record.id}
+                ar={ar}
+                request={request}
+                staff={manager}
+                when={when}
+                busy={busy}
+                action={action}
+              />
+            ) : modal.kind === "voucherPrint" ? (
               <VoucherCard
                 voucher={modal.record}
                 academy={localizedName(stable, ar)}

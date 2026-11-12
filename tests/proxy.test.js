@@ -9,7 +9,7 @@ test("Vercel proxy: configuration errors, backend failure, login cookies, CSRF a
   const saved = process.env.ACADEMY_BACKEND_URL;
   const db = openDatabase(":memory:");
   const frontend = express();
-  frontend.use(express.json());
+  frontend.use(express.json({ limit: "3mb" }));
   // Emulate the explicit Vercel rewrite, including nested authentication URLs.
   frontend.use((req, res, next) => {
     const original = new URL(req.url, "https://frontend.invalid");
@@ -124,6 +124,33 @@ test("Vercel proxy: configuration errors, backend failure, login cookies, CSRF a
     body: JSON.stringify({ done: true }),
   });
   assert.equal(r.status, 200);
+
+  const documentContent = Buffer.from(
+    "%PDF-1.4\n" + "x".repeat(150000),
+  ).toString("base64");
+  r = await fetch(base + "/api/horses/" + horse.id + "/documents", {
+    method: "POST",
+    headers: scopedHeaders,
+    body: JSON.stringify({
+      titleEn: "Passport",
+      category: "passport",
+      filename: "passport.pdf",
+      content: documentContent,
+    }),
+  });
+  assert.equal(r.status, 201);
+  const document = await r.json();
+  r = await fetch(base + "/api/horse-documents/" + document.id, {
+    headers: scopedHeaders,
+  });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).content, documentContent);
+  r = await fetch(base + "/api/records/horses", {
+    method: "POST",
+    headers: scopedHeaders,
+    body: JSON.stringify({ name: "Too large", notes: "x".repeat(150000) }),
+  });
+  assert.equal(r.status, 413);
 
   r = await fetch(base + "/api/auth/logout", {
     method: "POST",

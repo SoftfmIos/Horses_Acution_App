@@ -77,6 +77,8 @@ export function SettingsHub({
   ];
   const links = [
     ["horses", HorseHead],
+    ["stalls", HorseHead],
+    ["boardingManagement", HorseHead],
     ["breeds", HorseHead],
     ["members", Users],
     ["instructors", GraduationCap],
@@ -209,8 +211,8 @@ export function SettingsHub({
                 <button
                   className="primary"
                   onClick={() =>
-                    key === "members"
-                      ? go("members")
+                    ["members", "boardingManagement"].includes(key)
+                      ? go(key)
                       : key === "billing"
                         ? go("billing")
                         : openForm(module)

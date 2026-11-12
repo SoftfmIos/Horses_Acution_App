@@ -2,6 +2,8 @@
 
 Arabic/English stable and member management with the Academy's navy, ivory and gold theme, Tajawal fonts, full crest and RTL layouts. This version replaces the browser-only prototype with an authenticated Node.js API and a shared persistent SQLite database.
 
+See [Horse and stable workflows](docs/STABLE_WORKFLOWS.md) for horse timelines and documents, care reminders, stalls and boarding invoices, multi-horse medical plans, staff planners and feed-stock tracking.
+
 ## Vercel hosting
 
 For `https://horsesacutionapp.vercel.app`, follow [Connect Vercel to the backend](docs/VERCEL.md). The repo now includes a Vercel API proxy, a tested Docker container, and an optional Render Blueprint. Vercel still needs `ACADEMY_BACKEND_URL` pointing to a separately deployed persistent Node service. The backend has not been publicly deployed by this code change.

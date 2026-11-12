@@ -1527,3 +1527,256 @@ test("bulk feeding is atomic and discount titles generate immutable unique codes
     );
   }
 });
+
+test("stall capacity, boarding periods and linked invoices are stable scoped and atomic", async (t) => {
+  const f = await fixture(t),
+    { horse } = await setup(f),
+    member = (await f.member.call("/auth/me")).user.id;
+  const stall = await f.create("stalls", {
+    nameEn: "North 1",
+    nameAr: "الشمال 1",
+    capacity: 1,
+    active: true,
+  });
+  const plan = await f.create("plans", {
+    name: "Full boarding",
+    amount: 50000,
+    kind: "boarding_full",
+  });
+  const body = {
+    horseId: horse.id,
+    stallId: stall.id,
+    memberId: member,
+    planId: plan.id,
+    startDate: "2026-11-11",
+    endDate: "2026-11-30",
+  };
+  const stay = await f.owner.call("/boarding", "POST", body);
+  assert.equal(stay.httpStatus, 201, JSON.stringify(stay));
+  assert.equal(
+    (await f.owner.call("/data")).proformas.find((p) => p.id === stay.invoiceId)
+      .activation,
+    "pending_payment",
+  );
+  assert.equal((await f.member.call("/data")).proformas[0].member_id, member);
+  const second = await f.create("horses", { name: "Second" });
+  assert.equal(
+    (await f.owner.call("/boarding", "POST", { ...body, horseId: second.id }))
+      .httpStatus,
+    409,
+  );
+  assert.equal((await f.owner.call("/data")).proformas.length, 1);
+  assert.equal(
+    (
+      await f.owner.call("/records/stalls/" + stall.id, "PUT", {
+        ...stall,
+        active: false,
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal(
+    (await f.member.call("/boarding", "POST", body)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.owner.call("/boarding/" + stay.id + "/end", "POST")).httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.owner.call("/boarding", "POST", { ...body, horseId: second.id }))
+      .httpStatus,
+    201,
+  );
+  assert.deepEqual((await f.member.call("/data")).boarding, []);
+  f.other.stable = f.owner.stable;
+  assert.equal((await f.other.call("/boarding", "POST", body)).httpStatus, 403);
+});
+
+test("horse timeline and uploaded documents enforce ownership and stable permissions", async (t) => {
+  const f = await fixture(t),
+    { horse } = await setup(f),
+    member = (await f.member.call("/auth/me")).user.id;
+  assert.equal(
+    (await f.member.call("/horses/" + horse.id + "/profile")).httpStatus,
+    403,
+  );
+  await f.owner.call("/records/horses/" + horse.id, "PUT", {
+    ...horse,
+    ownerId: member,
+  });
+  const content = Buffer.from("%PDF-1.4\nsmall fixture\n%%EOF").toString(
+    "base64",
+  );
+  const uploaded = await f.owner.call(
+    "/horses/" + horse.id + "/documents",
+    "POST",
+    {
+      title: "Passport",
+      category: "passport",
+      filename: "passport.pdf",
+      content,
+    },
+  );
+  assert.equal(uploaded.httpStatus, 201, JSON.stringify(uploaded));
+  const profile = await f.member.call("/horses/" + horse.id + "/profile");
+  assert.equal(profile.documents.length, 1);
+  assert.equal(profile.events[0].type, "document");
+  const file = await f.member.call("/horse-documents/" + uploaded.id);
+  assert.equal(file.content, content);
+  assert.equal(file.mime, "application/pdf");
+  assert.equal(
+    (
+      await f.member.call("/horses/" + horse.id + "/documents", "POST", {
+        title: "bad",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/horses/" + horse.id + "/documents", "POST", {
+        title: "bad",
+        category: "medical",
+        filename: "evil.html",
+        content: Buffer.from("<script>alert(1)</script>").toString("base64"),
+      })
+    ).httpStatus,
+    400,
+  );
+  const data = await f.owner.call("/data");
+  assert.equal(JSON.stringify(data).includes(content), false);
+  const invite = await f.owner.call("/invites", "POST"),
+    stranger = f.client();
+  await stranger.register("document-stranger@test.com", invite.code);
+  assert.equal(
+    (await stranger.call("/horse-documents/" + uploaded.id)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.member.call("/horse-documents/" + uploaded.id, "DELETE"))
+      .httpStatus,
+    403,
+  );
+  assert.equal(
+    (await f.owner.call("/horse-documents/" + uploaded.id, "DELETE"))
+      .httpStatus,
+    200,
+  );
+  assert.equal(
+    (await f.member.call("/horse-documents/" + uploaded.id)).httpStatus,
+    404,
+  );
+});
+
+test("multi-horse medical creates independent schedules and rolls back invalid batches", async (t) => {
+  const f = await fixture(t),
+    { horse } = await setup(f),
+    other = await f.create("horses", { name: "Companion" });
+  const body = {
+    horseIds: [horse.id, other.id],
+    type: "Vaccination follow-up",
+    date: "2026-11-12T06:00:00Z",
+    dueAt: "2026-11-15T06:00:00Z",
+    notes: "Follow-up",
+    repeatMode: "daily",
+    repeatUntil: "2026-11-14",
+  };
+  assert.equal(
+    (
+      await f.owner.call("/records/medical", "POST", {
+        ...body,
+        horseIds: [horse.id, "missing"],
+      })
+    ).httpStatus,
+    404,
+  );
+  assert.equal((await f.owner.call("/data")).medical.length, 0);
+  const result = await f.owner.call("/records/medical", "POST", body);
+  assert.equal(result.httpStatus, 201, JSON.stringify(result));
+  assert.equal(result.created.length, 2);
+  let data = await f.owner.call("/data");
+  assert.equal(data.tasks.length, 6);
+  const task = data.tasks.find((x) => x.medicalId === result.created[0].id);
+  await f.owner.call("/tasks/" + task.id + "/toggle", "POST", { done: true });
+  data = await f.owner.call("/data");
+  assert.equal(data.tasks.filter((x) => x.done).length, 1);
+  assert.equal(
+    data.tasks.filter((x) => x.medicalId === result.created[1].id && x.done)
+      .length,
+    0,
+  );
+  assert.ok(data.notifications.some((n) => n.title.includes("Care due")));
+});
+
+test("completed feeding consumes stock once, reopening reverses it and shortages roll back", async (t) => {
+  const f = await fixture(t),
+    { horse } = await setup(f),
+    actor = (await f.owner.call("/auth/me")).user.id;
+  const stock = await f.create("inventory", {
+    name: "Hay units",
+    unit: "kg",
+    quantity: 10,
+    reorderAt: 3,
+  });
+  const plan = await f.create("feeding", {
+    horseId: horse.id,
+    feed: "Hay",
+    quantity: "3 kg",
+    time: "08:00",
+    assigneeId: actor,
+    inventoryId: stock.id,
+    stockUnits: 3,
+  });
+  let d = await f.owner.call("/data");
+  const tasks = d.tasks.filter((x) => x.feedingPlanId === plan.id);
+  assert.equal(
+    (
+      await f.owner.call("/tasks/" + tasks[0].id + "/toggle", "POST", {
+        done: true,
+      })
+    ).httpStatus,
+    200,
+  );
+  await f.owner.call("/tasks/" + tasks[0].id + "/toggle", "POST", {
+    done: true,
+  });
+  assert.equal((await f.owner.call("/data")).inventory[0].quantity, 7);
+  await f.owner.call("/tasks/" + tasks[0].id + "/toggle", "POST", {
+    done: false,
+  });
+  assert.equal((await f.owner.call("/data")).inventory[0].quantity, 10);
+  for (const task of tasks.slice(0, 3))
+    await f.owner.call("/tasks/" + task.id + "/toggle", "POST", { done: true });
+  assert.equal(
+    (
+      await f.owner.call("/tasks/" + tasks[3].id + "/toggle", "POST", {
+        done: true,
+      })
+    ).httpStatus,
+    409,
+  );
+  d = await f.owner.call("/data");
+  assert.equal(d.inventory[0].quantity, 1);
+  assert.equal(d.tasks.find((x) => x.id === tasks[3].id).done, false);
+  assert.equal(
+    (
+      await f.owner.call("/inventory/" + stock.id + "/receive", "POST", {
+        quantity: 5,
+        reference: "DEL-001",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal((await f.owner.call("/data")).inventory[0].quantity, 6);
+  assert.equal(
+    (
+      await f.member.call("/inventory/" + stock.id + "/receive", "POST", {
+        quantity: 5,
+        reference: "bad",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.deepEqual((await f.member.call("/data")).stockMovements, []);
+});

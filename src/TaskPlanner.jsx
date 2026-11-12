@@ -117,6 +117,52 @@ export function TaskPlanner({
           {label("Print planner", "طباعة المخطط")}
         </button>
       </div>
+      {!group && (
+        <section className="panel staff-workload">
+          <h3>{label("Staff work planner", "مخطط عمل الموظفين")}</h3>
+          <p>
+            {range.start} – {range.end}
+          </p>
+          <div className="record-grid">
+            {members
+              .filter(
+                (m) =>
+                  m.role === "owner" || all.some((t) => t.assigneeId === m.id),
+              )
+              .map((m) => {
+                const assigned = visible.filter((t) => t.assigneeId === m.id),
+                  done = assigned.filter((t) => t.done).length,
+                  overdue = assigned.filter(
+                    (t) => !t.done && t.dueAt < new Date().toISOString(),
+                  ).length;
+                return (
+                  <button
+                    key={m.id}
+                    className="soft"
+                    onClick={() => setAssignee(m.id)}
+                  >
+                    <strong>{m.name}</strong>
+                    <p>
+                      {done}/{assigned.length} {label("completed", "مكتملة")} ·{" "}
+                      {overdue} {label("overdue", "متأخرة")}
+                    </p>
+                  </button>
+                );
+              })}
+          </div>
+          <CareTasks
+            tasks={all}
+            period={range}
+            history={history}
+            members={members}
+            ar={ar}
+            when={when}
+            toggle={toggle}
+            busy={busy}
+            canComplete={canComplete}
+          />
+        </section>
+      )}
       {!group ? (
         <>
           <p>

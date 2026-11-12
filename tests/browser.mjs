@@ -298,7 +298,7 @@ let browser;
     .click();
   await nav("Medical care");
   await add();
-  await field("Horse").selectOption({ label: "Browser Shams" });
+  await field("Available horses (select multiple)").selectOption({ label: "Browser Shams" });
   await field("Care type").fill("Recovery");
   await field("Notes").fill("No riding until vet clearance");
   await field("Restrict horse from riding").check();
@@ -659,7 +659,7 @@ let browser;
   // A repeated follow-up creates individual tasks and displays completed/total progress.
   await nav("Medical care");
   await add();
-  await field("Horse").selectOption({ label: "Browser Shams" });
+  await field("Available horses (select multiple)").selectOption({ label: "Browser Shams" });
   await field("Care type").fill("Follow-up appointments");
   await field("Notes").fill("Appointment schedule test");
   await field("Recorded at").fill(firstDate + "T08:00");
