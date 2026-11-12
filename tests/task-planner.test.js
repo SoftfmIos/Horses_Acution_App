@@ -5,6 +5,7 @@ import {
   plannerRange,
   inPeriod,
   completionSummary,
+  taskCategoryGroups,
 } from "../src/taskPlanner.js";
 test("planner tracks each course separately and filters Riyadh dates", () => {
   const groups = taskGroups([
@@ -64,4 +65,49 @@ test("daily weekly monthly summaries use the selected period and exclude cancell
     completionSummary(tasks, plannerRange("2026-11-11", "month")),
     { done: 2, total: 4, percent: 50 },
   );
+});
+
+test("calendar categories separate feeding, medical and other tasks with accurate completion", () => {
+  const tasks = [
+    {
+      id: "f1",
+      feedingPlanId: "feed",
+      dueAt: "2026-11-12T05:00:00Z",
+      done: true,
+    },
+    {
+      id: "f2",
+      feedingPlanId: "feed",
+      dueAt: "2026-11-12T03:00:00Z",
+      done: false,
+    },
+    {
+      id: "m1",
+      medicalId: "course",
+      dueAt: "2026-11-12T06:00:00Z",
+      done: false,
+    },
+    { id: "o1", dueAt: "2026-11-12T07:00:00Z", done: true },
+    {
+      id: "cancelled",
+      feedingPlanId: "feed",
+      dueAt: "2026-11-12T08:00:00Z",
+      done: true,
+      cancelled: true,
+    },
+  ];
+  const groups = taskCategoryGroups(tasks);
+  assert.deepEqual(
+    groups.map((g) => [g.id, g.done, g.total, g.percent]),
+    [
+      ["feeding", 1, 2, 50],
+      ["medical", 0, 1, 0],
+      ["other", 1, 1, 100],
+    ],
+  );
+  assert.deepEqual(
+    groups[0].tasks.map((t) => t.id),
+    ["f2", "f1"],
+  );
+  assert.equal(tasks[0].id, "f1");
 });

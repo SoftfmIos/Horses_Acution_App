@@ -1,3 +1,4 @@
+import { taskCategoryGroups } from "./taskPlanner";
 import React, { useState } from "react";
 import { riyadhDay } from "./calendar";
 export function TaskCalendar({
@@ -12,6 +13,7 @@ export function TaskCalendar({
   canComplete,
 }) {
   const [pending, setPending] = useState({});
+  const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all"),
     l = (en, a) => (ar ? a : en);
   const dates = [];
@@ -23,10 +25,18 @@ export function TaskCalendar({
       .slice(0, 10)
   )
     dates.push(date);
+  const categoryName = (id) =>
+    ({
+      feeding: l("Feeding", "التغذية"),
+      medical: l("Medical", "الرعاية الطبية"),
+      other: l("Other tasks", "مهام أخرى"),
+    })[id];
   const rows = tasks.filter(
     (t) =>
       !t.cancelled &&
-      (status === "all" || (status === "done" ? t.done : !t.done)),
+      (category === "all" ||
+        (t.medicalId ? "medical" : t.feedingPlanId ? "feeding" : "other") ===
+          category),
   );
   const name = (id) => members.find((m) => m.id === id)?.name || "—";
   return (
@@ -44,6 +54,21 @@ export function TaskCalendar({
           <option value="all">{l("All", "الكل")}</option>
           <option value="pending">{l("Pending", "معلق")}</option>
           <option value="done">{l("Completed", "مكتمل")}</option>
+        </select>
+      </label>
+      <label className="task-calendar-filter">
+        {l("Task group", "مجموعة المهام")}
+        <select
+          aria-label={l("Calendar task group", "مجموعة مهام التقويم")}
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="all">{l("All groups", "كل المجموعات")}</option>
+          {["feeding", "medical", "other"].map((id) => (
+            <option key={id} value={id}>
+              {categoryName(id)}
+            </option>
+          ))}
         </select>
       </label>
       <div className={"task-calendar-grid task-calendar-view-" + view}>
@@ -81,75 +106,116 @@ export function TaskCalendar({
                 %
               </small>
               <div className="task-calendar-items">
-                {daily.map((task) => (
-                  <article
-                    className={
-                      "task-occurrence" +
-                      (task.done
-                        ? " done"
-                        : task.dueAt < new Date().toISOString()
-                          ? " overdue"
-                          : "")
-                    }
-                    key={task.id}
-                  >
-                    <label>
-                      <input
-                        type="checkbox"
+                {taskCategoryGroups(daily).map((group) => {
+                  const visible = group.tasks.filter(
+                    (t) =>
+                      status === "all" ||
+                      (status === "done" ? t.done : !t.done),
+                  );
+                  if (!visible.length) return null;
+                  return (
+                    <details
+                      className={"task-category-group category-" + group.id}
+                      data-category={group.id}
+                      key={group.id + view}
+                      open={view === "day"}
+                    >
+                      <summary>
+                        <strong>{categoryName(group.id)}</strong>
+                        <span>
+                          {group.done}/{group.total} · {group.percent}%
+                        </span>
+                      </summary>
+                      <progress
                         aria-label={
-                          l("Complete ", "إتمام ") +
-                          task.title +
+                          categoryName(group.id) +
                           " " +
-                          when(task.dueAt)
+                          l("completion", "الإنجاز")
                         }
-                        checked={pending[task.id] ?? Boolean(task.done)}
-                        disabled={busy || !canComplete(task)}
-                        onChange={async (e) => {
-                          const done = e.target.checked;
-                          setPending((p) => ({ ...p, [task.id]: done }));
-                          try {
-                            await toggle(task, done);
-                          } finally {
-                            setPending((p) => {
-                              const next = { ...p };
-                              delete next[task.id];
-                              return next;
-                            });
-                          }
-                        }}
+                        value={group.done}
+                        max={group.total}
                       />
-                      <span>
-                        <time>
-                          {new Date(task.dueAt).toLocaleTimeString(
-                            ar ? "ar-SA-u-nu-latn" : "en-GB",
-                            {
-                              timeZone: "Asia/Riyadh",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: false,
-                            },
-                          )}
-                        </time>
-                        <strong>{task.title}</strong>
-                      </span>
-                    </label>
-                    <small>{name(task.assigneeId)}</small>
-                    {task.done && (
-                      <p className="completion-stamp">
-                        ✓ {name(task.completedBy)} · {when(task.completedAt)}
-                      </p>
-                    )}
-                    {task.notes && (
-                      <details>
-                        <summary>{l("Instructions", "التعليمات")}</summary>
-                        <p>{task.notes}</p>
-                      </details>
-                    )}
-                  </article>
-                ))}
-                {!daily.length && (
-                  <p className="empty">{l("No tasks", "لا مهام")}</p>
-                )}
+                      <div className="task-category-entries">
+                        {visible.map((task) => (
+                          <article
+                            className={
+                              "task-occurrence" +
+                              (task.done
+                                ? " done"
+                                : task.dueAt < new Date().toISOString()
+                                  ? " overdue"
+                                  : "")
+                            }
+                            key={task.id}
+                          >
+                            <label>
+                              <input
+                                type="checkbox"
+                                aria-label={
+                                  l("Complete ", "إتمام ") +
+                                  task.title +
+                                  " " +
+                                  when(task.dueAt)
+                                }
+                                checked={pending[task.id] ?? Boolean(task.done)}
+                                disabled={busy || !canComplete(task)}
+                                onChange={async (e) => {
+                                  const done = e.target.checked;
+                                  setPending((p) => ({
+                                    ...p,
+                                    [task.id]: done,
+                                  }));
+                                  try {
+                                    await toggle(task, done);
+                                  } finally {
+                                    setPending((p) => {
+                                      const next = { ...p };
+                                      delete next[task.id];
+                                      return next;
+                                    });
+                                  }
+                                }}
+                              />
+                              <span>
+                                <time>
+                                  {new Date(task.dueAt).toLocaleTimeString(
+                                    ar ? "ar-SA-u-nu-latn" : "en-GB",
+                                    {
+                                      timeZone: "Asia/Riyadh",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      hour12: false,
+                                    },
+                                  )}
+                                </time>
+                                <strong>{task.title}</strong>
+                              </span>
+                            </label>
+                            <small>{name(task.assigneeId)}</small>
+                            {task.done && (
+                              <p className="completion-stamp">
+                                ✓ {name(task.completedBy)} ·{" "}
+                                {when(task.completedAt)}
+                              </p>
+                            )}
+                            {task.notes && (
+                              <details>
+                                <summary>
+                                  {l("Instructions", "التعليمات")}
+                                </summary>
+                                <p>{task.notes}</p>
+                              </details>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
+                {!daily.some(
+                  (t) =>
+                    status === "all" || (status === "done" ? t.done : !t.done),
+                ) && <p className="empty">{l("No tasks", "لا مهام")}</p>}
               </div>
             </section>
           );

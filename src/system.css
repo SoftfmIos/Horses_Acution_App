@@ -1635,3 +1635,52 @@ pre {
   font-size: 24px;
   margin: 10px 0;
 }
+.task-category-group {
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.task-category-group > summary {
+  cursor: pointer;
+  padding: 10px 8px;
+  font-size: 13px;
+  background: var(--stone);
+  border-inline-start: 4px solid var(--gold-text);
+}
+.task-category-group > summary strong {
+  display: inline;
+}
+.task-category-group > summary span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.task-category-group.category-feeding > summary {
+  border-color: #347749;
+  background: #e6f1e8;
+}
+.task-category-group.category-medical > summary {
+  border-color: #326a90;
+  background: #e6eef6;
+}
+.task-category-group.category-other > summary {
+  border-color: #977338;
+  background: #f4eedf;
+}
+.task-category-group > progress {
+  display: block;
+  width: calc(100% - 16px);
+  height: 6px;
+  margin: 8px;
+  accent-color: #347749;
+}
+.task-category-entries {
+  padding: 0 8px 4px;
+}
+.task-category-entries .task-occurrence {
+  margin: 8px 0;
+}
+.task-calendar-view-day .task-category-group > summary span {
+  display: inline;
+  margin-inline-start: 12px;
+}

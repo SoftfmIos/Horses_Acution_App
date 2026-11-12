@@ -51,3 +51,30 @@ export function completionSummary(tasks, range) {
     percent: selected.length ? Math.round((done / selected.length) * 100) : 0,
   };
 }
+
+export function taskCategoryGroups(tasks) {
+  return ["feeding", "medical", "other"]
+    .map((id) => {
+      const items = tasks
+        .filter(
+          (t) =>
+            !t.cancelled &&
+            (t.medicalId
+              ? "medical"
+              : t.feedingPlanId
+                ? "feeding"
+                : "other") === id,
+        )
+        .slice()
+        .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+      const done = items.filter((t) => t.done).length;
+      return {
+        id,
+        tasks: items,
+        done,
+        total: items.length,
+        percent: items.length ? Math.round((done / items.length) * 100) : 0,
+      };
+    })
+    .filter((group) => group.total > 0);
+}

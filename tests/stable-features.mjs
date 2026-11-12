@@ -345,6 +345,42 @@ try {
     .getByRole("heading", { name: "Staff work planner", exact: true })
     .waitFor();
   await page.getByLabel("Planner view", { exact: true }).selectOption("day");
+  const taskCalendar = page
+    .locator(".staff-workload")
+    .getByRole("region", { name: "Care task calendar" });
+  await taskCalendar.locator('[data-category="feeding"] > summary').waitFor();
+  await taskCalendar.locator('[data-category="medical"] > summary').waitFor();
+  await taskCalendar
+    .getByLabel("Calendar task group", { exact: true })
+    .selectOption("medical");
+  assert.equal(
+    await taskCalendar.locator('[data-category="feeding"]').count(),
+    0,
+  );
+  assert.equal(
+    await taskCalendar.locator('[data-category="medical"]').count(),
+    1,
+  );
+  await taskCalendar
+    .getByLabel("Calendar task group", { exact: true })
+    .selectOption("all");
+  await page.getByLabel("Planner view", { exact: true }).selectOption("week");
+  assert.equal(
+    await taskCalendar
+      .locator('[data-category="feeding"]')
+      .first()
+      .getAttribute("open"),
+    null,
+  );
+  await taskCalendar
+    .locator('[data-category="feeding"] > summary')
+    .first()
+    .click();
+  await taskCalendar
+    .locator('[data-category="feeding"] input[type=checkbox]')
+    .first()
+    .waitFor({ state: "visible" });
+  await page.getByLabel("Planner view", { exact: true }).selectOption("day");
   const before = await page
     .locator(".staff-workload input[type=checkbox]")
     .count();
@@ -363,6 +399,10 @@ try {
     .locator(".staff-workload .task-occurrence.done")
     .filter({ hasText: "Hay" })
     .locator(".completion-stamp")
+    .waitFor();
+  await taskCalendar
+    .locator('[data-category="feeding"] > summary')
+    .filter({ hasText: "100%" })
     .waitFor();
   await page.screenshot({
     path: "test-results/task-calendar.png",
