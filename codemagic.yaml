@@ -4,7 +4,7 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
-      xcode: latest
+      xcode: "26.4"
     triggering:
       events:
         - push
@@ -30,7 +30,7 @@ workflows:
     integrations:
       app_store_connect: Riyadh Polo Hills
     environment:
-      xcode: latest
+      xcode: "26.4"
       groups:
         - riyadh_polo_app_store
       ios_signing:
