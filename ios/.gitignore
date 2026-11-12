@@ -6,3 +6,6 @@ xcuserdata/
 *.dSYM/
 *.xcarchive/
 TestResults.xcresult/
+
+__pycache__/
+*.pyc

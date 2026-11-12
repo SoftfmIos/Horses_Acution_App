@@ -1,0 +1,65 @@
+workflows:
+  ios-simulator:
+    name: Riyadh Polo Hills - simulator checks
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: iOSApp
+          include: true
+          source: true
+      cancel_previous_builds: true
+    scripts:
+      - name: Validate the Xcode project
+        script: python3 ios/scripts/validate_project.py
+      - name: Run native simulator tests
+        script: bash ios/scripts/run_simulator_tests.sh
+    artifacts:
+      - ios/TestResults.xcresult
+      - /tmp/xcodebuild_logs/*.log
+
+  ios-testflight:
+    name: Riyadh Polo Hills - signed TestFlight deployment
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    integrations:
+      app_store_connect: Riyadh Polo Hills
+    environment:
+      xcode: latest
+      groups:
+        - riyadh_polo_app_store
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.riyadhpolohills.academy
+    # Start this workflow manually once the Apple app record and signing are ready.
+    # A push validates the app through ios-simulator; it does not upload automatically.
+    scripts:
+      - name: Validate the Xcode project
+        script: python3 ios/scripts/validate_project.py
+      - name: Verify the Apple app record and set the build number
+        script: python3 ios/scripts/codemagic_prepare.py
+      - name: Run native simulator tests before archiving
+        script: bash ios/scripts/run_simulator_tests.sh
+      - name: Apply Codemagic signing profiles
+        script: xcode-project use-profiles --project ios/RiyadhPoloHills.xcodeproj
+      - name: Archive and export the signed IPA
+        script: |
+          xcode-project build-ipa \
+            --project ios/RiyadhPoloHills.xcodeproj \
+            --scheme RiyadhPoloHills \
+            --config Release
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/xcarchive/*.xcarchive/dSYMs/*.dSYM
+      - ios/TestResults.xcresult
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false

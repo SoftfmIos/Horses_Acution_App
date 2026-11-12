@@ -16,7 +16,7 @@ The app includes no demo login, embedded credentials or sample financial records
 `Configuration/App.xcconfig` configures two public values:
 
 - `ACADEMY_API_ORIGIN`: `https://riyadhpolo.softfm.com`, the persistent Node API server.
-- `ACADEMY_WEBSITE_ORIGIN`: `https://horsesacutionapp.vercel.app`, which **must match the backend's `PUBLIC_ORIGIN` exactly**. This is sent as the request Origin to satisfy the existing CSRF policy. If your live website origin changes, update this value and rebuild.
+- `ACADEMY_WEBSITE_ORIGIN`: `https://app.riyadhpolohills.com`, which **must match the backend's `PUBLIC_ORIGIN` exactly**. This is sent as the request Origin to satisfy the existing CSRF policy. If your live website origin changes, update this value and rebuild.
 
 The `https:/$()/...` syntax prevents `.xcconfig` from interpreting `//` as a comment. Both values expand to ordinary HTTPS URLs in Info.plist. Do not put SMTP credentials or other secrets in this file. The app uses the existing `/api` endpoints without changing server authentication, enabling CORS, or deploying a separate backend. Use valid HTTPS certificates; App Transport Security remains enabled. Cross-host redirects are rejected rather than forwarding session headers.
 
@@ -56,3 +56,7 @@ The development workspace is Linux and has no Xcode or iOS Simulator. Source syn
 You will need your Apple Developer team, registered bundle ID, signing certificates/provisioning and an App Store Connect app. Configure signing locally in Xcode; never commit private keys, certificates or Apple passwords. Archive with a real-device destination and upload through Xcode Organizer. Before submission, validate both languages and staff/member accounts, ensure your production origin is correct, supply support/privacy-policy URLs, age rating, App Privacy disclosures, screenshots and a review account. The in-app privacy page is not a substitute for the public policy URL required by App Store Connect.
 
 Push notification delivery, if requested later, requires backend APNs device registration/sending plus Apple push capability and keys; it is not enabled merely by adding an entitlement. No App Store/TestFlight upload or signing has been performed by creating this branch.
+
+## Codemagic and TestFlight
+
+A root `codemagic.yaml` defines an automatic unsigned simulator-check workflow and a manually started signed TestFlight workflow. Follow [Apple registration and Codemagic setup](APP_STORE_SETUP.md). The TestFlight workflow expects the App Store Connect integration named **Riyadh Polo Hills** and environment group **riyadh_polo_app_store** containing **APP_STORE_APPLE_ID**. No signing secrets are stored in this repository.

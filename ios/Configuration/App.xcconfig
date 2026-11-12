@@ -1,6 +1,6 @@
 // Match the backend's PUBLIC_ORIGIN exactly. Do not put credentials here.
 ACADEMY_API_ORIGIN = https:/$()/riyadhpolo.softfm.com
-ACADEMY_WEBSITE_ORIGIN = https:/$()/horsesacutionapp.vercel.app
+ACADEMY_WEBSITE_ORIGIN = https:/$()/app.riyadhpolohills.com
 PRODUCT_BUNDLE_IDENTIFIER = com.riyadhpolohills.academy
 MARKETING_VERSION = 1.0.0
 CURRENT_PROJECT_VERSION = 1

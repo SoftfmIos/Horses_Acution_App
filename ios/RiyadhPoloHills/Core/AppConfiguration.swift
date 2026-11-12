@@ -5,7 +5,7 @@ struct AppConfiguration {
     let websiteOrigin: URL
     static let current = AppConfiguration(
         apiOrigin: URL(string: Bundle.main.object(forInfoDictionaryKey: "AcademyAPIOrigin") as? String ?? "https://riyadhpolo.softfm.com")!,
-        websiteOrigin: URL(string: Bundle.main.object(forInfoDictionaryKey: "AcademyWebsiteOrigin") as? String ?? "https://horsesacutionapp.vercel.app")!
+        websiteOrigin: URL(string: Bundle.main.object(forInfoDictionaryKey: "AcademyWebsiteOrigin") as? String ?? "https://app.riyadhpolohills.com")!
     )
 }
 
