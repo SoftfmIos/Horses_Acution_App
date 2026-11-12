@@ -72,3 +72,9 @@ The app uses Apple's Standard Licensed Application End User License Agreement: `
 If publishing says the binary was uploaded successfully but no matching build is found, check App Store Connect → TestFlight for the exact version/build and Apple's developer-account email for validation errors (often an ITMS code). Upload acceptance alone does not mean Apple finished processing or approved the binary.
 
 The workflow allows 30 minutes for the uploaded build to become discoverable and 30 minutes for processing, with a 120-minute overall build limit. These bounded waits handle processing delays; they do not override Apple's validation failures. If the build is already processing, check its result before starting another upload. An invalid or missing build accompanied by an Apple validation email must be corrected using that message.
+
+### Check status without rebuilding
+
+Refresh the Codemagic workflow list on `iOSApp`, then start **Riyadh Polo Hills - App Store build status**. This manual workflow uses the named Apple integration to read the app and all build states, including expired builds, without signing, archiving, uploading or submitting anything. Open **Read Apple build processing states** or download `app-store-status.json`.
+
+The report lists app version, build number, processing state and upload date for the latest 20 visible builds. Compare the exact version/build with the earlier Publishing log. An empty successful response confirms that the API has no build record; it cannot determine whether the upload is delayed or failed before a build was created. Authentication/API failures stop the workflow rather than being labelled no builds. If Apple still has no record and no processing email, collect the upload receipt/request ID and completion time from the original Publishing log for Apple Developer Support.
