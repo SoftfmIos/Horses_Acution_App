@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.0.1 (2)**; the web/backend release remains **1.21.0**. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.0.2 (3)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -72,3 +72,14 @@ A successful refresh replaces changed reminders and removes cancelled/pending bo
 The app icon is already packaged in the asset catalog; a review/download copy is in `ios/AppStoreAssets/AppIcon-1024.png`. Both are identical, opaque RGB 1024px PNGs using the existing crest on ivory.
 
 Notification scheduling, permission prompts and physical-device delivery must be tested in Xcode/TestFlight. The Linux workspace can validate source syntax and packaging but cannot run iOS notification delivery tests.
+
+## App Store public links (1.0.2)
+
+The in-app privacy screen links to the public privacy policy and Apple's standard EULA. Website release 1.28.0 includes the public pages; deploy it before distributing this app build.
+
+- Marketing: https://app.riyadhpolohills.com/app.html
+- Support: https://app.riyadhpolohills.com/app.html#support
+- Privacy: https://app.riyadhpolohills.com/privacy.html
+- Standard EULA: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+
+Use Apple's Standard EULA in App Store Connect. No custom license text is required. The deployment helper can raise the archive build number above 3 to avoid previously uploaded builds.

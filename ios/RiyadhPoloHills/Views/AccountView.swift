@@ -103,6 +103,14 @@ struct PrivacyView: View {
                 Text(store.text("This app connects to your academy account. Bookings, horse records, invoices and notifications are stored by the academy’s existing service. Staff access follows the permissions set by your administrator.", "يرتبط التطبيق بحسابك في الأكاديمية. تُحفظ الحجوزات وسجلات الخيل والفواتير والإشعارات في خدمة الأكاديمية الحالية. يتبع وصول الموظفين الصلاحيات المحددة من المسؤول."))
                 Text(store.text("Your session is stored in the iPhone Keychain. Your password is not saved by this app. Calendar access is used only when you choose to add a booking. The app does not include advertising or analytics SDKs.", "تُحفظ جلسة الدخول في سلسلة مفاتيح آيفون. لا يحفظ التطبيق كلمة المرور. يُستخدم التقويم فقط عند اختيار إضافة حجز. لا يحتوي التطبيق على أدوات إعلانات أو تحليلات."))
             }
+            Section(store.text("Privacy policy & license", "سياسة الخصوصية والترخيص")) {
+                Link(destination: store.api.configuration.websiteOrigin.appendingPathComponent("privacy.html")) {
+                    Label(store.text("Read the privacy policy", "قراءة سياسة الخصوصية"), systemImage: "hand.raised")
+                }
+                Link(destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!) {
+                    Label(store.text("Apple Standard License Agreement", "اتفاقية ترخيص آبل القياسية"), systemImage: "doc.text")
+                }
+            }
             Section(store.text("Account support", "دعم الحساب")) {
                 Text(store.text("Contact the academy to update your login details, request a password reset, or request account/data deletion. The academy may need to retain financial records.", "تواصل مع الأكاديمية لتحديث بيانات الدخول أو طلب استعادة كلمة المرور أو حذف الحساب والبيانات. قد يلزم الاحتفاظ بالسجلات المالية."))
                 Link("support@riyadhpolohills.com", destination: URL(string: "mailto:support@riyadhpolohills.com")!)

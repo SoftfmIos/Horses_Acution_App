@@ -1,6 +1,6 @@
 # Apple Developer → Codemagic → TestFlight
 
-The native app is **Riyadh Polo Hills**, version **1.0.1**, branch **iOSApp**. It uses bundle ID **com.riyadhpolohills.academy** and the website **https://app.riyadhpolohills.com**. Administrative settings stay in the web portal.
+The native app is **Riyadh Polo Hills**, version **1.0.2**, branch **iOSApp**. It uses bundle ID **com.riyadhpolohills.academy** and the website **https://app.riyadhpolohills.com**. Administrative settings stay in the web portal.
 
 ## 1. Register the Bundle ID in Apple Developer
 
@@ -56,3 +56,13 @@ The workflow does **not** submit for public App Store review. External testing m
 - Use one signed deployment at a time. Build numbers are assigned using the latest TestFlight build and the Codemagic CI build counter.
 - The unsigned `ios-simulator` workflow runs on branch pushes. The signed publishing workflow is manual so incomplete Apple setup does not trigger accidental uploads.
 - The native project needs Xcode/macOS. Linux packaging checks are not a simulator build or a successful TestFlight upload.
+
+## Public app information
+
+After deploying website release 1.28.0, use these public URLs in App Store Connect:
+
+- Marketing URL: `https://app.riyadhpolohills.com/app.html`
+- Support URL: `https://app.riyadhpolohills.com/app.html#support`
+- Privacy Policy URL: `https://app.riyadhpolohills.com/privacy.html`
+
+The app uses Apple's Standard Licensed Application End User License Agreement: `https://www.apple.com/legal/internet-services/itunes/dev/stdeula/`. Keep the default standard agreement; leave custom license text empty. The native privacy screen also links to the policy and agreement.
