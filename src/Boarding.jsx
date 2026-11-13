@@ -1,3 +1,6 @@
+import { isBoardingPrice } from "../shared/boarding.js";
+import { stallAvailability } from "./stallAvailability";
+import { ProfilePhoto } from "./ProfilePhoto";
 import React, { useState } from "react";
 import { localizedName } from "./localization";
 import { riyadhDay } from "./calendar";
@@ -10,15 +13,31 @@ export function Boarding({
   openForm,
   money,
   can = () => true,
+  onSaved = () => {},
 }) {
   const [form, setForm] = useState(null),
     [error, setError] = useState("");
   const l = (en, a) => (ar ? a : en);
-  const today = riyadhDay(new Date()),
-    live = data.boarding.filter(
-      (b) =>
-        b.status === "active" && b.startDate <= today && b.endDate >= today,
-    );
+  const today = riyadhDay(new Date());
+  const [availabilityFrom, setAvailabilityFrom] = useState(today),
+    [availabilityTo, setAvailabilityTo] = useState(today);
+  const occupancy = data.stallOccupancy ?? data.boarding;
+  const boardingPrices = data.plans.filter(
+    (p) => isBoardingPrice(p) && (p.active !== false || p.id === form?.planId),
+  );
+  const selectedPrice = boardingPrices.find((p) => p.id === form?.planId);
+  const originalStay = data.boarding.find((b) => b.id === form?.id);
+  const originalInvoice = data.proformas.find((p) => p.id === form?.invoiceId);
+  const priceAmount =
+    form?.id && form.planId === originalStay?.planId
+      ? (originalStay?.priceAmount ??
+        originalInvoice?.gross ??
+        selectedPrice?.amount)
+      : selectedPrice?.amount;
+  const addBoardingPrice = () => {
+    setForm(null);
+    openForm("plans", null, { kind: "boarding", credits: 0 });
+  };
   const horse = (id) =>
       localizedName(data.horses.find((h) => h.id === id) || {}, ar),
     stall = (id) =>
@@ -32,31 +51,98 @@ export function Boarding({
             "خصص المربط وأصدر فاتورة إيواء للفترة المختارة. السعر للفترة كاملة والتجديد يدوي. يبقى السداد معلقاً حتى تسجيله.",
           )}
         </p>
-        <button
-          className="primary"
-          disabled={!can("boarding", "add")}
-          onClick={() => {
-            setError("");
-            setForm({ startDate: today, endDate: today });
-          }}
-        >
-          {l("Assign boarding", "إضافة إيواء")}
-        </button>
-        <button
-          className="soft"
-          disabled={!can("stalls", "add")}
-          onClick={() => openForm("stalls")}
-        >
-          {l("Add stall", "إضافة مربط")}
-        </button>
+        <div className="boarding-actions">
+          <button
+            className="primary"
+            disabled={!can("boarding", "add")}
+            onClick={() => {
+              setError("");
+              const validPeriod =
+                availabilityFrom &&
+                availabilityTo &&
+                availabilityFrom <= availabilityTo;
+              setForm({
+                startDate: validPeriod ? availabilityFrom : today,
+                endDate: validPeriod ? availabilityTo : today,
+                planId: boardingPrices.length === 1 ? boardingPrices[0].id : "",
+              });
+            }}
+          >
+            {l("Assign boarding", "إضافة إيواء")}
+          </button>
+          {can("plans", "add") && (
+            <button className="soft" onClick={addBoardingPrice}>
+              {l("Add boarding price", "إضافة سعر إيواء")}
+            </button>
+          )}
+          <button
+            className="soft"
+            disabled={!can("stalls", "add")}
+            onClick={() => openForm("stalls")}
+          >
+            {l("Add stall", "إضافة مربط")}
+          </button>
+        </div>
       </div>
+      <div className="settings-form stall-date-filters">
+        <label>
+          {l("Availability from", "التوفر من")}
+          <input
+            type="date"
+            value={availabilityFrom}
+            onChange={(e) => setAvailabilityFrom(e.target.value)}
+          />
+        </label>
+        <label>
+          {l("Availability to", "التوفر إلى")}
+          <input
+            type="date"
+            value={availabilityTo}
+            onChange={(e) => setAvailabilityTo(e.target.value)}
+          />
+        </label>
+      </div>
+      <p className="boarding-availability-note">
+        {l(
+          "Available spaces are calculated for the selected dates. Unpaid assigned stays also occupy spaces; ended stays are excluded.",
+          "تُحسب الأماكن المتاحة للفترة المحددة. يشغل الإيواء المخصص مكاناً حتى قبل السداد، وتُستبعد الفترات المنتهية يدوياً.",
+        )}
+      </p>
+      {availabilityFrom > availabilityTo && (
+        <p role="alert">
+          {l(
+            "End date must be on or after start date.",
+            "يجب أن يكون تاريخ النهاية بعد البداية أو مساوياً له.",
+          )}
+        </p>
+      )}
       <div className="record-grid">
         {data.stalls.map((s) => (
           <article className="panel" key={s.id}>
             <h3>{localizedName(s, ar)}</h3>
             <p>
-              {live.filter((b) => b.stallId === s.id).length}/{s.capacity}{" "}
-              {l("occupied today", "مشغول اليوم")}
+              {
+                stallAvailability(
+                  s,
+                  occupancy,
+                  availabilityFrom,
+                  availabilityTo,
+                ).occupied
+              }
+              /{s.capacity}{" "}
+              {l(
+                "maximum occupied in selected period",
+                "أقصى إشغال في الفترة المحددة",
+              )}
+            </p>
+            <p className="stall-availability" role="status">
+              {s.active === false
+                ? l("Inactive stall", "مربط غير مفعّل")
+                : !availabilityFrom ||
+                    !availabilityTo ||
+                    availabilityFrom > availabilityTo
+                  ? "—"
+                  : `${stallAvailability(s, occupancy, availabilityFrom, availabilityTo).available} ${l("spaces available", "أماكن متاحة")}`}
             </p>
             <p>{s.notes}</p>
             <button
@@ -72,7 +158,14 @@ export function Boarding({
       <h3>{l("Boarding stays", "فترات الإيواء")}</h3>
       <div className="record-grid">
         {data.boarding.map((b) => (
-          <article className="panel" key={b.id}>
+          <article className="panel boarding-stay-card" key={b.id}>
+            <ProfilePhoto
+              kind="horses"
+              id={b.horseId}
+              name={horse(b.horseId)}
+              request={request}
+              ar={ar}
+            />
             <h3>
               {horse(b.horseId)} · {stall(b.stallId)}
             </h3>
@@ -90,20 +183,43 @@ export function Boarding({
                 ? l("Paid", "مدفوع")
                 : l("Payment pending", "بانتظار السداد")}
             </p>
+            {Number.isSafeInteger(b.priceAmount) && (
+              <p>
+                {l("Boarding price", "سعر الإيواء")}: {money(b.priceAmount)}
+              </p>
+            )}
             <small>
               {l("Invoice", "الفاتورة")}: {b.invoiceId}
             </small>
             {b.status === "active" && (
-              <button
-                disabled={busy || !can("boarding", "delete")}
-                onClick={() =>
-                  action(() =>
-                    request("/boarding/" + b.id + "/end", { method: "POST" }),
-                  )
-                }
-              >
-                {l("End stay", "إنهاء الإيواء")}
-              </button>
+              <div className="boarding-actions">
+                <button
+                  className="soft"
+                  disabled={busy || !can("boarding", "edit")}
+                  onClick={() => {
+                    setError("");
+                    setForm({ ...b });
+                  }}
+                >
+                  {l("Edit boarding", "تعديل الإيواء")}
+                </button>
+                <button
+                  className="soft"
+                  disabled={busy || !can("boarding", "delete")}
+                  onClick={async () => {
+                    if (
+                      await action(() =>
+                        request("/boarding/" + b.id + "/end", {
+                          method: "POST",
+                        }),
+                      )
+                    )
+                      onSaved({ ...b, status: "ended" });
+                  }}
+                >
+                  {l("End stay", "إنهاء الإيواء")}
+                </button>
+              </div>
             )}
           </article>
         ))}
@@ -113,7 +229,11 @@ export function Boarding({
           <section
             role="dialog"
             aria-modal="true"
-            aria-label={l("Assign boarding", "إضافة إيواء")}
+            aria-label={
+              form.id
+                ? l("Edit boarding", "تعديل الإيواء")
+                : l("Assign boarding", "إضافة إيواء")
+            }
             className="modal"
           >
             <button
@@ -123,21 +243,42 @@ export function Boarding({
             >
               ×
             </button>
-            <h2>{l("Assign boarding", "إضافة إيواء")}</h2>
+            <h2>
+              {form.id
+                ? l("Edit boarding", "تعديل الإيواء")
+                : l("Assign boarding", "إضافة إيواء")}
+            </h2>
+            {form.id && (
+              <p className="notice">
+                {l(
+                  "Editing keeps the same invoice. Paid invoices keep their original billed member and price. The period price is not automatically prorated.",
+                  "يحتفظ التعديل بالفاتورة نفسها. تحتفظ الفواتير المدفوعة بالعضو المفوتر والسعر الأصليين. لا يُحتسب السعر تلقائياً بالتناسب مع الفترة.",
+                )}
+              </p>
+            )}
             {error && <p role="alert">{error}</p>}
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 setError("");
+                let saved;
                 const ok = await action(async () => {
                   try {
-                    await request("/boarding", { method: "POST", body: form });
+                    saved = await request(
+                      "/boarding" + (form.id ? "/" + form.id : ""),
+                      { method: form.id ? "PUT" : "POST", body: form },
+                    );
                   } catch (e) {
                     setError(e.message);
                     throw e;
                   }
                 });
-                if (ok) setForm(null);
+                if (ok) {
+                  onSaved(saved);
+                  setAvailabilityFrom(saved.startDate);
+                  setAvailabilityTo(saved.endDate);
+                  setForm(null);
+                }
               }}
             >
               {[
@@ -150,8 +291,21 @@ export function Boarding({
                   "stallId",
                   l("Stall", "المربط"),
                   data.stalls
-                    .filter((s) => s.active)
-                    .map((s) => [s.id, localizedName(s, ar)]),
+                    .filter((s) => s.active !== false || s.id === form.stallId)
+                    .map((s) => [
+                      s.id,
+                      localizedName(s, ar) +
+                        " · " +
+                        stallAvailability(
+                          s,
+                          occupancy,
+                          form.startDate,
+                          form.endDate,
+                          form.id,
+                        ).available +
+                        " " +
+                        l("available", "متاح"),
+                    ]),
                 ],
                 [
                   "memberId",
@@ -161,9 +315,10 @@ export function Boarding({
                 [
                   "planId",
                   l("Boarding price", "سعر الإيواء"),
-                  data.plans
-                    .filter((p) => p.active && p.kind.startsWith("boarding"))
-                    .map((p) => [p.id, p.name + " · " + money(p.amount)]),
+                  boardingPrices.map((p) => [
+                    p.id,
+                    p.name + " · " + money(p.amount),
+                  ]),
                 ],
               ].map(([k, title, opts]) => (
                 <label key={k}>
@@ -171,6 +326,14 @@ export function Boarding({
                   <select
                     aria-label={title}
                     required
+                    disabled={
+                      !!form.id &&
+                      ["memberId", "planId"].includes(k) &&
+                      (form.financialTermsLocked ||
+                        data.proformas.find((p) => p.id === form.invoiceId)
+                          ?.paid > 0 ||
+                        form.paymentStatus === "settled")
+                    }
                     value={form[k] || ""}
                     onChange={(e) => setForm({ ...form, [k]: e.target.value })}
                   >
@@ -183,6 +346,44 @@ export function Boarding({
                   </select>
                 </label>
               ))}
+              {!boardingPrices.length && (
+                <div className="notice" role="status">
+                  <p>
+                    {l(
+                      "No active boarding prices are available. In Pricing, set the category to Boarding, Boarding with food, Full-inclusive boarding or Boarding with medical care, and mark the price active.",
+                      "لا توجد أسعار إيواء مفعّلة. في الأسعار، اختر فئة إيواء أو إيواء مع التغذية أو إيواء شامل أو إيواء مع الرعاية الطبية، وفعّل السعر.",
+                    )}
+                  </p>
+                  {can("plans", "add") ? (
+                    <button
+                      type="button"
+                      className="soft"
+                      onClick={addBoardingPrice}
+                    >
+                      {l("Add boarding price", "إضافة سعر إيواء")}
+                    </button>
+                  ) : (
+                    <p>
+                      {l(
+                        "Ask an administrator to add or activate a boarding price.",
+                        "اطلب من المسؤول إضافة سعر إيواء أو تفعيله.",
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
+              {Number.isSafeInteger(priceAmount) && (
+                <div className="boarding-price-total panel" role="status">
+                  <span>{l("Price for this stay", "سعر فترة الإيواء")}</span>
+                  <strong>{money(priceAmount)}</strong>
+                  <small>
+                    {l(
+                      "Charged once for the selected period. Editing dates does not automatically prorate the invoice.",
+                      "يُحتسب مرة واحدة للفترة المحددة. لا يؤدي تعديل التواريخ إلى احتساب الفاتورة تلقائياً بالتناسب مع المدة.",
+                    )}
+                  </small>
+                </div>
+              )}
               {[
                 ["startDate", l("Start date", "بداية الفترة")],
                 ["endDate", l("End date", "نهاية الفترة")],
@@ -198,8 +399,13 @@ export function Boarding({
                   />
                 </label>
               ))}
-              <button disabled={busy} className="primary">
-                {l("Assign & create invoice", "تخصيص وإصدار فاتورة")}
+              <button
+                disabled={busy || !boardingPrices.length}
+                className="primary"
+              >
+                {form.id
+                  ? l("Save boarding changes", "حفظ تعديلات الإيواء")
+                  : l("Assign & create invoice", "تخصيص وإصدار فاتورة")}
               </button>
             </form>
           </section>

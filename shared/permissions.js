@@ -68,6 +68,8 @@ export function staffPolicy(modules = PERMISSION_PAGES, actions = null) {
   };
 }
 export function permissionForRoute(path, method) {
+  if (method === "GET" && /^\/members\/[^/]+\/credits$/.test(path))
+    return { page: "classes", action: null };
   let page = path.startsWith("/records/")
     ? path.split("/")[2]
     : path.startsWith("/photos/")
@@ -105,7 +107,9 @@ export function permissionForRoute(path, method) {
       : method === "DELETE" || /\/(cancel|end)$/.test(path)
         ? "delete"
         : method === "POST" &&
-            !/\/(toggle|payment|refund|email|email-login)$/.test(path)
+            !/\/(toggle|payment|refund|email|email-login|session-credits)$/.test(
+              path,
+            )
           ? "add"
           : "edit";
   return { page, action };

@@ -1,10 +1,11 @@
+import { InstructorBadge } from "./InstructorBadge";
 import React, { useState } from "react";
 import { Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { bookingPlannerRows, instructorKey } from "./bookingPlanner";
 import { plannerRange } from "./taskPlanner";
 import { riyadhDay, movePeriod } from "./calendar";
 import { localizedName } from "./localization";
-export function BookingPlanner({ data, ar, staff, stableName, when }) {
+export function BookingPlanner({ data, ar, staff, stableName, when, request }) {
   const [view, setView] = useState("week"),
     [date, setDate] = useState(riyadhDay(new Date())),
     [memberId, setMemberId] = useState(""),
@@ -268,7 +269,15 @@ export function BookingPlanner({ data, ar, staff, stableName, when }) {
                     </strong>
                     <b>{localizedName(b.session, ar, "title")}</b>
                     <span>{member(b.member_id)}</span>
-                    <span>{localizedName(b.session, ar, "instructor")}</span>
+                    <InstructorBadge
+                      session={{
+                        ...b.session,
+                        instructor: localizedName(b.session, ar, "instructor"),
+                      }}
+                      instructors={data.instructors}
+                      request={request}
+                      ar={ar}
+                    />
                     <span>
                       {horse(b.horse_id)} ·{" "}
                       {localizedName(b.session, ar, "arena")}

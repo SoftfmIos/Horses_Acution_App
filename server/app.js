@@ -1,3 +1,5 @@
+import { accountRoutes } from "./account.js";
+import { summarizeSessionCredits } from "../shared/session-credits.js";
 import {
   PERMISSION_PAGES,
   PERMISSION_ACTIONS,
@@ -87,6 +89,7 @@ export function createApp(
     clock = () => new Date(),
     emailEnabled = false,
     publicOrigin,
+    allowedOrigins = [],
   } = {},
 ) {
   const app = express();
@@ -96,6 +99,19 @@ export function createApp(
     email.publicSettings(org)
       ? email.enabled(org)
       : emailEnabled || email.enabled(org);
+  const trustedOrigins = new Set(
+    [publicOrigin, ...allowedOrigins].filter(Boolean).map((value) => {
+      const parsed = new URL(value);
+      if (
+        !["https:", "http:"].includes(parsed.protocol) ||
+        parsed.origin !== value
+      )
+        throw new Error(
+          "Configure exact trusted website origins without paths or trailing slashes",
+        );
+      return value;
+    }),
+  );
   app.disable("x-powered-by");
   app.use(
     helmet({
@@ -157,7 +173,22 @@ export function createApp(
     );
   function awardCredits(pid) {
     const p = get("SELECT * FROM proformas WHERE id=?", pid);
-    if (p.credit_quantity > 0 && !p.credit_awarded && p.status === "settled") {
+    if (
+      p.credit_quantity > 0 &&
+      !p.credit_awarded &&
+      p.status === "settled" &&
+      p.paid >= p.due
+    ) {
+      if (
+        get(
+          "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+          p.org_id,
+          p.id,
+        )
+      ) {
+        run("UPDATE proformas SET credit_awarded=1 WHERE id=?", p.id);
+        return;
+      }
       creditEntry(
         p.org_id,
         p.member_id,
@@ -502,9 +533,14 @@ export function createApp(
       const origin = req.get("origin");
       if (
         !origin ||
-        origin !== (publicOrigin || `${req.protocol}://${req.get("host")}`)
+        !(
+          trustedOrigins.has(origin) ||
+          (!publicOrigin && origin === `${req.protocol}://${req.get("host")}`)
+        )
       )
-        return res.status(403).json({ error: "Request origin rejected" });
+        return res
+          .status(403)
+          .json({ error: "Request origin rejected", code: "ORIGIN_REJECTED" });
       if (req.get("x-requested-with") !== "RiyadhAcademy")
         return res.status(403).json({ error: "Request token required" });
     }
@@ -518,6 +554,7 @@ export function createApp(
       schedulingVersion: 2,
       bookingVersion: 1,
       medicalScheduleVersion: 2,
+      accountVersion: 1,
     }),
   );
   const authLimit = rateLimit({
@@ -546,7 +583,10 @@ export function createApp(
         .json({ error: "Authentication is busy; try again later" }),
   });
   app.use("/api/auth", (req, res, next) =>
-    req.method === "POST" && ["/login", "/register"].includes(req.path)
+    req.method === "POST" &&
+    ["/login", "/register", "/forgot-password", "/reset-password"].includes(
+      req.path,
+    )
       ? authBurst(req, res, () => authLimit(req, res, next))
       : next(),
   );
@@ -559,7 +599,7 @@ export function createApp(
     const user =
       raw &&
       get(
-        "SELECT u.id,u.email,u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>?",
+        "SELECT u.id,u.email,u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>? AND NOT EXISTS(SELECT 1 FROM deleted_accounts d WHERE d.user_id=u.id)",
         hash(raw),
         now(),
       );
@@ -602,9 +642,10 @@ export function createApp(
     if (!org) return res.status(403).json({ error: "Stable access denied" });
     req.org = {
       ...org,
-      isAdmin: adminUser(org.id, req.user.id),
-      permissions: userModules(org.id, req.user.id),
-      actionPermissions: userPolicy(org.id, req.user.id).actions,
+      isAdmin: org.role === "owner" && adminUser(org.id, req.user.id),
+      permissions: org.role === "owner" ? userModules(org.id, req.user.id) : [],
+      actionPermissions:
+        org.role === "owner" ? userPolicy(org.id, req.user.id).actions : {},
     };
     next();
   }
@@ -697,10 +738,85 @@ export function createApp(
     cookie(res, token);
     res.status(201).json({ ok: true });
   });
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const emailAddress = text(req.body.email, "email", 254).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)) fail("Invalid email");
+    const user = get("SELECT id FROM users WHERE email=?", emailAddress);
+    if (user) {
+      const org = all(
+        "SELECT org_id FROM memberships WHERE user_id=?",
+        user.id,
+      ).find((m) => emailAvailable(m.org_id));
+      if (org) {
+        const token = randomBytes(32).toString("base64url");
+        const link =
+          (req.get("origin") || publicOrigin) + "/#reset-password=" + token;
+        transaction(() => {
+          run(
+            "DELETE FROM password_resets WHERE user_id=? OR expires_at<=?",
+            user.id,
+            now(),
+          );
+          run(
+            "INSERT INTO password_resets VALUES(?,?,?,0)",
+            hash(token),
+            user.id,
+            new Date(clock().getTime() + 30 * 60000).toISOString(),
+          );
+          const details = mailDetails(org.org_id, user.id);
+          details.recovery = { linkEncrypted: email.encrypt(link) };
+          const rid = id();
+          run(
+            "INSERT INTO email_outbox(id,user_id,subject,body,org_id,details) VALUES(?,?,?,?,?,?)",
+            rid,
+            user.id,
+            "Reset your password / إعادة تعيين كلمة المرور",
+            "A password reset was requested. This link expires in 30 minutes. Ignore this email if you did not request it. / تم طلب إعادة تعيين كلمة المرور. تنتهي صلاحية الرابط خلال 30 دقيقة. تجاهل الرسالة إذا لم تطلب ذلك.",
+            org.org_id,
+            JSON.stringify(details),
+          );
+        });
+      }
+    }
+    res.json({
+      ok: true,
+      message:
+        "If an account can receive email, a reset link will be sent. / إذا كان الحساب يستقبل البريد فسيُرسل رابط إعادة التعيين.",
+    });
+  });
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const token = text(req.body.token, "reset token", 128);
+    const password = text(req.body.password, "password", 128);
+    if (password.length < 6) fail("Password must have at least 6 characters");
+    const row = get(
+      "SELECT user_id FROM password_resets WHERE token=? AND used=0 AND expires_at>?",
+      hash(token),
+      now(),
+    );
+    if (!row)
+      fail("Reset link is invalid or expired. Request a new link.", 400);
+    const encrypted = await passwordHash(password);
+    transaction(() => {
+      const changed = run(
+        "UPDATE password_resets SET used=1 WHERE token=? AND used=0 AND expires_at>?",
+        hash(token),
+        now(),
+      );
+      if (!changed.changes)
+        fail("Reset link is invalid or expired. Request a new link.", 400);
+      run("UPDATE users SET password=? WHERE id=?", encrypted, row.user_id);
+      run("DELETE FROM sessions WHERE user_id=?", row.user_id);
+      run("DELETE FROM password_resets WHERE user_id=?", row.user_id);
+    });
+    res.json({ ok: true });
+  });
   app.post("/api/auth/login", async (req, res) => {
     const email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "password", 128);
-    const user = get("SELECT * FROM users WHERE email=?", email);
+    const user = get(
+      "SELECT * FROM users WHERE email=? AND NOT EXISTS(SELECT 1 FROM deleted_accounts d WHERE d.user_id=users.id)",
+      email,
+    );
     const valid = await passwordValid(
       password,
       user?.password || dummyPassword,
@@ -726,9 +842,11 @@ export function createApp(
         const settings = records(o.id, "academySettings")[0];
         return {
           ...o,
-          isAdmin: adminUser(o.id, req.user.id),
-          permissions: userModules(o.id, req.user.id),
-          actionPermissions: userPolicy(o.id, req.user.id).actions,
+          isAdmin: o.role !== "member" && adminUser(o.id, req.user.id),
+          permissions:
+            o.role !== "member" ? userModules(o.id, req.user.id) : [],
+          actionPermissions:
+            o.role !== "member" ? userPolicy(o.id, req.user.id).actions : {},
           nameEn: settings?.academyNameEn ?? o.name,
           nameAr: settings?.academyNameAr || "",
         };
@@ -750,6 +868,25 @@ export function createApp(
     });
     res.json({ ok: true });
   });
+  accountRoutes({
+    app,
+    authenticate,
+    get,
+    all,
+    run,
+    transaction,
+    text,
+    fail,
+    now,
+    production,
+    passwordHash,
+    passwordValid,
+    records,
+    put,
+    audit,
+    notify,
+    creditEntry,
+  });
   // Key protected traffic by verified account, not the shared Vercel egress IP.
   app.use(
     "/api",
@@ -769,9 +906,25 @@ export function createApp(
     transaction(() => expireHolds(req.org.id));
     next();
   });
+  const ownsInstructor = (req, target) =>
+    req.org.role === "owner" &&
+    records(req.org.id, "instructors").some(
+      (i) =>
+        i.id === target &&
+        (i.userId === req.user.id ||
+          (!i.userId &&
+            i.email?.trim().toLowerCase() === req.user.email.toLowerCase())),
+    );
   app.use("/api", (req, res, next) => {
     if (req.org.role !== "owner" || req.org.isAdmin) return next();
     const path = req.path;
+    const instructorPhoto = /^\/photos\/instructors\/([^/]+)$/.exec(path);
+    if (
+      instructorPhoto &&
+      (ownsInstructor(req, instructorPhoto[1]) ||
+        (req.method === "GET" && req.org.permissions.includes("classes")))
+    )
+      return next();
     const required = permissionForRoute(path, req.method);
     if (
       path === "/records/classes" &&
@@ -990,7 +1143,36 @@ export function createApp(
             }
           : {}),
         ...(kind === "instructors"
-          ? { email: optional(b.email), phone: optional(b.phone) }
+          ? {
+              email: optional(b.email).toLowerCase(),
+              phone: optional(b.phone),
+              userId: (() => {
+                const linked =
+                  b.userId ??
+                  (rid ? record(org, "instructors", rid).userId : "") ??
+                  "";
+                if (
+                  linked &&
+                  !get(
+                    "SELECT user_id FROM memberships WHERE org_id=? AND user_id=? AND role='owner'",
+                    org,
+                    linked,
+                  )
+                )
+                  fail("Link an instructor to a staff account in this stable");
+                if (
+                  linked &&
+                  records(org, "instructors").some(
+                    (i) => i.id !== rid && i.userId === linked,
+                  )
+                )
+                  fail(
+                    "This staff account already has an instructor profile",
+                    409,
+                  );
+                return linked;
+              })(),
+            }
           : {}),
       };
     if (kind === "horses") {
@@ -1018,14 +1200,19 @@ export function createApp(
         notes: optional(b.notes),
       };
     }
-    if (kind === "plans")
+    if (kind === "plans") {
+      const credits = integer(
+        b.credits ?? 0,
+        "lesson credits",
+        b.kind === "package" ? 1 : 0,
+        1000,
+      );
+      if (b.kind !== "package" && credits > 0)
+        fail("Choose Lesson package as the category to save session credits.");
       return {
         name: text(b.name, "price name", 100),
         amount: integer(b.amount, "price", b.kind === "package" ? 1 : 0),
-        credits:
-          b.kind === "package"
-            ? integer(b.credits, "lesson credits", 1, 1000)
-            : 0,
+        credits,
         kind: [
           "class",
           "private",
@@ -1041,6 +1228,7 @@ export function createApp(
           : "class",
         active: b.active !== false,
       };
+    }
     if (kind === "discounts") {
       if (rid) b.code = record(org, kind, rid).code;
       else if (
@@ -1418,9 +1606,101 @@ export function createApp(
       places: Math.max(0, Math.min(c.capacity - total, usable - total)),
     };
   }
+  function boardingView(org, stay) {
+    const invoice = get(
+      "SELECT status,gross,paid,discount,voucher FROM proformas WHERE org_id=? AND id=?",
+      org,
+      stay.invoiceId,
+    );
+    return {
+      ...stay,
+      paymentStatus: invoice?.status || "open",
+      priceAmount: invoice?.gross ?? null,
+      financialTermsLocked:
+        !!invoice &&
+        (invoice.paid > 0 ||
+          invoice.status !== "open" ||
+          invoice.discount > 0 ||
+          invoice.voucher > 0),
+    };
+  }
+  function reconcilePackageCredits(org, memberId = null) {
+    transaction(() => {
+      for (const p of all(
+        "SELECT id FROM proformas WHERE org_id=? AND status='settled' AND paid>=due AND credit_quantity>0 AND credit_awarded=0" +
+          (memberId ? " AND member_id=?" : ""),
+        ...(memberId ? [org, memberId] : [org]),
+      ))
+        awardCredits(p.id);
+    });
+  }
+  app.get("/api/members/:id/credits", (req, res) => {
+    const org = req.org.id,
+      memberId = req.params.id;
+    if (req.org.role !== "owner" && req.user.id !== memberId)
+      fail("Session balance access denied", 403);
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        org,
+        memberId,
+      )
+    )
+      fail("Member not found", 404);
+    reconcilePackageCredits(org, memberId);
+    const ledger = all(
+      "SELECT delta,reason FROM credit_ledger WHERE org_id=? AND member_id=?",
+      org,
+      memberId,
+    );
+    const plans = records(org, "plans");
+    const invoices = all(
+      "SELECT id,description,status,paid,due,credit_quantity,credit_awarded,plan_id,reservation_id FROM proformas WHERE org_id=? AND member_id=?",
+      org,
+      memberId,
+    );
+    const paid = invoices.filter(
+      (p) => p.status === "settled" && p.paid >= p.due,
+    );
+    const missing = paid.filter(
+      (p) =>
+        !p.reservation_id &&
+        !p.credit_quantity &&
+        plans.some(
+          (plan) =>
+            plan.kind === "package" &&
+            (p.plan_id ? p.plan_id === plan.id : p.description === plan.name),
+        ),
+    );
+    const review = paid.filter(
+      (p) =>
+        p.credit_quantity > 0 &&
+        (!p.credit_awarded ||
+          !get(
+            "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+            org,
+            p.id,
+          )),
+    );
+    res.json({
+      memberId,
+      ...summarizeSessionCredits(ledger),
+      needsReview: [...missing, ...review].map((p) => ({
+        id: p.id,
+        description: p.description,
+      })),
+      pendingPackages: invoices.filter(
+        (p) => p.credit_quantity > 0 && p.status === "open",
+      ).length,
+      paidRequestsWithoutSessions: paid.filter(
+        (p) => !p.credit_quantity && !missing.some((m) => m.id === p.id),
+      ).length,
+    });
+  });
   app.get("/api/data", (req, res) => {
     const org = req.org.id,
       manager = req.org.role === "owner";
+    reconcilePackageCredits(org, manager ? null : req.user.id);
     const members = all(
       "SELECT u.id,u.name,u.email,CASE WHEN m.role='owner' THEN m.role ELSE coalesce(s.role,m.role) END AS role FROM users u JOIN memberships m ON m.user_id=u.id LEFT JOIN staff_roles s ON s.org_id=m.org_id AND s.user_id=u.id WHERE m.org_id=?",
       org,
@@ -1500,6 +1780,41 @@ export function createApp(
           descriptionAr: source?.titleAr || source?.nameAr || "",
         };
       })(),
+      sessionCreditStatus: (() => {
+        const candidates = records(org, "plans").filter(
+          (plan) =>
+            plan.kind === "package" &&
+            (p.plan_id ? p.plan_id === plan.id : p.description === plan.name),
+        );
+        if (!p.credit_quantity && (!candidates.length || p.reservation_id))
+          return null;
+        const granted = !!get(
+          "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+          org,
+          p.id,
+        );
+        return {
+          quantity: p.credit_quantity,
+          awarded: !!p.credit_awarded && granted,
+          status: ["void", "refund_required"].includes(p.status)
+            ? "refunded"
+            : p.status !== "settled"
+              ? "pending"
+              : !p.credit_quantity
+                ? "missing_snapshot"
+                : granted && p.credit_awarded
+                  ? "credited"
+                  : "needs_review",
+          canRepair:
+            !p.credit_awarded &&
+            !granted &&
+            p.status === "settled" &&
+            p.paid >= p.due,
+          matchedPlanId: candidates.length === 1 ? candidates[0].id : null,
+          suggestedQuantity:
+            candidates.length === 1 ? candidates[0].credits : null,
+        };
+      })(),
       activation:
         p.status === "settled"
           ? "active"
@@ -1528,30 +1843,41 @@ export function createApp(
       ...(manager ? [org] : [org, req.user.id]),
     );
     if (!manager) {
-      const bookedClasses = new Set(
-        result.bookings
-          .filter((b) => ["confirmed", "pending_payment"].includes(b.status))
-          .map((b) => b.class_id),
+      const bookedClasses = new Set(result.bookings.map((b) => b.class_id));
+      const horseIds = new Set(result.bookings.map((b) => b.horse_id));
+      result.classes = result.classes.filter(
+        (c) => c.endsAt > now() || bookedClasses.has(c.id),
       );
-      const horseIds = new Set(
-        result.bookings
-          .filter((b) => ["confirmed", "pending_payment"].includes(b.status))
-          .map((b) => b.horse_id),
-      );
-      result.horses = result.horses.filter(
-        (h) => h.ownerId === req.user.id || horseIds.has(h.id),
-      );
+      result.horses = result.horses
+        .filter((h) => h.ownerId === req.user.id || horseIds.has(h.id))
+        .map((h) =>
+          h.ownerId === req.user.id
+            ? h
+            : {
+                id: h.id,
+                name: h.name,
+                nameEn: h.nameEn,
+                nameAr: h.nameAr,
+                breed: h.breed,
+                status: h.status,
+              },
+        );
       const instructorIds = new Set(
-        result.horses.map((h) => h.instructorId).filter(Boolean),
+        [
+          ...result.horses.map((h) => h.instructorId),
+          ...result.classes.map((c) => c.instructorId),
+        ].filter(Boolean),
       );
-      const instructorNames = new Set(
-        result.classes
-          .filter((c) => bookedClasses.has(c.id))
-          .map((c) => c.instructor),
-      );
-      result.instructors = result.instructors.filter(
-        (i) => instructorIds.has(i.id) || instructorNames.has(i.name),
-      );
+      const instructorNames = new Set(result.classes.map((c) => c.instructor));
+      result.instructors = result.instructors
+        .filter((i) => instructorIds.has(i.id) || instructorNames.has(i.name))
+        .map((i) => ({
+          id: i.id,
+          name: i.name,
+          nameEn: i.nameEn,
+          nameAr: i.nameAr,
+          active: i.active,
+        }));
       result.tasks = [];
     }
     result.tasks = result.tasks
@@ -1569,16 +1895,23 @@ export function createApp(
     );
     if (!manager) result.taskHistory = [];
     result.boarding = manager
-      ? records(org, "boarding").map((b) => ({
-          ...b,
-          paymentStatus:
-            get(
-              "SELECT status FROM proformas WHERE org_id=? AND id=?",
-              org,
-              b.invoiceId,
-            )?.status || "open",
-        }))
+      ? records(org, "boarding").map((stay) => boardingView(org, stay))
       : [];
+    result.stallOccupancy =
+      manager &&
+      (req.org.isAdmin ||
+        req.org.permissions.includes("stalls") ||
+        req.org.permissions.includes("boarding"))
+        ? records(org, "boarding")
+            .filter((b) => b.status === "active")
+            .map((b) => ({
+              id: b.id,
+              stallId: b.stallId,
+              status: b.status,
+              startDate: b.startDate,
+              endDate: b.endDate,
+            }))
+        : [];
     result.stockMovements = manager ? records(org, "stockMovements") : [];
     if (!manager) result.stalls = [];
     result.userRole = req.org.role;
@@ -1651,6 +1984,16 @@ export function createApp(
         };
     }
     result.backendVersion = release.version;
+    result.myInstructorProfiles = manager
+      ? records(org, "instructors")
+          .filter((i) => ownsInstructor(req, i.id))
+          .map((i) => ({
+            id: i.id,
+            name: i.name,
+            nameEn: i.nameEn,
+            nameAr: i.nameAr,
+          }))
+      : [];
     result.emailConfigured = emailAvailable(org);
     if (
       manager &&
@@ -1708,6 +2051,8 @@ export function createApp(
     notify,
     mailDetails,
     createPaymentRequest,
+    ownsInstructor,
+    boardingView,
   });
   app.get("/api/class-series/:id", owner, (req, res) => {
     const slots = records(req.org.id, "classes")
@@ -2250,7 +2595,7 @@ export function createApp(
     )
       fail("Member not in stable");
     const plan = record(org, "plans", planId);
-    if (!plan.active) fail("Price inactive");
+    if (plan.active === false) fail("Price inactive");
     if (packageOnly && !(plan.kind === "package" && plan.credits > 0))
       fail("Select a lesson package");
     const pid = id();
@@ -2266,8 +2611,11 @@ export function createApp(
       plan.amount,
       plan.amount === 0 ? "settled" : "open",
       now(),
-      plan.credits || 0,
+      plan.kind === "package"
+        ? integer(Number(plan.credits), "package session quantity", 1, 1000)
+        : 0,
     );
+    run("UPDATE proformas SET plan_id=? WHERE id=?", plan.id, pid);
     awardCredits(pid);
     notify(
       org,
@@ -2292,6 +2640,74 @@ export function createApp(
     );
     res.status(201).json({ id: pid });
   });
+  app.post(
+    "/api/proformas/:id/session-credits",
+    owner,
+    adminOnly,
+    (req, res) => {
+      const org = req.org.id;
+      const p = get(
+        "SELECT * FROM proformas WHERE org_id=? AND id=?",
+        org,
+        req.params.id,
+      );
+      if (!p) fail("Payment request not found", 404);
+      if (p.reservation_id || p.status !== "settled" || p.paid < p.due)
+        fail(
+          "Only fully paid package requests can receive missing credits",
+          409,
+        );
+      const existing = get(
+        "SELECT id FROM credit_ledger WHERE org_id=? AND proforma_id=? AND reason='package.paid'",
+        org,
+        p.id,
+      );
+      if (p.credit_awarded || existing)
+        fail(
+          "Credits have already been processed; no additional credits were added",
+          409,
+        );
+      const reason = text(req.body.reason, "credit correction reason", 500);
+      const quantity = integer(
+        req.body.credits,
+        "confirmed session quantity",
+        1,
+        1000,
+      );
+      let planId = p.plan_id;
+      if (p.credit_quantity > 0) {
+        if (quantity !== p.credit_quantity)
+          fail("Use the original package session quantity", 409);
+      } else {
+        const plan = record(org, "plans", req.body.planId);
+        if (
+          plan.kind !== "package" ||
+          (p.plan_id ? p.plan_id !== plan.id : p.description !== plan.name)
+        )
+          fail("Select the lesson package matching this payment request", 409);
+        planId = plan.id;
+      }
+      transaction(() => {
+        run(
+          "UPDATE proformas SET credit_quantity=?,plan_id=? WHERE id=?",
+          quantity,
+          planId || null,
+          p.id,
+        );
+        awardCredits(p.id);
+        audit(req, "package.credits.repaired", p.id);
+        put(org, "creditCorrections", id(), {
+          proformaId: p.id,
+          memberId: p.member_id,
+          credits: quantity,
+          reason,
+          actorId: req.user.id,
+          createdAt: now(),
+        });
+      });
+      res.json({ ok: true, credits: quantity });
+    },
+  );
   app.post("/api/proformas/:id/refund", owner, (req, res) => {
     transaction(() => {
       const p = get(
@@ -2751,7 +3167,7 @@ export function createApp(
         details.credentials = {
           email,
           role: req.body.role === "staff" ? "Staff / موظف" : "Member / عضو",
-          loginUrl: publicOrigin || req.get("origin"),
+          loginUrl: req.get("origin") || publicOrigin,
           ...(req.body.includePassword === true
             ? { passwordEncrypted: app.locals.emailSettings.encrypt(password) }
             : {}),
@@ -2784,7 +3200,7 @@ export function createApp(
     const details = mailDetails(req.org.id, uid);
     details.credentials = {
       email: account.email,
-      loginUrl: publicOrigin || req.get("origin"),
+      loginUrl: req.get("origin") || publicOrigin,
     };
     if (req.body.password !== undefined) {
       const password = text(req.body.password, "password", 128);

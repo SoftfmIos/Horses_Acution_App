@@ -655,12 +655,15 @@ pre {
 }
 .client-layout .sidebar nav {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(80px, 1fr);
   gap: 0;
   margin: 0 auto;
   padding: 0;
   max-width: 1000px;
-  overflow: visible;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 .client-layout .sidebar nav button {
   display: flex;
@@ -2217,4 +2220,264 @@ pre {
     margin: 8px 0;
     padding: 7px 10px;
   }
+}
+.auth-recovery-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-recovery {
+  display: grid;
+  gap: 16px;
+}
+.account-recovery h3 {
+  margin-top: 12px;
+}
+.instructor-badge {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--navy);
+}
+.instructor-badge .profile-photo {
+  margin: 0;
+}
+.compact-profile-photo .profile-photo-image {
+  width: 42px;
+  height: 42px;
+}
+.instructor-badge .photo-error {
+  display: none;
+}
+.payment-month {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.payment-month > summary {
+  cursor: pointer;
+  padding: 14px;
+  background: var(--stone);
+}
+.payment-month > summary span {
+  margin-inline-start: 16px;
+  font-size: 12px;
+}
+.payment-month[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.payment-report-print-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.package-credit-status {
+  margin: 16px 0;
+}
+@media print {
+  .payment-month {
+    border: 0;
+  }
+  .payment-month > summary {
+    list-style: none;
+    break-after: avoid;
+    padding: 8px 0;
+  }
+  .payment-month > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+.boarding-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.boarding-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  margin-top: 0;
+}
+.boarding > .section-heading > p {
+  flex: 1 1 440px;
+}
+.boarding-stay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.boarding-stay-card .boarding-actions {
+  margin-top: auto;
+}
+.boarding-stay-card .profile-photo-image {
+  width: 88px;
+  height: 88px;
+}
+.boarding-stay-card .profile-photo {
+  margin-bottom: 0;
+}
+.boarding .modal form {
+  display: grid;
+  gap: 14px;
+}
+.boarding .modal :is(select, input) {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+}
+@media (max-width: 600px) {
+  .boarding > .section-heading > p {
+    flex-basis: auto;
+  }
+  .boarding-actions > button {
+    flex: 1 1 150px;
+  }
+}
+.stall-date-filters {
+  margin: 16px 0;
+}
+.stall-availability {
+  font-weight: 600;
+  color: var(--navy);
+}
+.billing-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.billing-header-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.payment-status-paid {
+  background-color: #e6f4ea;
+  color: #173e26;
+}
+.payment-status-partial {
+  background-color: #fff8d6;
+  color: #5a490c;
+}
+.payment-status-pending {
+  background-color: #ffecd9;
+  color: #703d12;
+}
+.payment-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+  font-size: 12px;
+}
+.payment-status-legend > span {
+  padding: 7px 12px;
+  border-radius: 4px;
+}
+.booking-session-balance {
+  padding: 12px 0;
+}
+.credit-breakdown {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.session-totals {
+  margin-block: 24px;
+}
+.session-totals h2 {
+  font-size: 21px;
+  margin-bottom: 14px;
+}
+.session-total-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+.session-total-grid .panel {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.session-total-grid dt {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.session-total-grid dd {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--deep);
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+.session-total-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.member-login-email {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 450px) {
+  .session-total-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.boarding-availability-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.boarding-price-total {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.boarding-price-total strong {
+  font-size: 25px;
+  color: var(--navy);
+}
+.boarding-price-total small {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.account-security {
+  max-width: 760px;
+}
+.account-security .member-modal-form {
+  max-width: 520px;
+  margin-block: 20px;
+}
+.account-delete-panel {
+  border-top: 1px solid var(--line);
+  margin-top: 30px;
+  padding-top: 24px;
+}
+.account-delete-button {
+  background: #923b32;
 }

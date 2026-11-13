@@ -1,3 +1,4 @@
+import backendConfig from "../config/backend.json" with { type: "json" };
 import { renderEmail } from "./email-template.js";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +35,13 @@ const emailEnabled = Boolean(
 const app = createApp(db, {
   production,
   publicOrigin: process.env.PUBLIC_ORIGIN,
+  allowedOrigins: [
+    ...(backendConfig.allowedWebsiteOrigins || []),
+    ...(process.env.ADDITIONAL_PUBLIC_ORIGINS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ],
   emailEnabled,
 });
 app.use(express.static(resolve(root, "dist")));
@@ -71,6 +79,10 @@ async function tick() {
             details.credentials.password = app.locals.emailSettings.decrypt(
               details.credentials.passwordEncrypted,
             );
+          if (details.recovery?.linkEncrypted)
+            details.recovery.link = app.locals.emailSettings.decrypt(
+              details.recovery.linkEncrypted,
+            );
           await mail.sendMail({
             from: config.from,
             replyTo: config.replyTo || undefined,
@@ -80,7 +92,7 @@ async function tick() {
             messageId: `<${job.id}@academy.notifications>`,
           });
           db.prepare(
-            "UPDATE email_outbox SET status='sent',attempts=attempts+1,details=json_remove(details,'$.credentials.passwordEncrypted') WHERE id=?",
+            "UPDATE email_outbox SET status='sent',attempts=attempts+1,details=json_remove(details,'$.credentials.passwordEncrypted','$.recovery.linkEncrypted') WHERE id=?",
           ).run(job.id);
         } catch {
           db.prepare(

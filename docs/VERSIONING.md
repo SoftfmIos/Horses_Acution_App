@@ -84,3 +84,79 @@ Deploy frontend and backend from the same release and restart the backend. Exist
 ## 1.21.0
 
 Email Settings and System Settings now use the same icon cards and Manage controls as the other settings modules. User-management buttons share sizing, spacing and shape, and the User and Access Level selectors have matching widths. Horse timelines, rides, medical records, care tasks, documents and boarding stays are grouped by month using Riyadh time, newest first. Print horse card & history prints a compact horse summary and the selected section, with month headers and without editing/upload controls. English and Arabic month labels follow the current language.
+
+## 1.22.0
+
+Login now offers Forgot password and Forgot login email recovery. Password reset emails use an encrypted queued link, a hashed single-use token with a 30-minute expiry, generic account-existence responses and authentication rate limiting. A reset invalidates existing sessions; reset tokens stay in a URL fragment and are removed from the address bar when the form opens. Forgotten email assistance goes to the academy support mailbox for identity verification.
+
+Instructor profiles can link to a staff account, or match its login email when no explicit link exists. The linked instructor can upload/remove their own photo from Overview without general instructor-edit permissions. They cannot modify another instructor's photo. Members can see instructor photos for published upcoming sessions and their historical bookings. Photos appear in session/booking cards, booking details and the booking calendar, and update live across mounted views.
+
+Deploy both frontend and backend and restart the backend. The password-reset table is created automatically. Email delivery must be configured for at least one academy associated with the recovering account. The `iOSApp` branch remains separate.
+
+## 1.23.0
+
+The backend explicitly trusts the production website `https://app.riyadhpolohills.com` and the existing Vercel frontend. This fixes login and password-reset requests rejected when the deployed PUBLIC_ORIGIN still named the older site. Origins remain exact allowlisted matches; absent/null origins, lookalike domains, different ports and spoofed forwarding headers remain rejected. Recovery and account-login email links use the verified requesting origin so custom-domain users return to their site. Other deployment domains can be added explicitly through ADDITIONAL_PUBLIC_ORIGINS.
+
+For the current deployment, set `PUBLIC_ORIGIN=https://app.riyadhpolohills.com` in the backend Node application and restart it. Pull/deploy this backend version to apply the repository allowlist and update/redeploy the frontend for the clearer configuration error. The Docker runtime now includes the config directory required by the backend.
+
+## 1.24.0
+
+The member portal has a direct Buy sessions page for active lesson packages, linked from Home, My balance and navigation. Purchases create a pro forma through the existing payment process; staff still confirm full payment before sessions activate. My balance shows each package's payment/credit state and refreshes when opened or when the tab regains focus.
+
+Package requests now persist their plan ID and validated immutable session quantity. Fully paid requests with a saved positive quantity and no grant flag are reconciled transactionally on scoped data reads; existing grant-ledger entries prevent double credits even if a flag is stale. Legacy paid requests without a quantity are flagged for review. System administrators can verify the original purchase and apply missing credits once from the pro forma dialog, with an audit entry and correction reason. Refunds, unpaid requests and booking invoices cannot receive this correction. Do not infer a historical session quantity automatically from a package that may have changed.
+
+Payment reports support a month filter and collapsible month sections inside user/invoice groups, using Riyadh dates. Print payment report sits beside Create payment request in the top toolbar. Print preview expands every matching month and retains the current filters.
+
+Boarding cards display the horse photo and consistently sized actions. Active stays can be edited with overlap/capacity checks while retaining the original invoice. Paid/adjusted invoices keep their original billed member and price. Unpaid, unadjusted requests can update those details with the stay; dates are not automatically prorated. Stall edits return to the boarding screen rather than a nearly empty generic record card. Availability uses peak simultaneous occupancy for a selected date range, excludes the current stay during edits, and exposes occupancy-only data to authorized stall viewers without revealing boarding customer details.
+
+Deploy the frontend and backend together and restart Node.js. Database updates are additive. No live production database was accessed during development; repairs apply to eligible records only after the new backend is deployed, and missing historical package counts require administrator review.
+
+## 1.25.0
+
+Booking dialogs fetch the selected member’s current session balance directly instead of relying on member-summary data. Changing member, reopening the dialog, or refreshing updates the balance. Loading and request failures no longer appear as zero. Purchased, used, restored and refunded totals explain the balance, and missing paid-package allocations link to the existing invoice review workflow. Class staff may read balances within their stable; members may read only their own. Missing historical session counts still require an administrator to verify the original purchase; this release does not guess or automatically allocate them.
+
+Payment requests and grouped payment report rows use pale green for fully paid invoices, pale yellow for partially paid invoices, and pale orange for pending invoices. A text legend preserves status meaning independently of color. Voided/refund-required invoices retain neutral styling.
+
+Deploy frontend and backend together and restart Node.js. Health should report version 1.25.0. No live production database was changed during development.
+
+## 1.26.0
+
+Pricing no longer silently discards session counts on regular class, private lesson, boarding or other non-package prices. The form retains entered values and explains that Category must be Lesson package; the API rejects inconsistent creates/updates before changing the saved record. Add session package opens the correct category directly, with a required whole-number count from 1 to 1000 and bilingual guidance on credit activation after full payment. Package session counts persist through create, edit and reload. Changing a current package count does not change an existing purchase's saved session snapshot.
+
+Deploy frontend and backend together and restart Node.js; health should report version 1.26.0. Previously discarded counts cannot be recovered from zero automatically. Confirm the intended quantity and edit the plan; already paid requests with missing historical snapshots still use the administrator's Review missing sessions workflow.
+
+## 1.27.0
+
+Successful sign-in resets the current page, search and open dialogs so members land on My account even after signing out from another page. My account displays the login email, remaining sessions, total purchased, used, restored after cancellation, refunded and awaiting-full-payment sessions. My balance uses the same totals. Used sessions show gross deductions; restored sessions are listed separately and the remaining-balance formula explains the relationship. Unpaid/partially paid packages are excluded from available credits, and paid packages with missing allocations show a review notice.
+
+Session totals and the staff booking-credit lookup share one ledger calculation. Opening My account refreshes its data; members can also refresh the balance or open the session history directly. Initial loading is labelled instead of briefly displaying a zero balance. The member navigation stays in a single horizontally scrollable row on narrow screens. Arabic and English labels, desktop layout and Arabic mobile layout are supported.
+
+Validation: `npm test` and, after `npm run build`, `CHROMIUM_PATH=/usr/bin/chromium node tests/member-account.mjs`. The browser scenario covers staff-to-member login, member relogin from invoices, actual paid packages, credit bookings, cancellation, refund, partial payment, matching account/balance totals, refresh, Arabic and mobile overflow.
+
+Deploy the frontend and backend together and restart Node.js. Health should report version 1.27.0. Historical missing paid-package counts still require administrator review; this change does not alter live production balances.
+
+## 1.28.0
+
+Adds public bilingual marketing/support and privacy pages at `/app.html` and `/privacy.html`, with the academy logo, local fonts, responsive layouts and links from the portal footer and sign-in page. Both pages are static HTML and work without authentication or JavaScript. The marketing page links to Apple's standard iOS EULA and explains TestFlight access, academy payment confirmation and local class reminders. The privacy notice describes the current app/portal data, access, optional device features, retention and account/data-request contact.
+
+The static files are copied into `dist` by Vite and served directly by Vercel or the standalone Node server. Deploy the frontend to publish the URLs. The release version is 1.28.0; update the backend too to keep version labels aligned. No database changes are included. Validation covers the production build, unauthenticated HTML responses, logo, links, canonical URLs, no-JavaScript access and Arabic mobile overflow. Live website access from the development environment is blocked, so publication must be confirmed after deployment.
+
+## 1.29.0
+
+Stalls & boarding includes Add boarding price, opening a new Pricing form with the Boarding category already selected and returning to boarding after save. An empty price dropdown explains the eligible active categories and provides a creation shortcut when authorized. The selected stay price is shown separately from the dropdown. Existing stays display their invoice's original price snapshot rather than a subsequently changed catalogue rate. Active defaults for legacy stalls/prices are applied consistently; explicitly inactive prices still cannot be assigned.
+
+Assign boarding inherits the availability-filter dates. After create/edit, cards switch to the saved stay's dates. Successful create, edit and end operations update the local stay and occupancy snapshot directly, so a stale data refresh does not leave slot counts unchanged. Moving a horse releases the old stall and occupies the new one. Availability remains based on peak simultaneous occupancy in the selected date range, includes assigned unpaid stays and excludes ended stays. Full stalls are still rejected atomically without creating another invoice. Paid-invoice protections remain enforced.
+
+Validation: 95 tests and `CHROMIUM_PATH=/usr/bin/chromium node tests/boarding-browser.mjs` after building. The browser check covers the empty-price state, price creation, visible SAR amount, future date inheritance, a deliberately stale refresh, full capacity, moving/ending stays, invoice preservation and Arabic mobile layout. API checks include legacy catalogue records, original price snapshots and restricted staff data.
+
+Deploy this same main commit to frontend and backend and restart Node.js. Both version labels should read 1.29.0. No production database was accessed or existing price category automatically changed; activate/reclassify intended prices or use Add boarding price.
+
+## 1.30.0
+
+Members no longer receive staff grants or academy tasks. Member horse summaries preserve complete owned-horse records and restrict booked/shared horses to public identity fields. Public instructor identities and photos are available for upcoming classes and owned-horse assignments; private instructor contact/notes are omitted. Owned-horse profiles retain care, feeding, horse-specific tasks, boarding, documents and the member's ride history. Staff profile sections follow their module grants, including class-booking visibility.
+
+Adds password-confirmed self-service email/password changes and account deletion, available in Account & security on the web and through authenticated account endpoints for iOS. Login changes revoke every existing session/reset token and retain the user's ID/history. Deletion revokes access across academies, removes memberships, names, personal profile photos, queued personal messages and account credentials, and anonymizes the retained identity. Upcoming bookings are cancelled; paid/open amounts are flagged for staff reconciliation and financial/service records are retained. No refund is automatically issued. Sole academy administrators/staff owners must transfer access first. An additive deleted_accounts marker prevents login resurrection; no database replacement is required.
+
+New endpoints are PUT /api/auth/account/email, PUT /api/auth/account/password, GET /api/auth/account/deletion and DELETE /api/auth/account. They require authentication without a stable header, current-password confirmation for mutations, and DELETE confirmation for deletion. Mutations are rate-limited. Health advertises accountVersion 1. Boarding responses also expose whether financial terms are locked so restricted staff cannot accidentally edit partially paid terms.
+
+Validation: 99 API/system tests and the account-security, member-account and boarding browser scenarios. Deploy the same commit to frontend/backend, restart Node.js, then distribute native iOS 1.1.0. The native app depends on these new account endpoints and privacy filters. No production accounts or balances were changed during development.

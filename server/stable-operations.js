@@ -1,3 +1,4 @@
+import { isBoardingPrice } from "../shared/boarding.js";
 // Stable-scoped operations use the same transactions, permissions and audit log as core records.
 export function stableOperations(c) {
   const {
@@ -20,6 +21,8 @@ export function stableOperations(c) {
     notify,
     mailDetails,
     createPaymentRequest,
+    ownsInstructor,
+    boardingView,
   } = c;
   const day = (value) =>
     new Intl.DateTimeFormat("en-CA", {
@@ -73,7 +76,7 @@ export function stableOperations(c) {
       !staff &&
       !owned &&
       !get(
-        "SELECT id FROM reservations WHERE org_id=? AND horse_id=? AND member_id=? AND status IN ('confirmed','pending_payment')",
+        "SELECT id FROM reservations WHERE org_id=? AND horse_id=? AND member_id=?",
         req.org.id,
         hid,
         req.user.id,
@@ -100,16 +103,24 @@ export function stableOperations(c) {
         fail("Photo access denied", 403);
     } else {
       const profile = record(org, kind, target);
+      if (kind === "instructors" && ownsInstructor(req, target))
+        return "photo:" + org + ":" + kind + ":" + target;
       if (req.org.role !== "owner") {
         if (write) fail("Staff permission required", 403);
         if (kind === "horses") horseAccess(req, target);
         else {
           const assigned =
+            (profile.active !== false &&
+              records(org, "classes").some(
+                (c) =>
+                  c.startsAt > now() &&
+                  (c.instructorId === target || c.instructor === profile.name),
+              )) ||
             records(org, "horses").some(
               (h) => h.ownerId === req.user.id && h.instructorId === target,
             ) ||
             all(
-              "SELECT class_id FROM reservations WHERE org_id=? AND member_id=? AND status IN ('confirmed','pending_payment')",
+              "SELECT class_id FROM reservations WHERE org_id=? AND member_id=?",
               org,
               req.user.id,
             ).some((b) => {
@@ -185,32 +196,44 @@ export function stableOperations(c) {
   app.get("/api/horses/:id/profile", (req, res) => {
     const { horse, staff, owned } = horseAccess(req, req.params.id),
       org = req.org.id;
+    const allowed = (page) =>
+      req.org.isAdmin || req.org.permissions.includes(page);
     const care = staff || owned;
-    const medical = care
-      ? records(org, "medical").filter((x) => x.horseId === horse.id)
-      : [];
-    const feeding = care
-      ? records(org, "feeding").filter((x) => x.horseId === horse.id)
-      : [];
+    const medical =
+      owned || (staff && allowed("medical"))
+        ? records(org, "medical").filter((x) => x.horseId === horse.id)
+        : [];
+    const feeding =
+      owned || (staff && allowed("feeding"))
+        ? records(org, "feeding").filter((x) => x.horseId === horse.id)
+        : [];
     const medicalIds = new Set(medical.map((x) => x.id)),
       feedIds = new Set(feeding.map((x) => x.id));
-    const tasks = care
-      ? records(org, "tasks").filter(
-          (x) => medicalIds.has(x.medicalId) || feedIds.has(x.feedingPlanId),
-        )
-      : [];
+    const tasks =
+      owned || (staff && allowed("tasks"))
+        ? records(org, "tasks").filter(
+            (x) =>
+              x.horseId === horse.id ||
+              medicalIds.has(x.medicalId) ||
+              feedIds.has(x.feedingPlanId),
+          )
+        : [];
     const documents = care
       ? records(org, "horseDocuments").filter((x) => x.horseId === horse.id)
       : [];
-    const boarding = care
-      ? records(org, "boarding")
-          .filter((x) => x.horseId === horse.id)
-          .map((x) => ({ ...x, stall: record(org, "stalls", x.stallId).name }))
-      : [];
+    const boarding =
+      owned || (staff && allowed("boarding"))
+        ? records(org, "boarding")
+            .filter((x) => x.horseId === horse.id)
+            .map((x) => ({
+              ...boardingView(org, x),
+              stall: record(org, "stalls", x.stallId).name,
+            }))
+        : [];
     const bookings = all(
       "SELECT * FROM reservations WHERE org_id=? AND horse_id=?" +
-        (staff ? "" : " AND member_id=?"),
-      ...[org, horse.id, ...(staff ? [] : [req.user.id])],
+        (staff && allowed("classes") ? "" : " AND member_id=?"),
+      ...[org, horse.id, ...(staff && allowed("classes") ? [] : [req.user.id])],
     ).map((b) => ({
       ...b,
       session: record(org, "classes", b.class_id),
@@ -271,7 +294,18 @@ export function stableOperations(c) {
           ? get("SELECT name FROM users WHERE id=?", horse.ownerId)?.name || ""
           : "",
       instructor: horse.instructorId
-        ? record(org, "instructors", horse.instructorId)
+        ? (() => {
+            const instructor = record(org, "instructors", horse.instructorId);
+            return staff && allowed("instructors")
+              ? instructor
+              : {
+                  id: instructor.id,
+                  name: instructor.name,
+                  nameEn: instructor.nameEn,
+                  nameAr: instructor.nameAr,
+                  active: instructor.active,
+                };
+          })()
         : null,
       horse:
         staff || owned
@@ -385,27 +419,20 @@ export function stableOperations(c) {
     });
     res.json({ ok: true });
   });
-  app.post("/api/boarding", owner, (req, res) => {
+  function boardingDetails(req, previous = null) {
     const org = req.org.id,
-      b = req.body,
+      b = { ...previous, ...req.body },
       horse = record(org, "horses", b.horseId),
       stall = record(org, "stalls", b.stallId),
       plan = record(org, "plans", b.planId);
     const startDate = iso(b.startDate).slice(0, 10),
       endDate = iso(b.endDate).slice(0, 10);
     if (startDate > endDate) fail("End date precedes start date");
-    if (!stall.active) fail("Stall is inactive");
-    if (
-      ![
-        "boarding",
-        "boarding_food",
-        "boarding_full",
-        "boarding_medical",
-      ].includes(plan.kind)
-    )
-      fail("Choose a boarding price");
+    if (!active(stall)) fail("Stall is inactive");
+    if (!isBoardingPrice(plan)) fail("Choose a boarding price");
     const rows = records(org, "boarding").filter(
       (x) =>
+        x.id !== previous?.id &&
         x.status === "active" &&
         x.startDate <= endDate &&
         x.endDate >= startDate,
@@ -423,6 +450,22 @@ export function stableOperations(c) {
         stall.capacity
       )
         fail("Stall capacity is full for these dates", 409);
+    const memberId = b.memberId || horse.ownerId;
+    if (
+      !get(
+        "SELECT user_id FROM memberships WHERE org_id=? AND user_id=?",
+        org,
+        memberId,
+      )
+    )
+      fail("Billed member must belong to this stable");
+    if (!active(plan) && plan.id !== previous?.planId)
+      fail("Boarding price is inactive");
+    return { org, b, horse, stall, plan, startDate, endDate, memberId };
+  }
+  app.post("/api/boarding", owner, (req, res) => {
+    const { org, b, horse, stall, plan, startDate, endDate, memberId } =
+      boardingDetails(req);
     const bid = id();
     transaction(() => {
       const invoiceId = createPaymentRequest(
@@ -458,7 +501,75 @@ export function stableOperations(c) {
       );
       audit(req, "boarding.create", bid);
     });
-    res.status(201).json(record(org, "boarding", bid));
+    res.status(201).json(boardingView(org, record(org, "boarding", bid)));
+  });
+  app.put("/api/boarding/:id", owner, (req, res) => {
+    const previous = record(req.org.id, "boarding", req.params.id);
+    if (previous.status !== "active")
+      fail("Only active boarding stays can be edited", 409);
+    const { org, horse, stall, plan, startDate, endDate, memberId } =
+      boardingDetails(req, previous);
+    const invoice = get(
+      "SELECT * FROM proformas WHERE org_id=? AND id=?",
+      org,
+      previous.invoiceId,
+    );
+    if (!invoice || ["void", "refund_required"].includes(invoice.status))
+      fail("Reconcile the closed boarding invoice before editing", 409);
+    const financialChange =
+      memberId !== previous.memberId || plan.id !== previous.planId;
+    if (
+      financialChange &&
+      (invoice.paid > 0 ||
+        invoice.status !== "open" ||
+        invoice.discount ||
+        invoice.voucher)
+    )
+      fail(
+        "Paid or adjusted invoices keep their billed member and price; reconcile payment before changing them",
+        409,
+      );
+    transaction(() => {
+      if (memberId !== previous.memberId)
+        run(
+          "UPDATE proformas SET member_id=? WHERE org_id=? AND id=?",
+          memberId,
+          org,
+          invoice.id,
+        );
+      if (plan.id !== previous.planId)
+        run(
+          "UPDATE proformas SET description=?,gross=?,due=?,plan_id=?,status=? WHERE org_id=? AND id=?",
+          plan.name,
+          plan.amount,
+          plan.amount,
+          plan.id,
+          plan.amount === 0 ? "settled" : "open",
+          org,
+          invoice.id,
+        );
+      put(org, "boarding", previous.id, {
+        ...previous,
+        horseId: horse.id,
+        stallId: stall.id,
+        memberId,
+        planId: plan.id,
+        startDate,
+        endDate,
+        updatedAt: now(),
+        updatedBy: req.user.id,
+      });
+      notify(
+        org,
+        memberId,
+        "Boarding updated / تم تحديث الإيواء",
+        "Your boarding details have been updated. / تم تحديث تفاصيل الإيواء.",
+        null,
+        mailDetails(org, memberId, invoice.id),
+      );
+      audit(req, "boarding.update", previous.id);
+    });
+    res.json(boardingView(org, record(org, "boarding", previous.id)));
   });
   app.post("/api/boarding/:id/end", owner, (req, res) => {
     const b = record(req.org.id, "boarding", req.params.id);

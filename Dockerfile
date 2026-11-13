@@ -21,6 +21,7 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node server ./server
 COPY --chown=node:node shared ./shared
+COPY --chown=node:node config ./config
 RUN mkdir -p /var/lib/academy && chown node:node /var/lib/academy
 USER node
 EXPOSE 3001

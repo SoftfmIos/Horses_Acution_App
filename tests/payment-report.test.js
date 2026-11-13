@@ -76,3 +76,23 @@ test("search and Riyadh date filters select payments while preserving lifetime i
   assert.equal(search[0].outstanding, 6000);
   assert.equal(paymentReport({ ...data, search: "not found" }).length, 0);
 });
+
+test("payment month groups use Riyadh dates and keep refunds in the correct month", async () => {
+  const { historyMonths } = await import("../src/historyMonths.js");
+  const months = historyMonths(
+    [
+      { amount: 5000, created_at: "2026-10-31T22:00:00Z" },
+      { amount: -1000, created_at: "2026-11-01T10:00:00Z" },
+      { amount: 2000, created_at: "2026-10-15T10:00:00Z" },
+    ],
+    (p) => p.created_at,
+  );
+  assert.deepEqual(
+    months.map((m) => m.key),
+    ["2026-11", "2026-10"],
+  );
+  assert.equal(
+    months[0].items.reduce((sum, p) => sum + p.amount, 0),
+    4000,
+  );
+});

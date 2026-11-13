@@ -96,3 +96,21 @@ After success, remove `ADMIN_PASSWORD` and other `ADMIN_*` environment settings,
 ## Updating the portal, Settings and care schedules
 
 Deploy the same latest `main` commit to both cPanel and Vercel. In cPanel, Update from Remote, keep startup file `passenger.cjs` and the existing `DATABASE_PATH`, then Restart. Schema additions are created automatically on database open; never replace the database to update the application. Vercel must build the latest commit, not redeploy an older deployment. After both updates, hard-refresh the browser. A 12-character password requirement indicates an older frontend or backend is still active; current registration and member creation both accept 6 characters.
+
+## Production custom domain: app.riyadhpolohills.com
+
+The current website is **https://app.riyadhpolohills.com**. In cPanel → Node.js application → Environment variables set `PUBLIC_ORIGIN=https://app.riyadhpolohills.com` (no trailing slash), save, and restart the Node application. A stale `PUBLIC_ORIGIN` rejects all POST/PUT/DELETE requests, including login and password recovery; a frontend redeploy alone cannot change that backend environment variable.
+
+Release 1.23.0 also reads the explicit `allowedWebsiteOrigins` in `config/backend.json`, supporting both the custom domain and the existing Vercel frontend even when migrating between them. Additional domains require exact origins in `ADDITIONAL_PUBLIC_ORIGINS` (comma-separated). Wildcards and reflected Host/X-Forwarded-Host values are not trusted. No CORS or CSRF protections need to be disabled. After pulling the backend, restart Passenger so the new origin configuration takes effect.
+
+Password-reset and welcome links follow the verified requesting site. A request from `app.riyadhpolohills.com` therefore receives a link to that custom domain.
+
+## Public App Store pages
+
+The repository includes `public/app.html`, `public/privacy.html` and `public/app-pages.css`. Vite copies these files to the deployed site root. They need no API or sign-in. Deploy `main` and confirm both links display the public pages before adding them to App Store Connect:
+
+- Marketing: `https://app.riyadhpolohills.com/app.html`
+- Support: `https://app.riyadhpolohills.com/app.html#support`
+- Privacy: `https://app.riyadhpolohills.com/privacy.html`
+
+The app uses Apple's Standard EULA: `https://www.apple.com/legal/internet-services/itunes/dev/stdeula/`. Leave the App Store Connect custom-license field empty to use Apple's standard agreement.

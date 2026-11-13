@@ -23,6 +23,17 @@ export async function api(path, { method = "GET", body, stableId } = {}) {
     throw new Error("Server unavailable / الخادم غير متاح");
   }
   if (!response.ok) {
+    if (
+      data.code === "ORIGIN_REJECTED" ||
+      data.error === "Request origin rejected"
+    ) {
+      const e = new Error(
+        "Website origin is not configured on the backend. Update and restart the backend for app.riyadhpolohills.com. / نطاق الموقع غير مهيأ في الخادم. حدّث الخادم وأعد تشغيله لدعم app.riyadhpolohills.com.",
+      );
+      e.code = "ORIGIN_REJECTED";
+      e.status = response.status;
+      throw e;
+    }
     const outdated =
       data.error === "Unknown module" || data.error === "Endpoint not found";
     const e = new Error(

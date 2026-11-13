@@ -219,12 +219,15 @@ export function renderEmail(job) {
       contentType: "text/calendar; charset=utf-8",
     });
   }
+  const recovery = d.recovery?.link
+    ? `<p dir="auto">${escape(job.body)}</p><p><a href="${escape(d.recovery.link)}" style="display:inline-block;padding:14px;background:#152b42;color:white;border-radius:6px">Reset password / إعادة تعيين كلمة المرور</a></p>`
+    : "";
   const login = d.credentials?.loginUrl
     ? `<p><a style="display:inline-block;padding:14px;background:#152b42;color:white;border-radius:6px" href="${escape(d.credentials.loginUrl)}">Sign in / تسجيل الدخول</a></p>`
     : "";
   const table = `<table style="width:100%;border-collapse:collapse;font-size:14px">${rows.join("")}</table>`;
   const brand = escape(d.academy || "Riyadh Polo Hills");
-  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#152b42"><div style="max-width:660px;margin:24px auto;background:white;border-radius:12px;overflow:hidden"><header style="padding:24px;text-align:center;background:#152b42;color:white"><img src="cid:academy-logo" width="120" alt="Academy logo / شعار الأكاديمية" style="background:white;border-radius:8px"><h1 style="font-size:22px">${brand}</h1></header><main style="padding:28px"><h2>${escape(job.subject)}</h2><p dir="auto" style="line-height:1.9">${escape(explanation.split(" / ")[0])}</p>${explanation.includes(" / ") ? `<p dir="rtl" lang="ar" style="line-height:1.9">${escape(explanation.split(" / ").slice(1).join(" / "))}</p>` : ""}${table}${login}${calendar}<p dir="rtl" lang="ar" style="line-height:1.8">للاستفسارات، يرجى الرد على هذا البريد أو التواصل مع فريق الدعم.</p><p>For questions, reply to this email or contact our support team.</p>${p ? "<p>Pro forma payment request — not an official tax invoice. / فاتورة مبدئية لطلب الدفع — ليست فاتورة ضريبية رسمية.</p>" : ""}</main><footer style="padding:20px;text-align:center;background:#eee7d8">${brand}<br>${escape(d.phone || "")} ${escape(d.address || "")}</footer></div></body></html>`;
+  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f5f1e9;font-family:Arial,sans-serif;color:#152b42"><div style="max-width:660px;margin:24px auto;background:white;border-radius:12px;overflow:hidden"><header style="padding:24px;text-align:center;background:#152b42;color:white"><img src="cid:academy-logo" width="120" alt="Academy logo / شعار الأكاديمية" style="background:white;border-radius:8px"><h1 style="font-size:22px">${brand}</h1></header><main style="padding:28px"><h2>${escape(job.subject)}</h2><p dir="auto" style="line-height:1.9">${escape(explanation.split(" / ")[0])}</p>${explanation.includes(" / ") ? `<p dir="rtl" lang="ar" style="line-height:1.9">${escape(explanation.split(" / ").slice(1).join(" / "))}</p>` : ""}${table}${login}${recovery}${calendar}<p dir="rtl" lang="ar" style="line-height:1.8">للاستفسارات، يرجى الرد على هذا البريد أو التواصل مع فريق الدعم.</p><p>For questions, reply to this email or contact our support team.</p>${p ? "<p>Pro forma payment request — not an official tax invoice. / فاتورة مبدئية لطلب الدفع — ليست فاتورة ضريبية رسمية.</p>" : ""}</main><footer style="padding:20px;text-align:center;background:#eee7d8">${brand}<br>${escape(d.phone || "")} ${escape(d.address || "")}</footer></div></body></html>`;
   if (p)
     attachments.push({
       filename: `proforma-${p.id}.html`,
@@ -233,7 +236,9 @@ export function renderEmail(job) {
     });
   return {
     html,
-    text: [job.subject, explanation, ...plainRows].join("\n"),
+    text: [job.subject, explanation, d.recovery?.link || "", ...plainRows].join(
+      "\n",
+    ),
     attachments,
   };
 }

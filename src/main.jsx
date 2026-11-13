@@ -1,3 +1,10 @@
+import { AccountSecurity } from "./AccountSecurity";
+import { SessionTotals } from "./SessionTotals";
+import { BookingCredits } from "./BookingCredits";
+import { paymentStatusTone } from "./paymentStatus";
+import { BuySessions, PackageCreditStatus } from "./SessionCredits";
+import { AccountRecovery, ResetPassword } from "./AccountRecovery";
+import { InstructorBadge } from "./InstructorBadge";
 import { PaymentReport } from "./PaymentReport";
 import { EmailSettings } from "./EmailSettings";
 import { BookingPlanner } from "./BookingPlanner";
@@ -18,6 +25,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CalendarDays,
+  Printer,
   Users,
   HeartPulse,
   LayoutDashboard,
@@ -70,6 +78,7 @@ const dict = {
     startDate: "Schedule start date",
     endDate: "Schedule end date",
     instructors: "Instructors",
+    userId: "Instructor staff account",
     arenas: "Training locations & arenas",
     breeds: "Horse breeds",
     address: "Address",
@@ -83,7 +92,9 @@ const dict = {
     academyPortal: "Academy portal",
     memberPortal: "Member portal",
     myAccount: "My account",
+    accountSecurity: "Account & security",
     accountBalance: "My balance",
+    buySessions: "Buy sessions",
     sessionBalance: "Lesson credits remaining",
     credits: "Session credits (packages only)",
     creditCost: "Credits per booking",
@@ -310,6 +321,7 @@ const dict = {
     startDate: "تاريخ بداية الجدول",
     endDate: "تاريخ نهاية الجدول",
     instructors: "المدربون",
+    userId: "حساب الموظف للمدرب",
     arenas: "مواقع التدريب والميادين",
     breeds: "سلالات الخيول",
     address: "العنوان",
@@ -323,7 +335,9 @@ const dict = {
     academyPortal: "بوابة الأكاديمية",
     memberPortal: "بوابة العضو",
     myAccount: "حسابي",
+    accountSecurity: "الحساب والأمان",
     accountBalance: "رصيدي",
+    buySessions: "شراء حصص",
     sessionBalance: "رصيد الحصص المتبقي",
     credits: "عدد الحصص (للباقات فقط)",
     creditCost: "رصيد الحصص المطلوب للحجز",
@@ -567,6 +581,9 @@ function App() {
   const [lang, setLang] = useState(
       localStorage.getItem("academy-language") || "en",
     ),
+    [resetToken, setResetToken] = useState(() =>
+      new URLSearchParams(window.location.hash.slice(1)).get("reset-password"),
+    ),
     [auth, setAuth] = useState(null),
     [stable, setStable] = useState(null),
     [rawData, setData] = useState(fresh),
@@ -581,6 +598,8 @@ function App() {
     [instructorFilter, setInstructorFilter] = useState(""),
     [q, setQ] = useState(""),
     [reports, setReports] = useState(null),
+    [paymentPrintRequest, setPaymentPrintRequest] = useState(0),
+    [paymentCanPrint, setPaymentCanPrint] = useState(false),
     [calendarDate, setCalendarDate] = useState(""),
     [taskPlanFilter, setTaskPlanFilter] = useState(null),
     [pendingVoucher, setPendingVoucher] = useState(() => {
@@ -613,6 +632,22 @@ function App() {
   const refreshSequence = useRef(0),
     stableRef = useRef(stable?.id);
   stableRef.current = stable?.id;
+  useEffect(() => {
+    const handle = () =>
+      setResetToken(
+        new URLSearchParams(window.location.hash.slice(1)).get(
+          "reset-password",
+        ),
+      );
+    window.addEventListener("hashchange", handle);
+    if (resetToken)
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    return () => window.removeEventListener("hashchange", handle);
+  }, [resetToken]);
   const data = localizeData(rawData, ar);
   const selectStable = (selected) => {
     if (!selected || selected.id === stable?.id) return;
@@ -664,6 +699,11 @@ function App() {
     setLoading(true);
     try {
       const a = await api("/auth/me");
+      setData(fresh);
+      setPage("overview");
+      setModal(null);
+      setMenu(false);
+      setQ("");
       setAuth(a);
       setStable(a.stables[0]);
       setFailure("");
@@ -732,7 +772,16 @@ function App() {
     setData(fresh);
     refresh();
     const timer = setInterval(() => refresh(true), 30000);
-    return () => clearInterval(timer);
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh(true);
+    };
+    window.addEventListener("focus", visible);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", visible);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, [stable?.id]);
   const notify = (m) => {
     setToast(m);
@@ -772,13 +821,49 @@ function App() {
   const go = (p) => {
     if (p === "tasks") setTaskPlanFilter(null);
     setPage(p);
+    if (
+      ["overview", "accountBalance", "buySessions", "billing"].includes(p) &&
+      stable
+    )
+      refresh(true);
     setQ("");
     setMenu(false);
+  };
+  const applyBoardingUpdate = (stay) => {
+    if (stableRef.current !== stable?.id) return;
+    refreshSequence.current++;
+    setData((current) => {
+      const existing = current.boarding.find((row) => row.id === stay.id);
+      const occupancy = (current.stallOccupancy ?? current.boarding).filter(
+        (row) => row.id !== stay.id,
+      );
+      if (stay.status === "active")
+        occupancy.push({
+          id: stay.id,
+          stallId: stay.stallId,
+          status: stay.status,
+          startDate: stay.startDate,
+          endDate: stay.endDate,
+        });
+      return {
+        ...current,
+        boarding: [
+          ...current.boarding.filter((row) => row.id !== stay.id),
+          { ...existing, ...stay },
+        ],
+        stallOccupancy: occupancy,
+      };
+    });
   };
   const nav = [
     ["overview", LayoutDashboard],
     ["classes", CalendarDays],
-    ...(!manager ? [["accountBalance", BookOpen]] : []),
+    ...(!manager
+      ? [
+          ["accountBalance", BookOpen],
+          ["buySessions", Ticket],
+        ]
+      : []),
     ["horses", HorseHead],
     ...(client ? [["instructors", GraduationCap]] : []),
     ...(manager
@@ -821,6 +906,7 @@ function App() {
           "overview",
           "classes",
           "accountBalance",
+          "buySessions",
           "horses",
           "instructors",
           "billing",
@@ -875,6 +961,14 @@ function App() {
           ["nameEn", "text", true],
           ["nameAr", "text"],
           ["email", "email"],
+          [
+            "userId",
+            "select",
+            false,
+            data.members
+              .filter((m) => m.role === "owner")
+              .map((m) => [m.id, m.name]),
+          ],
           ["phone", "tel"],
           ["active", "checkbox"],
           ["notes", "textarea"],
@@ -942,7 +1036,7 @@ function App() {
               "other",
             ].map((v) => [v, t[v]]),
           ],
-          ["credits", "number"],
+          ["credits", "number", modal?.form?.kind === "package"],
           ["active", "checkbox"],
         ],
         classes: [
@@ -1108,11 +1202,15 @@ function App() {
         : {}),
     };
   }
-  function openForm(kind, row) {
+  function openForm(kind, row, initial = {}) {
     setModal({
       kind,
       record: row || null,
-      form: { ...defaults(kind), ...row },
+      form: { ...defaults(kind), ...initial, ...row },
+      returnPage:
+        page === "boardingManagement" && ["stalls", "plans"].includes(kind)
+          ? "boardingManagement"
+          : null,
     });
   }
   async function saveRecord(e) {
@@ -1154,6 +1252,15 @@ function App() {
                 : b[key],
             ).toISOString()
           : "";
+    }
+    if (modal.kind === "plans" && b.credits > 0 && b.kind !== "package") {
+      setModal((m) => ({
+        ...m,
+        error: ar
+          ? "لحفظ عدد الحصص، اختر باقة حصص من الفئة. لم يتم حفظ التغييرات بعد."
+          : "Choose Lesson package in Category to save session credits. Your changes have not been saved yet.",
+      }));
+      return;
     }
     if (modal.kind === "discounts" && b.mode === "fixed")
       b.value = Math.round(b.value * 100);
@@ -1247,7 +1354,7 @@ function App() {
       }
       // A successful write must not be hidden by an old search filter.
       setModal(null);
-      go(kind === "plans" ? "pricing" : kind);
+      go(modal.returnPage || (kind === "plans" ? "pricing" : kind));
       if (kind === "classes") {
         setInstructorFilter("");
         setCalendarDate(riyadhDay(saved.startsAt));
@@ -1348,6 +1455,7 @@ function App() {
           : {}),
       },
       touched: [...(m.touched || []), key],
+      error: "",
       quote: null,
     }));
   }
@@ -1360,8 +1468,16 @@ function App() {
             id={r.id}
             name={r.name}
             request={request}
-            editable={canManage(kind, "edit")}
-            removable={canManage(kind, "delete")}
+            editable={
+              canManage(kind, "edit") ||
+              (kind === "instructors" &&
+                rawData.myInstructorProfiles?.some((i) => i.id === r.id))
+            }
+            removable={
+              canManage(kind, "delete") ||
+              (kind === "instructors" &&
+                rawData.myInstructorProfiles?.some((i) => i.id === r.id))
+            }
             ar={ar}
           />
         )}
@@ -1413,6 +1529,17 @@ function App() {
               {t[r.status]}
             </span>
             <p>{r.notes}</p>
+          </>
+        ) : kind === "stalls" ? (
+          <>
+            <p>
+              {ar ? "السعة" : "Capacity"}: {r.capacity}
+            </p>
+            <p>{r.active ? t.active : ar ? "غير مفعّل" : "Inactive"}</p>
+            <p>{r.notes}</p>
+            <button className="soft" onClick={() => go("boardingManagement")}>
+              {ar ? "عرض التوفر والإيواء" : "View availability & boarding"}
+            </button>
           </>
         ) : kind === "plans" ? (
           <>
@@ -1573,6 +1700,22 @@ function App() {
       </article>
     );
   }
+  if (resetToken)
+    return (
+      <ResetPassword
+        token={resetToken}
+        ar={ar}
+        onBack={() => {
+          setResetToken(null);
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+          window.location.reload();
+        }}
+      />
+    );
   if (loading)
     return (
       <div className="auth-page">
@@ -1601,7 +1744,14 @@ function App() {
               {failure}
             </p>
           )}
-          <AuthForm t={t} onSuccess={init} />
+          <AuthForm t={t} ar={ar} onSuccess={init} />
+          <p>
+            <a href="/app.html">{ar ? "عن التطبيق" : "About the app"}</a>
+            {" · "}
+            <a href="/privacy.html">
+              {ar ? "سياسة الخصوصية" : "Privacy policy"}
+            </a>
+          </p>
         </section>
       </div>
     );
@@ -1707,6 +1857,13 @@ function App() {
             {t.brand}
           </div>
           <div className="header-actions">
+            <button
+              className="icon-button"
+              aria-label={t.accountSecurity}
+              onClick={() => go("accountSecurity")}
+            >
+              <Users size={17} />
+            </button>
             {client && (
               <button
                 className="icon-button"
@@ -1833,13 +1990,53 @@ function App() {
                   {t.add}
                 </button>
               )}
-            {page === "billing" && canManage("billing", "add") && (
+            {page === "pricing" && canManage("plans", "add") && (
               <button
-                className="primary"
-                onClick={() => setModal({ kind: "manualBilling", form: {} })}
+                className="soft"
+                onClick={() =>
+                  setModal({
+                    kind: "plans",
+                    record: null,
+                    form: {
+                      ...defaults("plans"),
+                      kind: "package",
+                      credits: "",
+                    },
+                  })
+                }
               >
-                {t.createRequest}
+                <Plus size={17} />
+                {ar ? "إضافة باقة حصص" : "Add session package"}
               </button>
+            )}
+            {page === "billing" && manager && (
+              <div
+                className="billing-header-actions"
+                role="group"
+                aria-label={
+                  ar ? "إجراءات طلبات الدفع" : "Payment request actions"
+                }
+              >
+                <button
+                  className="soft payment-report-print-button"
+                  disabled={!paymentCanPrint}
+                  onClick={() => setPaymentPrintRequest((value) => value + 1)}
+                >
+                  <Printer size={17} />
+                  {ar ? "طباعة تقرير الدفعات" : "Print payment report"}
+                </button>
+                {canManage("billing", "add") && (
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      setModal({ kind: "manualBilling", form: {} })
+                    }
+                  >
+                    <Plus size={17} />
+                    {t.createRequest}
+                  </button>
+                )}
+              </div>
             )}
             {page === "members" && canManage("members", "add") && (
               <button
@@ -1856,6 +2053,23 @@ function App() {
             )}
           </div>
 
+          {page === "overview" && !!rawData.myInstructorProfiles?.length && (
+            <section className="panel">
+              <h2>{ar ? "صورتي كمدرب" : "My instructor photo"}</h2>
+              {rawData.myInstructorProfiles.map((i) => (
+                <ProfilePhoto
+                  key={i.id}
+                  kind="instructors"
+                  id={i.id}
+                  name={localizedName(i, ar)}
+                  request={request}
+                  editable
+                  removable
+                  ar={ar}
+                />
+              ))}
+            </section>
+          )}
           {page === "permissions" &&
             manager &&
             !isSystemAdmin &&
@@ -1884,7 +2098,9 @@ function App() {
           )}
           {page === "boardingManagement" && manager && (
             <Boarding
+              key={stable.id}
               data={data}
+              onSaved={applyBoardingUpdate}
               ar={ar}
               request={request}
               action={action}
@@ -1912,11 +2128,29 @@ function App() {
               when={when}
             />
           )}
+          {page === "accountSecurity" && (
+            <AccountSecurity
+              user={auth.user}
+              ar={ar}
+              request={request}
+              onSignedOut={(message) => {
+                refreshSequence.current++;
+                setAuth(null);
+                setStable(null);
+                setData(fresh);
+                setModal(null);
+                setPage("overview");
+                notify(message);
+              }}
+            />
+          )}
           {page === "overview" && client && (
             <ClientHome
               key={stable.id}
               request={request}
               data={data}
+              loading={rawData === fresh}
+              refresh={() => refresh(true)}
               user={{ ...auth.user, name: localizedName(auth.user, ar) }}
               ar={ar}
               t={t}
@@ -2087,9 +2321,13 @@ function App() {
                       <article className="panel record-card" key={b.id}>
                         <h3>{c.title}</h3>
                         <p>{when(c.startsAt)}</p>
-                        <p>
-                          {c.instructor} · {c.arena}
-                        </p>
+                        <InstructorBadge
+                          session={c}
+                          instructors={data.instructors}
+                          request={request}
+                          ar={ar}
+                        />
+                        <p>{c.arena}</p>
                         <p>{labelHorse(b.horse_id)}</p>
                         <button
                           className="text-button"
@@ -2112,18 +2350,70 @@ function App() {
               <p className="notice">{t.cancelPolicy}</p>
             </>
           )}
+          {page === "buySessions" && !manager && (
+            <BuySessions
+              key={stable.id}
+              data={data}
+              ar={ar}
+              money={money}
+              request={request}
+              action={action}
+              busy={busy}
+              onCreated={() => {
+                go("billing");
+                notify(
+                  ar
+                    ? "تم إنشاء طلب الدفع. تضاف الحصص بعد تأكيد السداد الكامل."
+                    : "Payment request created. Sessions are added after staff confirm full payment.",
+                );
+              }}
+            />
+          )}
           {page === "accountBalance" && !manager && (
             <>
               <div className="balance-hero panel">
                 <div>
                   <p>{t.sessionBalance}</p>
-                  <div className="big-money">{data.creditBalance}</div>
+                  <div className="big-money">
+                    {rawData === fresh ? t.loading : data.creditBalance}
+                  </div>
                 </div>
-                <button className="primary" onClick={() => go("pricing")}>
-                  {t.requestPackage}
+                <button className="primary" onClick={() => go("buySessions")}>
+                  {t.buySessions}
                 </button>
               </div>
+              <SessionTotals
+                ledger={data.creditLedger}
+                invoices={data.proformas}
+                ar={ar}
+                loading={rawData === fresh}
+              />
               <p className="notice">{t.packageNotice}</p>
+              <button
+                className="soft"
+                disabled={busy}
+                onClick={() => refresh()}
+              >
+                {ar ? "تحديث رصيد الحصص" : "Refresh session balance"}
+              </button>
+              {data.proformas
+                .filter((p) => p.sessionCreditStatus)
+                .map((p) => (
+                  <article className="panel" key={p.id}>
+                    <h3>{p.description}</h3>
+                    <p>
+                      {t[p.status] || p.status} · {money(p.paid)} /{" "}
+                      {money(p.due)}
+                    </p>
+                    <PackageCreditStatus invoice={p} ar={ar} />
+                    <button
+                      className="soft"
+                      onClick={() => setModal({ kind: "proforma", record: p })}
+                    >
+                      {t.view}
+                    </button>
+                  </article>
+                ))}
               <div className="panel table-wrap">
                 <h2>{t.creditHistory}</h2>
                 <table>
@@ -2319,6 +2609,7 @@ function App() {
               </details>
 
               <BookingPlanner
+                request={request}
                 data={data}
                 ar={ar}
                 staff={manager}
@@ -2364,7 +2655,12 @@ function App() {
                     return (
                       <article className="session" key={c.id}>
                         <div className="session-top">
-                          <span className="eyebrow">{c.instructor}</span>
+                          <InstructorBadge
+                            session={c}
+                            instructors={data.instructors}
+                            request={request}
+                            ar={ar}
+                          />
                           <span className="pill">
                             {c.places} {t.places}
                           </span>
@@ -2651,12 +2947,25 @@ function App() {
                   money={money}
                   when={when}
                   stableName={localizedName(stable, ar)}
+                  printRequest={paymentPrintRequest}
+                  onCanPrintChange={setPaymentCanPrint}
                 />
               )}
               <p className="notice">
                 <FileText size={20} />
                 {t.proforma}
               </p>
+              <div className="payment-status-legend">
+                <span className="payment-status-paid">
+                  {ar ? "مدفوع بالكامل" : "Paid in full"}
+                </span>
+                <span className="payment-status-partial">
+                  {ar ? "مدفوع جزئياً" : "Partially paid"}
+                </span>
+                <span className="payment-status-pending">
+                  {ar ? "بانتظار الدفع" : "Awaiting payment"}
+                </span>
+              </div>
               <div className="panel table-wrap">
                 <table>
                   <thead>
@@ -2673,7 +2982,10 @@ function App() {
                   </thead>
                   <tbody>
                     {data.proformas.map((p) => (
-                      <tr key={p.id}>
+                      <tr
+                        key={p.id}
+                        className={"payment-status-" + paymentStatusTone(p)}
+                      >
                         <td>
                           {p.description}
                           <small className="record-id">
@@ -2812,6 +3124,13 @@ function App() {
             </>
           )}
           <footer>
+            <span>
+              <a href="/app.html">{ar ? "عن التطبيق" : "About the app"}</a>
+              {" · "}
+              <a href="/privacy.html">
+                {ar ? "سياسة الخصوصية" : "Privacy policy"}
+              </a>
+            </span>
             <span>
               © {new Date().getFullYear()} {t.brand}
             </span>
@@ -2979,6 +3298,14 @@ function App() {
                   }
                 }}
               >
+                <InstructorBadge
+                  session={
+                    data.classes.find((c) => c.id === modal.classId) || {}
+                  }
+                  instructors={data.instructors}
+                  request={request}
+                  ar={ar}
+                />
                 {manager && (
                   <label>
                     {ar ? "الحجز للعضو" : "Book for member"}
@@ -3013,42 +3340,55 @@ function App() {
                     <strong>{localizedName(auth.user, ar)}</strong>
                   </p>
                 )}
-                <p>
-                  {t.sessionBalance}:{" "}
-                  <strong>
-                    {manager
-                      ? data.members.find((m) => m.id === modal.form.memberId)
-                          ?.creditBalance || 0
-                      : data.creditBalance}
-                  </strong>
-                </p>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    disabled={
-                      (manager
-                        ? data.members.find((m) => m.id === modal.form.memberId)
-                            ?.creditBalance || 0
-                        : data.creditBalance) <
-                      (data.classes.find((c) => c.id === modal.classId)
-                        ?.creditCost || 1)
-                    }
-                    checked={Boolean(modal.form.useCredits)}
-                    onChange={(e) =>
-                      setModal((m) => ({
-                        ...m,
-                        form: {
-                          ...m.form,
-                          useCredits: e.target.checked,
-                          discountCode: "",
-                          voucherCode: "",
-                        },
-                        quote: null,
-                      }))
-                    }
-                  />
-                  {t.useCredits}
-                </label>
+                <BookingCredits
+                  key={
+                    stable.id +
+                    "|" +
+                    (manager ? modal.form.memberId || "" : auth.user.id)
+                  }
+                  onReview={
+                    !manager || permitted("billing")
+                      ? async (id) => {
+                          const loaded = await refresh(true);
+                          const invoice = (
+                            loaded?.proformas || data.proformas
+                          ).find((p) => p.id === id);
+                          if (invoice)
+                            setModal({ kind: "proforma", record: invoice });
+                          else {
+                            setModal(null);
+                            go("billing");
+                          }
+                        }
+                      : undefined
+                  }
+                  memberId={manager ? modal.form.memberId : auth.user.id}
+                  stableId={stable.id}
+                  request={request}
+                  ar={ar}
+                  creditCost={
+                    data.classes.find((c) => c.id === modal.classId)
+                      ?.creditCost || 1
+                  }
+                  checked={Boolean(modal.form.useCredits)}
+                  refreshKey={rawData}
+                  onChange={(useCredits) =>
+                    setModal((m) =>
+                      m && m.kind === "booking"
+                        ? {
+                            ...m,
+                            form: {
+                              ...m.form,
+                              useCredits,
+                              discountCode: "",
+                              voucherCode: "",
+                            },
+                            quote: null,
+                          }
+                        : m,
+                    )
+                  }
+                />
                 <label>
                   {t.discountCode}
                   <input
@@ -3219,6 +3559,18 @@ function App() {
                   <h3>{t.brand}</h3>
                 </div>
                 <p>{modal.record.description}</p>
+                <PackageCreditStatus
+                  invoice={
+                    data.proformas.find((p) => p.id === modal.record.id) ||
+                    modal.record
+                  }
+                  ar={ar}
+                  admin={isSystemAdmin}
+                  action={action}
+                  request={request}
+                  busy={busy}
+                />
+
                 <p>
                   {ar ? "التفعيل" : "Activation"}:{" "}
                   {modal.record.activation === "active"
@@ -3311,6 +3663,11 @@ function App() {
               </>
             ) : (
               <form onSubmit={saveRecord}>
+                {modal.error && (
+                  <p className="notice" role="alert">
+                    {modal.error}
+                  </p>
+                )}
                 {modal.kind === "medical" && (
                   <p className="notice">
                     {ar
@@ -3342,6 +3699,13 @@ function App() {
                     ) : (
                       <>
                         {key === "amount" ? t.price : t[key]}
+                        {modal.kind === "plans" && key === "credits" && (
+                          <small id="plan-credits-help">
+                            {ar
+                              ? "اختر باقة حصص من الفئة لحفظ عدد الحصص (1–1000). تضاف الحصص لرصيد العضو بعد سداد قيمة الباقة بالكامل."
+                              : "Choose Lesson package in Category to save 1–1000 session credits. Members receive these credits after the package is paid in full."}
+                          </small>
+                        )}
                         {key === "frequencyHours" && (
                           <small>
                             {ar
@@ -3422,9 +3786,23 @@ function App() {
                                 : undefined
                             }
                             type={type === "money" ? "number" : type}
+                            aria-describedby={
+                              modal.kind === "plans" && key === "credits"
+                                ? "plan-credits-help"
+                                : undefined
+                            }
                             min={
-                              ["number", "money"].includes(type)
-                                ? "0"
+                              modal.kind === "plans" &&
+                              key === "credits" &&
+                              modal.form.kind === "package"
+                                ? "1"
+                                : ["number", "money"].includes(type)
+                                  ? "0"
+                                  : undefined
+                            }
+                            max={
+                              modal.kind === "plans" && key === "credits"
+                                ? "1000"
                                 : undefined
                             }
                             step={
@@ -3511,11 +3889,14 @@ function App() {
     </div>
   );
 }
-function AuthForm({ t, onSuccess }) {
+function AuthForm({ t, ar, onSuccess }) {
+  const [recovery, setRecovery] = useState(false);
   const [mode, setMode] = useState("login"),
     [join, setJoin] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  if (recovery)
+    return <AccountRecovery ar={ar} onBack={() => setRecovery(false)} />;
   return (
     <>
       <div className="tabs">
@@ -3585,6 +3966,24 @@ function AuthForm({ t, onSuccess }) {
             }
           />
         </label>
+        {mode === "login" && (
+          <div className="auth-recovery-links">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setRecovery(true)}
+            >
+              {ar ? "نسيت كلمة المرور؟" : "Forgot password?"}
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setRecovery(true)}
+            >
+              {ar ? "نسيت بريد تسجيل الدخول؟" : "Forgot login email?"}
+            </button>
+          </div>
+        )}
         {mode === "register" && (
           <>
             <label className="check-label">
