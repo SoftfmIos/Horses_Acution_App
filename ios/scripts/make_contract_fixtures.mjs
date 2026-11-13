@@ -34,13 +34,21 @@ try {
  const invite=await owner.call('/invites','POST');
  await member.call('/auth/register','POST',{name:'Test Rider',email:'rider@example.com',password:'Test-only-password',invite:invite.code});
  const me=await member.call('/auth/me');
- const horse=await owner.call('/records/horses','POST',{name:'Test Horse',status:'ready',ownerId:me.user.id});
+ const instructor=await owner.call('/records/instructors','POST',{name:'Test Instructor',userId:auth.user.id});
+ const horse=await owner.call('/records/horses','POST',{name:'Test Horse',status:'ready',ownerId:me.user.id,instructorId:instructor.id,microchip:'TEST-CHIP',birthDate:'2018-02-10',notes:'Fictional owner care notes'});
  const plan=await owner.call('/records/plans','POST',{name:'Test Lesson',amount:10000,active:true});
- const session=await owner.call('/records/classes','POST',{title:'Test Session',startsAt:'2026-11-13T10:00:00Z',endsAt:'2026-11-13T11:00:00Z',capacity:1,horseIds:[horse.id],instructor:'Test Instructor',arena:'Test Arena',planId:plan.id});
+ const session=await owner.call('/records/classes','POST',{title:'Test Session',startsAt:'2026-11-13T10:00:00Z',endsAt:'2026-11-13T11:00:00Z',capacity:1,horseIds:[horse.id],instructor:'Test Instructor',instructorId:instructor.id,arena:'Test Arena',planId:plan.id});
  const booking=await member.call('/bookings','POST',{classId:session.id});
  await owner.call('/proformas/'+booking.proformaId+'/payment','POST',{amount:4000,reference:'TEST-REFERENCE',externalRef:'Test voucher'});
  await owner.call('/records/tasks','POST',{title:'Test Care Task',dueAt:'2026-11-13T08:00:00Z',assigneeId:auth.user.id});
  for (const [name,value] of [['member-data',await member.call('/data')],['staff-data',await owner.call('/data')],['member-auth',me]])
+  writeFileSync(out+name+'.json',JSON.stringify(value,null,2)+'\n');
+ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+ await owner.call('/photos/horses/'+horse.id,'PUT',{mime:'image/png',content:png});
+ await owner.call('/photos/instructors/'+instructor.id,'PUT',{mime:'image/png',content:png});
+ await owner.call('/records/medical','POST',{horseId:horse.id,type:'Test vaccination',date:'2026-11-12T05:00:00Z',assigneeId:auth.user.id,notes:'Fictional owner medical record',restriction:false,frequencyHours:0,durationDays:0});
+ await owner.call('/records/feeding','POST',{horseId:horse.id,feed:'Test hay',quantity:'2 kg',time:'07:00',durationMinutes:30,assigneeId:auth.user.id,startDate:'2026-11-12',endDate:'2026-11-14',active:true,notes:'Fictional feeding plan'});
+ for(const[name,value]of [['member-horse-profile',await member.call('/horses/'+horse.id+'/profile')],['member-horse-photo',await member.call('/photos/horses/'+horse.id)],['member-instructor-photo',await member.call('/photos/instructors/'+instructor.id)]])
   writeFileSync(out+name+'.json',JSON.stringify(value,null,2)+'\n');
  console.log('Generated fictional fixtures for native backend decoding tests.');
 } finally {server.close();db.close();}

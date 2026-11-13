@@ -5,6 +5,11 @@ enum Brand {
     static let ivory = Color(red: 247/255, green: 243/255, blue: 235/255)
     static let stone = Color(red: 234/255, green: 228/255, blue: 216/255)
     static let gold = Color(red: 184/255, green: 142/255, blue: 80/255)
+    static func invoiceBackground(_ invoice: Invoice) -> Color {
+        if invoice.status == "settled" && invoice.paid >= invoice.due { return Color(red: 230/255, green: 244/255, blue: 234/255) }
+        if invoice.status == "open" { return invoice.paid > 0 ? Color(red: 1, green: 248/255, blue: 214/255) : Color(red: 1, green: 236/255, blue: 217/255) }
+        return .white
+    }
     static let ink = Color(red: 35/255, green: 57/255, blue: 70/255)
 }
 struct AcademyCard<Content: View>: View {

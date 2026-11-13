@@ -5,17 +5,18 @@ struct InvoicesView: View {
     @State private var search = ""
     var body: some View {
         List {
-            if store.data.proformas.isEmpty { EmptyMessage(title: store.text("No payment requests", "لا توجد طلبات دفع"), symbol: "doc.text") }
-            ForEach(store.data.proformas.filter { search.isEmpty || [$0.description,$0.descriptionAr ?? "",$0.id,store.memberName($0.member_id)].joined(separator: " ").localizedCaseInsensitiveContains(search) }) { invoice in
+            if store.visibleInvoices.isEmpty { EmptyMessage(title: store.text("No payment requests", "لا توجد طلبات دفع"), symbol: "doc.text") }
+            ForEach(store.visibleInvoices.filter { search.isEmpty || [$0.description,$0.descriptionAr ?? "",$0.id,store.memberName($0.member_id)].joined(separator: " ").localizedCaseInsensitiveContains(search) }) { invoice in
                 NavigationLink { InvoiceDetailView(invoice: invoice) } label: {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack { Text(invoice.display(store.arabic)).font(.headline); Spacer(); StatusPill(status: invoice.status) }
+                        HStack { Text(invoice.display(store.arabic)).font(.headline); Spacer(); StatusPill(status: invoice.status == "open" && invoice.paid > 0 ? "partial" : invoice.status) }
                         if store.isStaff { Text(store.memberName(invoice.member_id)).font(.caption) }
                         HStack { Text(store.money(invoice.due)); Spacer(); Text(store.text("Remaining: ", "المتبقي: ") + store.money(invoice.outstanding)).font(.caption) }
                     }.padding(.vertical, 6)
-                }
+                }.listRowBackground(Brand.invoiceBackground(invoice))
             }
         }.scrollContentBackground(.hidden).background(Brand.ivory).navigationTitle(store.text("Payment requests", "طلبات الدفع"))
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { PaymentHistoryView() } label: { Image(systemName: "list.bullet.rectangle") }.accessibilityLabel(store.text("Payment history", "سجل المدفوعات")) } }
             .searchable(text: $search, prompt: store.text("Search invoices or members", "البحث في الفواتير أو الأعضاء")).refreshable { await store.reload() }
     }
 }
@@ -24,10 +25,12 @@ struct InvoiceDetailView: View {
     let invoice: Invoice
     @State private var recordPayment = false
     @State private var file: URL?
+    @State private var emailNotice: String?
     var current: Invoice { store.data.proformas.first { $0.id == invoice.id } ?? invoice }
     var payments: [Payment] { store.data.payments.filter { $0.proforma_id == invoice.id }.sorted { $0.created_at < $1.created_at } }
     var body: some View {
         List {
+            if store.canView(current) {
             Section {
                 StatusPill(status: current.status)
                 Text(current.display(store.arabic)).font(.headline)
@@ -54,12 +57,18 @@ struct InvoiceDetailView: View {
                 if store.allowed("billing", "edit") && current.status == "open" && current.outstanding > 0 {
                     Button(store.text("Record payment", "تسجيل دفعة")) { recordPayment = true }
                 }
+                if store.allowed("billing", "edit") {
+                    Button(store.text("Email invoice copy", "إرسال نسخة الفاتورة بالبريد")) { Task { await store.perform { try await store.mutate("proformas/\(current.id)/email"); emailNotice = store.text("Invoice email queued.", "تمت جدولة بريد الفاتورة.") } } }.disabled(store.busy || !store.data.emailConfigured)
+                    if current.paid > 0 { Button(store.text("Email payment confirmation", "إرسال تأكيد الدفع بالبريد")) { Task { await store.perform { try await store.mutate("proformas/\(current.id)/email", body: ["receipt":true]); emailNotice = store.text("Payment confirmation queued.", "تمت جدولة تأكيد الدفع.") } } }.disabled(store.busy || !store.data.emailConfigured) }
+                }
+                if let emailNotice { Text(emailNotice).font(.footnote) }
                 Button(store.text("Share or print pro forma", "مشاركة أو طباعة الفاتورة المبدئية")) {
                     do { file = try InvoiceDocument.create(invoice: current, payments: payments, customer: store.memberName(current.member_id), academy: store.stable?.display(store.arabic) ?? "Riyadh Polo Hills") }
                     catch { store.error = error.localizedDescription }
                 }
                 Text(store.text("Pro forma payment request. Official tax invoices are issued by the academy’s invoicing system.", "فاتورة مبدئية لطلب الدفع. تصدر الفواتير الضريبية الرسمية من نظام فواتير الأكاديمية.")).font(.footnote)
             }
+            } else { EmptyMessage(title: store.text("This invoice is not available for your account.", "هذه الفاتورة غير متاحة لحسابك."), symbol: "lock") }
         }.navigationTitle(store.text("Pro forma", "الفاتورة المبدئية"))
             .sheet(isPresented: $recordPayment) { NavigationStack { RecordPaymentView(invoice: current) } }
             .sheet(isPresented: Binding(get: { file != nil }, set: { if !$0 { file = nil } })) { if let file { ShareDocument(url: file) } }

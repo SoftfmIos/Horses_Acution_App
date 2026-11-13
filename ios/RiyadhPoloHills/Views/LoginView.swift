@@ -16,6 +16,7 @@ struct LoginView: View {
                     Text(store.text("Your horses. Your next ride.", "خيلك وحصتك القادمة.")).foregroundStyle(.secondary)
                 }
                 AcademyCard {
+                    if let notice = store.notice { Text(notice).foregroundStyle(Brand.navy).font(.subheadline) }
                     Text(store.text("Member & staff sign in", "دخول الأعضاء والموظفين")).font(.title3.bold())
                     TextField(store.text("Email", "البريد الإلكتروني"), text: $email)
                         .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().focused($field, equals: .email).submitLabel(.next).onSubmit { field = .password }
@@ -29,6 +30,7 @@ struct LoginView: View {
                     }.buttonStyle(PrimaryButtonStyle()).disabled(store.busy || email.isEmpty || password.isEmpty)
                     if store.api.hasSession { Button(store.text("Retry saved session", "إعادة محاولة الدخول المحفوظ")) { Task { await store.restore() } }.disabled(store.busy) }
                 }
+                Link(store.text("Forgot password? Open the web portal", "نسيت كلمة المرور؟ افتح بوابة الويب"), destination: store.api.configuration.websiteOrigin).font(.subheadline)
                 Text(store.text("Use the account provided by your academy. Contact support if you need access.", "استخدم الحساب المقدم من الأكاديمية. تواصل مع الدعم للحصول على حساب.")).font(.footnote).multilineTextAlignment(.center).foregroundStyle(.secondary)
                 Link("support@riyadhpolohills.com", destination: URL(string: "mailto:support@riyadhpolohills.com")!)
                 Image("RidingHero").resizable().scaledToFill().frame(height: 170).clipped().clipShape(RoundedRectangle(cornerRadius: 18)).accessibilityHidden(true)

@@ -6,6 +6,8 @@ import SwiftUI
     @Published var stable: Stable?
     @Published var data = AcademyData()
     @Published var snapshotLoaded = false
+    @Published var dataRevision = UUID()
+    private var requestGeneration = UUID()
     @Published var busy = false
     @Published var restoring = true
     @Published var error: String?
@@ -15,7 +17,22 @@ import SwiftUI
     }
     let api: APIClient
     init(api: APIClient? = nil) { self.api = api ?? APIClient() }
-    var isStaff: Bool { let role = snapshotLoaded ? data.userRole ?? stable?.role : stable?.role; return role != nil && role != "member" }
+    var isStaff: Bool { AcademyAccess.isStaff(authRole: stable?.role, snapshotRole: data.userRole, loaded: snapshotLoaded) }
+    var accessIdentity: String {
+        let grants = data.actionPermissions.keys.sorted().map { $0 + ":" + (data.actionPermissions[$0] ?? []).sorted().joined(separator: ",") }.joined(separator: ";")
+        return (account?.id ?? "") + "|" + (stable?.id ?? "") + "|" + String(isStaff) + "|" + String(data.isAdmin) + "|" + data.permissions.sorted().joined(separator: ",") + "|" + grants
+    }
+    var visibleBookings: [Booking] { isStaff && allowed("classes") ? data.bookings : data.bookings.filter { $0.member_id == account?.id } }
+    var visibleInvoices: [Invoice] { isStaff && allowed("billing") ? data.proformas : data.proformas.filter { $0.member_id == account?.id } }
+    var ownedHorses: [Horse] { data.horses.filter { $0.ownerId == account?.id } }
+    var directoryHorses: [Horse] { isStaff ? (allowed("horses") ? data.horses : []) : ownedHorses }
+    func instructor(for session: RidingSession) -> Instructor? { data.instructors.first { $0.id == session.instructorId || $0.name == session.instructor || $0.nameEn == session.instructor || $0.nameAr == session.instructor } }
+    func canView(_ invoice: Invoice) -> Bool { invoice.member_id == account?.id || allowed("billing") }
+    func canView(_ booking: Booking) -> Bool { booking.member_id == account?.id || allowed("classes") }
+    private func resetSnapshot() {
+        requestGeneration = UUID(); ClassReminderService.shared.clear()
+        data = AcademyData(); snapshotLoaded = false; dataRevision = UUID()
+    }
     var unread: Int { data.notifications.filter { $0.read_at == nil }.count }
     func text(_ english: String, _ arabic: String) -> String { self.arabic ? arabic : english }
     func allowed(_ page: String, _ action: String? = nil) -> Bool {
@@ -38,6 +55,7 @@ import SwiftUI
         let names: [String: (String, String)] = [
             "confirmed": ("Confirmed", "مؤكد"), "pending_payment": ("Awaiting payment", "بانتظار الدفع"),
             "cancelled": ("Cancelled", "ملغى"), "expired": ("Expired", "منتهي"),
+            "partial": ("Partially paid", "مدفوع جزئياً"), "attended": ("Attended", "حاضر"), "absent": ("Absent", "غائب"),
             "open": ("Awaiting payment", "بانتظار الدفع"), "settled": ("Paid", "مدفوع"),
             "void": ("Voided", "ملغاة"), "refund_required": ("Refund required", "يلزم الاسترداد"),
             "ready": ("Ready", "جاهز"), "rest": ("Medical rest", "راحة طبية"), "retired": ("Retired", "متقاعد")]
@@ -67,27 +85,37 @@ import SwiftUI
         }
     }
     private func loadAccount() async throws {
+        resetSnapshot()
+        account = nil; stable = nil; stables = []
         let auth: Authentication = try await api.send("auth/me")
         account = auth.user
         stables = auth.stables
         let preferred = UserDefaults.standard.string(forKey: "academy.stable")
         stable = stables.first(where: { $0.id == preferred }) ?? stables.first
+        guard stable != nil else { snapshotLoaded = true; return }
         try await refresh()
     }
     func refresh() async throws {
-        guard let id = stable?.id else { return }
-        let snapshot: AcademyData = try await api.send("data", stableID: id)
-        guard stable?.id == id else { return }
+        guard let id = stable?.id, let accountID = account?.id else { return }
+        let generation = requestGeneration
+        var snapshot: AcademyData = try await api.send("data", stableID: id)
+        guard stable?.id == id, account?.id == accountID, generation == requestGeneration else { return }
+        if !AcademyAccess.isStaff(authRole: stable?.role, snapshotRole: snapshot.userRole, loaded: true) {
+            snapshot = snapshot.memberView(accountID: accountID)
+        } else if !snapshot.isAdmin {
+            if !snapshot.permissions.contains("tasks") { snapshot.tasks = [] }
+            if !snapshot.permissions.contains("classes") { snapshot.classes = []; snapshot.bookings = [] }
+            if !snapshot.permissions.contains("billing") { snapshot.proformas = []; snapshot.payments = []; snapshot.creditLedger = [] }
+        }
         data = snapshot
         snapshotLoaded = true
+        dataRevision = UUID()
         await synchronizeReminders()
     }
     func reload() async { await perform { try await refresh() } }
     func chooseStable(_ id: String) async {
         guard !busy, id != stable?.id else { return }
-        ClassReminderService.shared.clear()
-        data = AcademyData()
-        snapshotLoaded = false
+        resetSnapshot()
         stable = stables.first { $0.id == id }
         UserDefaults.standard.set(id, forKey: "academy.stable")
         await reload()
@@ -112,13 +140,34 @@ import SwiftUI
         }
     }
     func clear() {
-        ClassReminderService.shared.clear()
+        resetSnapshot()
         api.clearSession()
         account = nil; stable = nil; stables = []; data = AcademyData(); snapshotLoaded = false; notice = nil
-        try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appendingPathComponent("InvoiceExports"))
+        for folder in ["InvoiceExports", "HorseExports", "AccountExports"] { try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appendingPathComponent(folder)) }
+    }
+    func changeEmail(_ email: String, currentPassword: String) async {
+        await perform {
+            let _: APIResult = try await api.send("auth/account/email", method: "PUT", body: ["email": email, "currentPassword": currentPassword])
+            clear()
+            notice = text("Email updated. Sign in with your new email.", "تم تحديث البريد. سجّل الدخول بالبريد الجديد.")
+        }
+    }
+    func changePassword(_ password: String, currentPassword: String) async {
+        await perform {
+            let _: APIResult = try await api.send("auth/account/password", method: "PUT", body: ["newPassword": password, "currentPassword": currentPassword])
+            clear()
+            notice = text("Password updated. Sign in with your new password.", "تم تحديث كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.")
+        }
+    }
+    func deleteAccount(currentPassword: String) async {
+        await perform {
+            let _: APIResult = try await api.send("auth/account", method: "DELETE", body: ["currentPassword": currentPassword, "confirmation": "DELETE"])
+            clear()
+            notice = text("Your account has been deleted.", "تم حذف حسابك.")
+        }
     }
     func session(for booking: Booking) -> RidingSession? { data.classes.first { $0.id == booking.class_id } }
-    func memberName(_ id: String) -> String { data.members.first { $0.id == id }?.name ?? "—" }
+    func memberName(_ id: String) -> String { data.members.first { $0.id == id }?.display(arabic) ?? "—" }
     func canComplete(_ task: CareTask) -> Bool {
         guard isStaff, allowed("tasks", "edit"), task.cancelled != true else { return false }
         if snapshotLoaded ? data.isAdmin : stable?.isAdmin == true { return true }

@@ -1,18 +1,26 @@
 {
-  "instructors": [],
+  "instructors": [
+    {
+      "id": "3dca42f4-80c5-4056-bf65-96c20bbf7075",
+      "name": "Test Instructor",
+      "nameEn": "Test Instructor",
+      "nameAr": "",
+      "active": true
+    }
+  ],
   "arenas": [],
   "breeds": [],
   "horses": [
     {
-      "id": "f13a75d0-419c-4461-b639-c9e066089bc2",
+      "id": "ec393278-34d0-45ce-aea4-ddd716885a82",
       "name": "Test Horse",
       "breed": "",
-      "birthDate": "",
-      "microchip": "",
-      "ownerId": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
-      "instructorId": "",
+      "birthDate": "2018-02-10T00:00:00.000Z",
+      "microchip": "TEST-CHIP",
+      "ownerId": "153ea828-2954-4e0d-8e52-159c98d4b095",
+      "instructorId": "3dca42f4-80c5-4056-bf65-96c20bbf7075",
       "status": "ready",
-      "notes": "",
+      "notes": "Fictional owner care notes",
       "breedEn": "",
       "breedAr": "",
       "nameEn": "Test Horse",
@@ -21,7 +29,7 @@
   ],
   "plans": [
     {
-      "id": "9d50844d-ce6f-4c2d-b636-c26af3798179",
+      "id": "60786f11-8051-4477-8a9d-ca66b33e93d1",
       "name": "Test Lesson",
       "amount": 10000,
       "credits": 0,
@@ -35,18 +43,18 @@
   "vouchers": [],
   "classes": [
     {
-      "id": "92ec54bb-32e8-48ea-9700-3b669e6aeff6",
+      "id": "8c0801b7-8fc9-473c-9181-1023b11a0e0f",
       "title": "Test Session",
       "startsAt": "2026-11-13T10:00:00.000Z",
       "endsAt": "2026-11-13T11:00:00.000Z",
       "capacity": 1,
       "horseIds": [
-        "f13a75d0-419c-4461-b639-c9e066089bc2"
+        "ec393278-34d0-45ce-aea4-ddd716885a82"
       ],
-      "instructorId": "",
+      "instructorId": "3dca42f4-80c5-4056-bf65-96c20bbf7075",
       "instructor": "Test Instructor",
       "arena": "Test Arena",
-      "planId": "9d50844d-ce6f-4c2d-b636-c26af3798179",
+      "planId": "60786f11-8051-4477-8a9d-ca66b33e93d1",
       "creditCost": 1,
       "titleEn": "Test Session",
       "titleAr": "",
@@ -76,7 +84,7 @@
     "defaultCapacity": 1,
     "defaultCreditCost": 1,
     "bookingHoldHours": 72,
-    "id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad:settings",
+    "id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f:settings",
     "academyNameEn": "Test Academy",
     "academyNameAr": "",
     "currency": "SAR",
@@ -84,11 +92,11 @@
   },
   "bookings": [
     {
-      "id": "7a5fc6e8-fbd6-4b07-9fdf-00009f69bb4f",
-      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
-      "member_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
-      "class_id": "92ec54bb-32e8-48ea-9700-3b669e6aeff6",
-      "horse_id": "f13a75d0-419c-4461-b639-c9e066089bc2",
+      "id": "be35ba4d-4932-4530-a0aa-c54b914c1f8a",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "member_id": "153ea828-2954-4e0d-8e52-159c98d4b095",
+      "class_id": "8c0801b7-8fc9-473c-9181-1023b11a0e0f",
+      "horse_id": "ec393278-34d0-45ce-aea4-ddd716885a82",
       "status": "pending_payment",
       "created_at": "2026-11-12T07:00:00.000Z",
       "hold_expires_at": "2026-11-13T10:00:00.000Z"
@@ -96,10 +104,10 @@
   ],
   "proformas": [
     {
-      "id": "d6b36169-321f-44c3-a99e-aa6589251557",
-      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
-      "member_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
-      "reservation_id": "7a5fc6e8-fbd6-4b07-9fdf-00009f69bb4f",
+      "id": "f31745c3-c980-4a23-89ef-e4c7506124ef",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "member_id": "153ea828-2954-4e0d-8e52-159c98d4b095",
+      "reservation_id": "be35ba4d-4932-4530-a0aa-c54b914c1f8a",
       "description": "Test Session",
       "gross": 10000,
       "discount": 0,
@@ -111,17 +119,19 @@
       "voucher_id": null,
       "external_ref": "Test voucher",
       "created_at": "2026-11-12T07:00:00.000Z",
+      "plan_id": null,
       "credit_quantity": 0,
       "credit_awarded": 0,
       "credit_used": 0,
       "descriptionEn": "Test Session",
       "descriptionAr": "",
+      "sessionCreditStatus": null,
       "activation": "pending_payment"
     }
   ],
   "members": [
     {
-      "id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "id": "153ea828-2954-4e0d-8e52-159c98d4b095",
       "name": "Test Rider",
       "email": "rider@example.com",
       "role": "member",
@@ -135,9 +145,9 @@
   "creditLedger": [],
   "notifications": [
     {
-      "id": "6a4dc2be-b696-4cbb-be03-96e226551b48",
-      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
-      "user_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "id": "4e891102-f97f-4143-8b89-7b9ae138f41e",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "user_id": "153ea828-2954-4e0d-8e52-159c98d4b095",
       "title": "Welcome / مرحباً",
       "message": "Your academy workspace is ready. مساحة الأكاديمية جاهزة.",
       "read_at": null,
@@ -145,9 +155,9 @@
       "created_at": "2026-11-12T07:00:00.000Z"
     },
     {
-      "id": "4719928b-f071-4b60-880f-15dc5ed73f18",
-      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
-      "user_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "id": "74323ca4-9bc1-4650-84b7-1e8a052e1ad3",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "user_id": "153ea828-2954-4e0d-8e52-159c98d4b095",
       "title": "Payment pending / بانتظار الدفع",
       "message": "Test Session · 2026-11-13T10:00:00.000Z",
       "read_at": null,
@@ -155,9 +165,9 @@
       "created_at": "2026-11-12T07:00:00.000Z"
     },
     {
-      "id": "55481aa5-30bd-4a2a-b477-5d492d7e14fe",
-      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
-      "user_id": "c2a6dc93-ed7d-4b85-a4d6-efbf2e03e196",
+      "id": "82815fb2-e4e0-4e9a-a079-e9e286f9d31a",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "user_id": "153ea828-2954-4e0d-8e52-159c98d4b095",
       "title": "Payment recorded / تم تسجيل الدفعة",
       "message": "40.00 SAR · TEST-REFERENCE",
       "read_at": null,
@@ -167,9 +177,9 @@
   ],
   "payments": [
     {
-      "id": "931d454e-5b6c-4c4d-8de0-495967ebc9f4",
-      "org_id": "5fb3a87e-bef7-4f71-b956-3a9a038b99ad",
-      "proforma_id": "d6b36169-321f-44c3-a99e-aa6589251557",
+      "id": "7e09c65d-02ec-4c43-8f98-8d67ffd66833",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "proforma_id": "f31745c3-c980-4a23-89ef-e4c7506124ef",
       "amount": 4000,
       "reference": "TEST-REFERENCE",
       "created_at": "2026-11-12T07:00:00.000Z",
@@ -180,125 +190,13 @@
   "attendance": [],
   "taskHistory": [],
   "boarding": [],
+  "stallOccupancy": [],
   "stockMovements": [],
   "userRole": "member",
   "isAdmin": false,
-  "permissions": [
-    "classes",
-    "instructors",
-    "arenas",
-    "horses",
-    "breeds",
-    "stalls",
-    "boarding",
-    "medical",
-    "feeding",
-    "tasks",
-    "pricing",
-    "discounts",
-    "billing",
-    "vouchers",
-    "inventory",
-    "reports",
-    "members",
-    "settings",
-    "stables",
-    "emailSettings"
-  ],
-  "actionPermissions": {
-    "classes": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "horses": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "medical": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "feeding": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "tasks": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "pricing": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "billing": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "inventory": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "reports": [],
-    "members": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "settings": [
-      "edit"
-    ],
-    "instructors": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "arenas": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "breeds": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "stalls": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "boarding": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "discounts": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "vouchers": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "stables": [
-      "add",
-      "edit",
-      "delete"
-    ],
-    "emailSettings": [
-      "edit"
-    ]
-  },
-  "backendVersion": "1.21.0",
+  "permissions": [],
+  "actionPermissions": {},
+  "backendVersion": "1.30.0",
+  "myInstructorProfiles": [],
   "emailConfigured": false
 }

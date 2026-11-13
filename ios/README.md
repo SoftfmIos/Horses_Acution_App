@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.0.2 (3)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.0 (14)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -86,4 +86,12 @@ Use Apple's Standard EULA in App Store Connect. No custom license text is requir
 
 ## Codemagic version declaration
 
-The signed workflow declares `APP_VERSION: "1.0.2"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+The signed workflow declares `APP_VERSION: "1.1.0"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+
+## Member and staff experience (1.1.0)
+
+Deploy backend/web **1.30.0 or later** before distributing this version. See [the feature comparison and validation guide](WEB_PORTAL_PARITY.md). Members receive only their own bookings, invoices and notifications; the directory shows their owned horses. Horse cards load authenticated horse/instructor photos and offer complete authorized care, feeding, boarding, ride, document and monthly history sections, plus PDF sharing/printing. Account & security supports password-confirmed email/password changes and account deletion.
+
+Account changes revoke existing sign-ins. Deletion removes access and profile data across academies, cancels upcoming bookings and anonymizes retained reconciliation/service records; it does not automatically issue refunds. The last academy administrator/staff owner must transfer access first. Staff screens and actions follow module grants. Email/system settings, user administration and bulk authoring remain web workflows.
+
+The app resets snapshots on account/academy changes, rejects stale transport/session responses, filters member payloads defensively and resets navigation when access grants change. Local invoice/horse/report exports are removed on sign-out. Tests cover role conflicts, mixed-account payloads, private horse fields, credit totals, scoped photos, deletion previews and occupancy. Xcode/Codemagic simulator tests and device/TestFlight checks remain necessary; Linux packaging/syntax checks do not execute SwiftUI.

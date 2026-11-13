@@ -13,6 +13,7 @@ enum APIError: LocalizedError {
 @MainActor final class APIClient: NSObject, URLSessionTaskDelegate {
     let configuration: AppConfiguration
     private var token: String?
+    private(set) var sessionRevision = UUID()
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.httpCookieStorage = nil
@@ -28,6 +29,7 @@ enum APIError: LocalizedError {
     }
     var hasSession: Bool { token != nil }
     func clearSession() {
+        sessionRevision = UUID()
         token = nil
         SessionVault.clear(server: configuration.apiOrigin.absoluteString)
     }
@@ -47,7 +49,9 @@ enum APIError: LocalizedError {
         if let token { request.setValue("rp_session=\(token)", forHTTPHeaderField: "Cookie") }
         if let stableID { request.setValue(stableID, forHTTPHeaderField: "X-Stable-Id") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        let revision = sessionRevision
         let (data, response) = try await session.data(for: request)
+        guard revision == sessionRevision else { throw CancellationError() }
         guard let response = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         if response.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(response.statusCode) else {
@@ -61,6 +65,7 @@ enum APIError: LocalizedError {
             guard let cookie = HTTPCookie.cookies(withResponseHeaderFields: headers, for: url).first(where: { $0.name == "rp_session" }) else { throw APIError.invalidResponse }
             try SessionVault.save(cookie.value, server: configuration.apiOrigin.absoluteString)
             token = cookie.value
+            sessionRevision = UUID()
         }
         return try JSONDecoder().decode(T.self, from: data)
     }

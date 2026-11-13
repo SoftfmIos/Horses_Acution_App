@@ -7,7 +7,7 @@ struct AccountView: View {
         List {
             Section {
                 HStack(spacing: 16) {
-                    Image("AcademyLogo").resizable().scaledToFit().frame(width: 70, height: 85)
+                    AcademyPhoto(kind: "members", id: store.account?.id ?? "", symbol: "person.fill", size: 74)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(store.account?.display(store.arabic) ?? "").font(.headline)
                         Text(store.account?.email ?? "").font(.caption).textSelection(.enabled)
@@ -16,13 +16,17 @@ struct AccountView: View {
                 }.padding(.vertical, 8)
             }
             Section {
+                NavigationLink { AccountSecurityView() } label: { Label(store.text("Account & security", "الحساب والأمان"), systemImage: "person.crop.circle") }
+                if !store.isStaff { NavigationLink { BalanceView() } label: { Label(store.text("My balance & sessions", "رصيدي وحصصي"), systemImage: "ticket") } }
                 NavigationLink { InboxView() } label: { Label(store.text("Notifications", "الإشعارات") + (store.unread > 0 ? " (\(store.unread))" : ""), systemImage: "bell") }
                 if !store.isStaff || store.allowed("billing") {
+                    NavigationLink { PaymentHistoryView() } label: { Label(store.text("Payment history & reports", "سجل وتقارير المدفوعات"), systemImage: "list.bullet.rectangle") }
                     NavigationLink { InvoicesView() } label: { Label(store.text("Invoices & payments", "الفواتير والمدفوعات"), systemImage: "doc.text") }
                 }
                 if !store.isStaff {
                     NavigationLink { PackagesView() } label: { Label(store.text("Lesson packages", "باقات الحصص"), systemImage: "ticket") }
                 }
+                if store.allowed("boarding") || store.allowed("stalls") { NavigationLink { BoardingOverviewView() } label: { Label(store.text("Stalls & boarding", "المرابط والإيواء"), systemImage: "building.2") } }
                 if store.isStaff && store.allowed("tasks") {
                     NavigationLink { TasksView() } label: { Label(store.text("Staff tasks", "مهام الموظفين"), systemImage: "checklist") }
                 }
@@ -80,7 +84,7 @@ struct PackagesView: View {
     var body: some View {
         List {
             Section { LabeledContent(store.text("Lesson credits", "رصيد الحصص"), value: "\(store.data.creditBalance)") }
-            ForEach(store.data.plans.filter { $0.kind == "package" && $0.active != false }) { plan in
+            ForEach(store.data.plans.filter { $0.kind == "package" && $0.active != false && ($0.credits ?? 0) > 0 }) { plan in
                 VStack(alignment: .leading, spacing: 10) {
                     Text(plan.name).font(.headline)
                     Text("\(plan.credits ?? 0) " + store.text("lessons", "حصص") + " · " + store.money(plan.amount))
@@ -112,7 +116,7 @@ struct PrivacyView: View {
                 }
             }
             Section(store.text("Account support", "دعم الحساب")) {
-                Text(store.text("Contact the academy to update your login details, request a password reset, or request account/data deletion. The academy may need to retain financial records.", "تواصل مع الأكاديمية لتحديث بيانات الدخول أو طلب استعادة كلمة المرور أو حذف الحساب والبيانات. قد يلزم الاحتفاظ بالسجلات المالية."))
+                Text(store.text("Use Account & security to change your email or password and delete your account. Contact the academy for other data requests. Financial and service records may need to be retained.", "استخدم الحساب والأمان لتغيير بريدك أو كلمة مرورك وحذف حسابك. تواصل مع الأكاديمية لطلبات البيانات الأخرى. قد يلزم الاحتفاظ بالسجلات المالية والخدمية."))
                 Link("support@riyadhpolohills.com", destination: URL(string: "mailto:support@riyadhpolohills.com")!)
             }
         }.navigationTitle(store.text("Privacy", "الخصوصية"))

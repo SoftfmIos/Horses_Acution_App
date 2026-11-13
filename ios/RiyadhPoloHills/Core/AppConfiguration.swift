@@ -34,6 +34,22 @@ enum AcademyDates {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+    static func dayDisplay(_ value: String?, arabic: Bool) -> String {
+        guard let value, let date = parse(value) else { return "—" }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: arabic ? "ar_SA" : "en_SA")
+        formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = zone; formatter.dateStyle = .medium; formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+    static func day(_ date: Date) -> String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = zone; formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+    static func monthTitle(_ value: String, arabic: Bool) -> String {
+        guard let date = parse(value + "-01") else { return arabic ? "بدون تاريخ" : "Undated" }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: arabic ? "ar_SA" : "en_SA")
+        formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = zone; formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
     static func month(_ value: String) -> String {
         guard let date = parse(value) else { return "" }
         let formatter = DateFormatter()

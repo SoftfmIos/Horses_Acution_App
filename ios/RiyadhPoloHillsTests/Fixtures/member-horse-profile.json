@@ -1,0 +1,178 @@
+{
+  "ownerName": "Test Rider",
+  "instructor": {
+    "id": "3dca42f4-80c5-4056-bf65-96c20bbf7075",
+    "name": "Test Instructor",
+    "nameEn": "Test Instructor",
+    "nameAr": "",
+    "active": true
+  },
+  "horse": {
+    "id": "ec393278-34d0-45ce-aea4-ddd716885a82",
+    "name": "Test Horse",
+    "breed": "",
+    "birthDate": "2018-02-10T00:00:00.000Z",
+    "microchip": "TEST-CHIP",
+    "ownerId": "153ea828-2954-4e0d-8e52-159c98d4b095",
+    "instructorId": "3dca42f4-80c5-4056-bf65-96c20bbf7075",
+    "status": "ready",
+    "notes": "Fictional owner care notes",
+    "breedEn": "",
+    "breedAr": "",
+    "nameEn": "Test Horse",
+    "nameAr": ""
+  },
+  "medical": [
+    {
+      "id": "66da198f-4903-4e19-8e22-511bcae60ddc",
+      "frequencyHours": 0,
+      "dailyDose": false,
+      "durationDays": 0,
+      "assigneeId": "940fd823-9bb3-4729-a3e4-9c4cf41d01c5",
+      "repeatMode": "none",
+      "repeatEvery": 1,
+      "repeatDays": [],
+      "repeatUntil": "",
+      "horseId": "ec393278-34d0-45ce-aea4-ddd716885a82",
+      "type": "Test vaccination",
+      "date": "2026-11-12T05:00:00.000Z",
+      "dueAt": "",
+      "vet": "",
+      "notes": "Fictional owner medical record",
+      "restriction": false,
+      "completed": false,
+      "medication": "",
+      "dose": "",
+      "frequency": "",
+      "completedAt": "",
+      "completedBy": ""
+    }
+  ],
+  "feeding": [
+    {
+      "id": "6805ca10-46d1-4583-806d-48561a487569",
+      "inventoryId": "",
+      "stockUnits": 0,
+      "time": "07:00",
+      "durationMinutes": 30,
+      "startDate": "2026-11-12",
+      "endDate": "2026-11-14",
+      "active": true,
+      "horseId": "ec393278-34d0-45ce-aea4-ddd716885a82",
+      "feed": "Test hay",
+      "quantity": "2 kg",
+      "assigneeId": "940fd823-9bb3-4729-a3e4-9c4cf41d01c5",
+      "notes": "Fictional feeding plan"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "feeding:6805ca10-46d1-4583-806d-48561a487569:2026-11-12",
+      "title": "Test Horse · Test hay · 2 kg",
+      "titleEn": "Test Horse · Test hay · 2 kg",
+      "titleAr": "Test Horse · Test hay · 2 kg",
+      "dueAt": "2026-11-12T04:00:00.000Z",
+      "assigneeId": "940fd823-9bb3-4729-a3e4-9c4cf41d01c5",
+      "done": false,
+      "cancelled": false,
+      "notes": "Fictional feeding plan",
+      "feedingPlanId": "6805ca10-46d1-4583-806d-48561a487569",
+      "horseId": "ec393278-34d0-45ce-aea4-ddd716885a82",
+      "medication": "",
+      "dose": "",
+      "completedAt": "",
+      "completedBy": "",
+      "completedByName": ""
+    },
+    {
+      "id": "feeding:6805ca10-46d1-4583-806d-48561a487569:2026-11-13",
+      "title": "Test Horse · Test hay · 2 kg",
+      "titleEn": "Test Horse · Test hay · 2 kg",
+      "titleAr": "Test Horse · Test hay · 2 kg",
+      "dueAt": "2026-11-13T04:00:00.000Z",
+      "assigneeId": "940fd823-9bb3-4729-a3e4-9c4cf41d01c5",
+      "done": false,
+      "cancelled": false,
+      "notes": "Fictional feeding plan",
+      "feedingPlanId": "6805ca10-46d1-4583-806d-48561a487569",
+      "horseId": "ec393278-34d0-45ce-aea4-ddd716885a82",
+      "medication": "",
+      "dose": "",
+      "completedAt": "",
+      "completedBy": "",
+      "completedByName": ""
+    },
+    {
+      "id": "feeding:6805ca10-46d1-4583-806d-48561a487569:2026-11-14",
+      "title": "Test Horse · Test hay · 2 kg",
+      "titleEn": "Test Horse · Test hay · 2 kg",
+      "titleAr": "Test Horse · Test hay · 2 kg",
+      "dueAt": "2026-11-14T04:00:00.000Z",
+      "assigneeId": "940fd823-9bb3-4729-a3e4-9c4cf41d01c5",
+      "done": false,
+      "cancelled": false,
+      "notes": "Fictional feeding plan",
+      "feedingPlanId": "6805ca10-46d1-4583-806d-48561a487569",
+      "horseId": "ec393278-34d0-45ce-aea4-ddd716885a82",
+      "medication": "",
+      "dose": "",
+      "completedAt": "",
+      "completedBy": "",
+      "completedByName": ""
+    }
+  ],
+  "documents": [],
+  "boarding": [],
+  "bookings": [
+    {
+      "id": "be35ba4d-4932-4530-a0aa-c54b914c1f8a",
+      "org_id": "f3dd56ac-d89d-4ed5-9204-902c2647e56f",
+      "member_id": "153ea828-2954-4e0d-8e52-159c98d4b095",
+      "class_id": "8c0801b7-8fc9-473c-9181-1023b11a0e0f",
+      "horse_id": "ec393278-34d0-45ce-aea4-ddd716885a82",
+      "status": "pending_payment",
+      "created_at": "2026-11-12T07:00:00.000Z",
+      "hold_expires_at": "2026-11-13T10:00:00.000Z",
+      "session": {
+        "id": "8c0801b7-8fc9-473c-9181-1023b11a0e0f",
+        "title": "Test Session",
+        "startsAt": "2026-11-13T10:00:00.000Z",
+        "endsAt": "2026-11-13T11:00:00.000Z",
+        "capacity": 1,
+        "horseIds": [
+          "ec393278-34d0-45ce-aea4-ddd716885a82"
+        ],
+        "instructorId": "3dca42f4-80c5-4056-bf65-96c20bbf7075",
+        "instructor": "Test Instructor",
+        "arena": "Test Arena",
+        "planId": "60786f11-8051-4477-8a9d-ca66b33e93d1",
+        "creditCost": 1,
+        "titleEn": "Test Session",
+        "titleAr": "",
+        "instructorEn": "Test Instructor",
+        "instructorAr": "",
+        "arenaEn": "Test Arena",
+        "arenaAr": "",
+        "placeType": "arena"
+      },
+      "memberName": "Test Rider",
+      "attendance": ""
+    }
+  ],
+  "events": [
+    {
+      "id": "be35ba4d-4932-4530-a0aa-c54b914c1f8a",
+      "date": "2026-11-13T10:00:00.000Z",
+      "type": "class",
+      "title": "Test Session",
+      "details": "pending_payment"
+    },
+    {
+      "id": "66da198f-4903-4e19-8e22-511bcae60ddc",
+      "date": "2026-11-12T05:00:00.000Z",
+      "type": "medical",
+      "title": "Test vaccination",
+      "details": "Fictional owner medical record"
+    }
+  ]
+}

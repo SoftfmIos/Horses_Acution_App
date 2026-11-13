@@ -114,3 +114,85 @@ extension AcademyTests {
         XCTAssertEqual(Set(plan.map(\.id)).count,60)
     }
 }
+
+extension AcademyTests {
+    func testMemberProjectionRejectsForeignBookingsTasksPaymentsAndPrivateHorseFields() throws {
+        let payload = Data(#"{"userRole":"owner","isAdmin":true,"permissions":["tasks","classes","billing"],"tasks":[{"id":"task","title":"Academy work","dueAt":"2026-11-13T10:00:00Z","done":false}],"bookings":[{"id":"mine","member_id":"me","class_id":"lesson","horse_id":"school","status":"confirmed"},{"id":"theirs","member_id":"other","class_id":"lesson","status":"confirmed"}],"proformas":[{"id":"my-invoice","member_id":"me","description":"Mine","gross":100,"discount":0,"voucher":0,"due":100,"paid":0,"status":"open","created_at":"2026-11-13"},{"id":"their-invoice","member_id":"other","description":"Private","gross":100,"discount":0,"voucher":0,"due":100,"paid":0,"status":"open","created_at":"2026-11-13"}],"payments":[{"id":"my-payment","proforma_id":"my-invoice","amount":50,"reference":"Mine","created_at":"2026-11-13"},{"id":"their-payment","proforma_id":"their-invoice","amount":50,"reference":"Private","created_at":"2026-11-13"}],"horses":[{"id":"owned","name":"Owned","ownerId":"me","notes":"Owner care","microchip":"OWN"},{"id":"school","name":"School","ownerId":"other","notes":"Private notes","microchip":"PRIVATE"},{"id":"unrelated","name":"Unrelated","ownerId":"other"}],"notifications":[{"id":"mine","user_id":"me","title":"Mine","message":"Mine","created_at":"2026-11-13"},{"id":"other","user_id":"other","title":"Other","message":"Private","created_at":"2026-11-13"}]}"#.utf8)
+        let source = try JSONDecoder().decode(AcademyData.self, from: payload)
+        let view = source.memberView(accountID: "me")
+        XCTAssertEqual(view.bookings.map(\.id), ["mine"])
+        XCTAssertEqual(view.proformas.map(\.id), ["my-invoice"])
+        XCTAssertEqual(view.payments.map(\.id), ["my-payment"])
+        XCTAssertEqual(view.notifications.map(\.id), ["mine"])
+        XCTAssertTrue(view.tasks.isEmpty); XCTAssertTrue(view.permissions.isEmpty); XCTAssertFalse(view.isAdmin)
+        XCTAssertEqual(view.horses.count, 2)
+        XCTAssertEqual(view.horses.first { $0.id == "owned" }?.notes, "Owner care")
+        XCTAssertNil(view.horses.first { $0.id == "school" }?.notes)
+        XCTAssertNil(view.horses.first { $0.id == "school" }?.microchip)
+        XCTAssertEqual(source.tasks.count, 1, "Filtering must not mutate another account's source snapshot")
+    }
+    @MainActor func testMemberAuthenticationCannotInheritCachedStaffPrivileges() throws {
+        let store = AcademyStore()
+        store.account = try JSONDecoder().decode(Account.self, from: Data(#"{"id":"me","name":"Member","email":"member@example.com"}"#.utf8))
+        store.stable = try JSONDecoder().decode(Stable.self, from: Data(#"{"id":"s","name":"Academy","role":"member","isAdmin":false}"#.utf8))
+        store.data = try JSONDecoder().decode(AcademyData.self, from: Data(#"{"userRole":"owner","isAdmin":true,"permissions":["tasks","classes"],"bookings":[{"id":"foreign","member_id":"another","class_id":"lesson","status":"confirmed"}]}"#.utf8))
+        store.snapshotLoaded = true
+        XCTAssertFalse(store.isStaff)
+        XCTAssertFalse(store.allowed("tasks"))
+        XCTAssertTrue(store.visibleBookings.isEmpty)
+        let foreign = try XCTUnwrap(store.data.bookings.first)
+        XCTAssertFalse(store.canView(foreign))
+        let identity = store.accessIdentity
+        store.clear()
+        XCTAssertNil(store.account); XCTAssertTrue(store.data.bookings.isEmpty); XCTAssertFalse(store.snapshotLoaded)
+        XCTAssertNotEqual(identity, store.accessIdentity)
+    }
+    func testUnknownRolesFailClosedAndMemberRoleOverridesStaleStaffSnapshot() {
+        XCTAssertFalse(AcademyAccess.isStaff(authRole: "unknown", snapshotRole: "owner", loaded: true))
+        XCTAssertFalse(AcademyAccess.isStaff(authRole: "member", snapshotRole: "owner", loaded: true))
+        XCTAssertFalse(AcademyAccess.isStaff(authRole: "owner", snapshotRole: "member", loaded: true))
+        XCTAssertFalse(AcademyAccess.isStaff(authRole: "owner", snapshotRole: nil, loaded: true))
+        XCTAssertTrue(AcademyAccess.isStaff(authRole: "owner", snapshotRole: "owner", loaded: true))
+    }
+    func testSessionTotalsHandleUsedRestoredAndRefundedCredits() throws {
+        let data = Data(#"[{"id":"1","reason":"package.paid","delta":10,"created_at":"2026-11-13"},{"id":"2","reason":"booking.used","delta":-3,"created_at":"2026-11-13"},{"id":"3","reason":"booking.cancelled","delta":1,"created_at":"2026-11-13"},{"id":"4","reason":"package.refunded","delta":-2,"created_at":"2026-11-13"}]"#.utf8)
+        let totals = SessionTotals(try JSONDecoder().decode([CreditEntry].self, from: data))
+        XCTAssertEqual(totals.purchased,10); XCTAssertEqual(totals.used,3); XCTAssertEqual(totals.restored,1); XCTAssertEqual(totals.refunded,2)
+        XCTAssertEqual(totals.purchased-totals.used+totals.restored-totals.refunded,6)
+    }
+    func testStallAvailabilityUsesPeakOverlapAndExcludesEditedOrEndedStays() throws {
+        let stall = try JSONDecoder().decode(Stall.self, from: Data(#"{"id":"stall","name":"A","capacity":2,"active":true}"#.utf8))
+        let stays = try JSONDecoder().decode([StallOccupancy].self, from: Data(#"[{"id":"first","stallId":"stall","status":"active","startDate":"2026-11-01","endDate":"2026-11-03"},{"id":"second","stallId":"stall","status":"active","startDate":"2026-11-04","endDate":"2026-11-06"},{"id":"ended","stallId":"stall","status":"ended","startDate":"2026-11-01","endDate":"2026-11-06"}]"#.utf8))
+        XCTAssertEqual(StallSlots.available(stall,stays:stays,from:"2026-11-01",to:"2026-11-06"),1)
+        XCTAssertEqual(StallSlots.available(stall,stays:stays,from:"2026-11-01",to:"2026-11-03",excluding:"first"),2)
+    }
+    func testProfilePhotoAndAccountDeletionPreviewDecode() throws {
+        let photo = try JSONDecoder().decode(ProfilePhotoData.self,from:Data(#"{"mime":"image/png","content":"cGhvdG8=","updatedAt":"2026-11-13"}"#.utf8))
+        XCTAssertEqual(Data(base64Encoded:try XCTUnwrap(photo.content)),Data("photo".utf8))
+        let empty = try JSONDecoder().decode(ProfilePhotoData.self,from:Data(#"{"content":null}"#.utf8)); XCTAssertNil(empty.content)
+        let preview = try JSONDecoder().decode(DeletionPreview.self,from:Data(#"{"blockers":[],"creditBalance":3,"openInvoices":1,"activeBookings":2}"#.utf8))
+        XCTAssertEqual(preview.activeBookings,2); XCTAssertTrue(preview.blockers.isEmpty)
+    }
+}
+
+extension AcademyTests {
+    func testOwnedHorseAndPhotoContractsFromCurrentBackend() throws {
+        let bundle = Bundle(for: AcademyTests.self)
+        let profileURL = try XCTUnwrap(bundle.url(forResource: "member-horse-profile", withExtension: "json"))
+        let profile = try JSONDecoder().decode(HorseProfileData.self, from: Data(contentsOf: profileURL))
+        XCTAssertEqual(profile.horse.microchip, "TEST-CHIP")
+        XCTAssertEqual(profile.horse.notes, "Fictional owner care notes")
+        XCTAssertEqual(profile.instructor?.name, "Test Instructor")
+        XCTAssertFalse(profile.medical.isEmpty)
+        XCTAssertEqual(profile.medical.first?.display(false), "Test vaccination")
+        XCTAssertEqual(profile.feeding.first?.feed, "Test hay")
+        XCTAssertEqual(profile.bookings.count, 1)
+        for name in ["member-horse-photo", "member-instructor-photo"] {
+            let url = try XCTUnwrap(bundle.url(forResource: name, withExtension: "json"))
+            let photo = try JSONDecoder().decode(ProfilePhotoData.self, from: Data(contentsOf: url))
+            XCTAssertEqual(photo.mime, "image/png")
+            let bytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(photo.content)))
+            XCTAssertTrue(bytes.count > 8)
+        }
+    }
+}

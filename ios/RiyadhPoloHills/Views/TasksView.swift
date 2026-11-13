@@ -7,9 +7,10 @@ struct TasksView: View {
     @State private var search = ""
     @State private var selected: CareTask?
     var tasks: [CareTask] {
-        store.data.tasks.filter { task in
+        guard store.allowed("tasks") else { return [] }
+        return store.data.tasks.filter { task in
             task.cancelled != true && (showCompleted || !task.done) && (!onlyMine || task.assigneeId == store.account?.id)
-            && (search.isEmpty || task.title.localizedCaseInsensitiveContains(search))
+            && (search.isEmpty || [task.title, task.titleEn ?? "", task.titleAr ?? ""].joined(separator: " ").localizedCaseInsensitiveContains(search))
         }.sorted { $0.dueAt < $1.dueAt }
     }
     var body: some View {
@@ -24,7 +25,7 @@ struct TasksView: View {
                     HStack(spacing: 12) {
                         Image(systemName: task.done ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(task.done ? Brand.gold : Brand.navy)
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(task.title).font(.headline)
+                            Text(task.display(store.arabic)).font(.headline)
                             Text(store.date(task.dueAt)).font(.caption).foregroundStyle(.secondary)
                             if let id = task.assigneeId { Text(store.memberName(id)).font(.caption) }
                         }
@@ -44,8 +45,9 @@ struct TaskDetailView: View {
     var current: CareTask { store.data.tasks.first { $0.id == task.id } ?? task }
     var body: some View {
         Form {
+            if store.allowed("tasks") {
             Section {
-                Text(current.title).font(.headline)
+                Text(current.display(store.arabic)).font(.headline)
                 LabeledContent(store.text("Scheduled (Riyadh)", "الموعد (الرياض)"), value: store.date(current.dueAt))
                 LabeledContent(store.text("Assigned to", "المسؤول"), value: store.memberName(current.assigneeId ?? ""))
                 if let notes = current.notes?.nonempty { Text(notes) }
@@ -57,6 +59,7 @@ struct TaskDetailView: View {
                 }.disabled(store.busy || !store.canComplete(current))
                 if !store.canComplete(current) { Text(store.text("Your permissions or the historical-task policy prevent changes to this task.", "تمنع صلاحياتك أو سياسة المهام القديمة تعديل هذه المهمة.")).font(.footnote) }
             }
+            } else { EmptyMessage(title: store.text("Task access is not available.", "الوصول إلى المهام غير متاح."), symbol: "lock") }
         }.navigationTitle(store.text("Task details", "تفاصيل المهمة"))
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(store.text("Close", "إغلاق")) { dismiss() } } }
     }

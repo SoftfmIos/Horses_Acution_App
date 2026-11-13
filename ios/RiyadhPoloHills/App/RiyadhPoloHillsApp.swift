@@ -18,6 +18,14 @@ struct RootView: View {
     var body: some View {
         Group {
             if store.restoring { ZStack { Brand.ivory.ignoresSafeArea(); VStack { Image("AcademyLogo").resizable().scaledToFit().frame(height: 160); ProgressView() } } }
+            else if store.account != nil && !store.snapshotLoaded {
+                VStack(spacing: 20) {
+                    Image("AcademyLogo").resizable().scaledToFit().frame(height: 100)
+                    if store.busy { ProgressView(store.text("Loading your account…", "جار تحميل حسابك…")) }
+                    else { Button(store.text("Retry loading your account", "إعادة تحميل الحساب")) { Task { await store.reload() } } }
+                    Button(store.text("Sign out", "تسجيل الخروج")) { Task { await store.signOut() } }.disabled(store.busy)
+                }.padding().frame(maxWidth: .infinity, maxHeight: .infinity).background(Brand.ivory)
+            }
             else if store.account != nil { MainTabs() }
             else { LoginView() }
         }
@@ -44,9 +52,9 @@ struct MainTabs: View {
             if store.allowed("tasks") {
                 NavigationStack { TasksView() }.tabItem { Label(store.text("Tasks", "المهام"), systemImage: "checklist") }
             }
-            NavigationStack { AccountView() }.tabItem { Label(store.text("More", "المزيد"), systemImage: "ellipsis.circle") }.badge(store.unread)
+            NavigationStack { AccountView() }.tabItem { Label(store.text("Account", "الحساب"), systemImage: "ellipsis.circle") }.badge(store.unread)
         }
-        .id(store.stable?.id)
+        .id(store.accessIdentity)
         .task(id: store.stable?.id) {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
