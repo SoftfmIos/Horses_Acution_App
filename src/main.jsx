@@ -1,3 +1,4 @@
+import { AccountSecurity } from "./AccountSecurity";
 import { SessionTotals } from "./SessionTotals";
 import { BookingCredits } from "./BookingCredits";
 import { paymentStatusTone } from "./paymentStatus";
@@ -91,6 +92,7 @@ const dict = {
     academyPortal: "Academy portal",
     memberPortal: "Member portal",
     myAccount: "My account",
+    accountSecurity: "Account & security",
     accountBalance: "My balance",
     buySessions: "Buy sessions",
     sessionBalance: "Lesson credits remaining",
@@ -333,6 +335,7 @@ const dict = {
     academyPortal: "بوابة الأكاديمية",
     memberPortal: "بوابة العضو",
     myAccount: "حسابي",
+    accountSecurity: "الحساب والأمان",
     accountBalance: "رصيدي",
     buySessions: "شراء حصص",
     sessionBalance: "رصيد الحصص المتبقي",
@@ -1854,6 +1857,13 @@ function App() {
             {t.brand}
           </div>
           <div className="header-actions">
+            <button
+              className="icon-button"
+              aria-label={t.accountSecurity}
+              onClick={() => go("accountSecurity")}
+            >
+              <Users size={17} />
+            </button>
             {client && (
               <button
                 className="icon-button"
@@ -2116,6 +2126,22 @@ function App() {
               horses={data.horses}
               ar={ar}
               when={when}
+            />
+          )}
+          {page === "accountSecurity" && (
+            <AccountSecurity
+              user={auth.user}
+              ar={ar}
+              request={request}
+              onSignedOut={(message) => {
+                refreshSequence.current++;
+                setAuth(null);
+                setStable(null);
+                setData(fresh);
+                setModal(null);
+                setPage("overview");
+                notify(message);
+              }}
             />
           )}
           {page === "overview" && client && (

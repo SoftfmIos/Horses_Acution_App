@@ -3624,3 +3624,473 @@ test("boarding price snapshots survive catalogue rate changes and scoped staff c
   assert.deepEqual(data.boarding, []);
   assert.deepEqual(data.stallOccupancy, []);
 });
+
+test("users change their own email/password with current-password confirmation and every previous session is revoked", async (t) => {
+  const f = await fixture(t),
+    password = "Very secure password 123!",
+    user = (await f.member.call("/auth/me")).user;
+  const second = f.client();
+  await second.call("/auth/login", "POST", { email: user.email, password });
+  assert.equal(
+    (
+      await f.member.call("/auth/account/email", "PUT", {
+        email: "new-member@test.com",
+        currentPassword: "wrong",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await f.member.call("/auth/account/email", "PUT", {
+        email: "owner@test.com",
+        currentPassword: password,
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal(
+    (
+      await f.member.call("/auth/account/email", "PUT", {
+        email: "bad",
+        currentPassword: password,
+      })
+    ).httpStatus,
+    400,
+  );
+  f.member.stable = "";
+  const changed = await f.member.call("/auth/account/email", "PUT", {
+    email: "NEW-member@test.com",
+    currentPassword: password,
+    userId: (await f.owner.call("/auth/me")).user.id,
+  });
+  assert.equal(changed.httpStatus, 200);
+  assert.equal((await second.call("/auth/me")).httpStatus, 401);
+  assert.equal((await f.member.call("/auth/me")).httpStatus, 401);
+  assert.equal(
+    (
+      await f
+        .client()
+        .call("/auth/login", "POST", { email: user.email, password })
+    ).httpStatus,
+    401,
+  );
+  const account = f.client();
+  assert.equal(
+    (
+      await account.call("/auth/login", "POST", {
+        email: "new-member@test.com",
+        password,
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal((await account.call("/auth/me")).user.id, user.id);
+  assert.equal((await f.owner.call("/auth/me")).user.email, "owner@test.com");
+  assert.equal(
+    (
+      await account.call("/auth/account/password", "PUT", {
+        currentPassword: "bad",
+        newPassword: "new12345",
+      })
+    ).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await account.call("/auth/account/password", "PUT", {
+        currentPassword: password,
+        newPassword: "123",
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await account.call("/auth/account/password", "PUT", {
+        currentPassword: password,
+        newPassword: "new12345",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal((await account.call("/auth/me")).httpStatus, 401);
+  assert.equal(
+    (
+      await f
+        .client()
+        .call("/auth/login", "POST", { email: "new-member@test.com", password })
+    ).httpStatus,
+    401,
+  );
+  assert.equal(
+    (
+      await f.client().call("/auth/login", "POST", {
+        email: "new-member@test.com",
+        password: "new12345",
+      })
+    ).httpStatus,
+    200,
+  );
+  assert.equal(
+    f.db
+      .prepare(
+        "SELECT count(*) n FROM audit WHERE action IN ('account.email.changed','account.password.changed') AND actor_id=?",
+      )
+      .get(user.id).n,
+    2,
+  );
+});
+
+test("member deletion is immediate across academies, anonymizes identity, revokes access and preserves reconciliation records", async (t) => {
+  const f = await fixture(t),
+    password = "Very secure password 123!",
+    user = (await f.member.call("/auth/me")).user;
+  f.db
+    .prepare("INSERT INTO memberships VALUES(?,?,?)")
+    .run(user.id, f.other.stable, "member");
+  const { horse, cls } = await setup(f, 10000);
+  const booking = await f.member.call("/bookings", "POST", { classId: cls.id });
+  await f.owner.call("/proformas/" + booking.proformaId + "/payment", "POST", {
+    amount: 4000,
+    reference: "DELETE-PARTIAL",
+    externalRef: "Received",
+  });
+  const pack = await f.create("plans", {
+    name: "Delete package",
+    kind: "package",
+    credits: 3,
+    amount: 10000,
+  });
+  const order = await f.member.call("/packages", "POST", { planId: pack.id });
+  await f.owner.call("/proformas/" + order.id + "/payment", "POST", {
+    amount: 10000,
+    reference: "DELETE-PACK",
+    externalRef: "Received",
+  });
+  f.db
+    .prepare("INSERT INTO password_resets VALUES(?,?,?,0)")
+    .run("delete-token", user.id, "2030-01-01T00:00:00Z");
+  f.db
+    .prepare("INSERT INTO records(id,org_id,kind,data) VALUES(?,?,?,?)")
+    .run(
+      "photo:" + f.owner.stable + ":members:" + user.id,
+      f.owner.stable,
+      "profilePhotos",
+      JSON.stringify({ content: "private", mime: "image/png" }),
+    );
+  f.db
+    .prepare("INSERT OR REPLACE INTO profile_names VALUES(?,?,?)")
+    .run(user.id, "Private name", "اسم خاص");
+  f.db
+    .prepare(
+      "INSERT INTO email_outbox(id,user_id,subject,body,org_id,details) VALUES(?,?,?,?,?,?)",
+    )
+    .run("private-mail", user.id, "private", "private", f.owner.stable, "{}");
+  const second = f.client();
+  await second.call("/auth/login", "POST", { email: user.email, password });
+  const preview = await f.member.call("/auth/account/deletion");
+  assert.equal(preview.activeBookings, 1);
+  assert.equal(preview.creditBalance, 3);
+  assert.deepEqual(preview.blockers, []);
+  assert.equal(
+    (
+      await f.member.call("/auth/account", "DELETE", {
+        currentPassword: password,
+      })
+    ).httpStatus,
+    400,
+  );
+  assert.equal(
+    (
+      await f.member.call("/auth/account", "DELETE", {
+        currentPassword: "wrong",
+        confirmation: "DELETE",
+      })
+    ).httpStatus,
+    403,
+  );
+  const deletion = await f.member.call("/auth/account", "DELETE", {
+    currentPassword: password,
+    confirmation: "DELETE",
+  });
+  assert.equal(deletion.httpStatus, 200, JSON.stringify(deletion));
+  assert.equal(deletion.deleted, true);
+  assert.equal((await second.call("/auth/me")).httpStatus, 401);
+  assert.equal((await f.member.call("/auth/me")).httpStatus, 401);
+  assert.equal(
+    (
+      await f
+        .client()
+        .call("/auth/login", "POST", { email: user.email, password })
+    ).httpStatus,
+    401,
+  );
+  const deleted = f.db.prepare("SELECT * FROM users WHERE id=?").get(user.id);
+  assert.equal(deleted.name, "Deleted account");
+  assert.ok(deleted.email.endsWith("@deleted.invalid"));
+  for (const table of [
+    "memberships",
+    "sessions",
+    "password_resets",
+    "profile_names",
+    "notifications",
+    "email_outbox",
+    "staff_permissions",
+    "system_admins",
+  ]) {
+    assert.equal(
+      f.db
+        .prepare("SELECT count(*) n FROM " + table + " WHERE user_id=?")
+        .get(user.id).n,
+      0,
+      table,
+    );
+  }
+  assert.equal(
+    f.db
+      .prepare(
+        "SELECT count(*) n FROM records WHERE kind='profilePhotos' AND id=?",
+      )
+      .get("photo:" + f.owner.stable + ":members:" + user.id).n,
+    0,
+  );
+  assert.equal(
+    f.db.prepare("SELECT status FROM reservations WHERE id=?").get(booking.id)
+      .status,
+    "cancelled",
+  );
+  assert.equal(
+    f.db
+      .prepare("SELECT status FROM proformas WHERE id=?")
+      .get(booking.proformaId).status,
+    "refund_required",
+  );
+  assert.equal(
+    f.db
+      .prepare("SELECT sum(delta) n FROM credit_ledger WHERE member_id=?")
+      .get(user.id).n,
+    3,
+  );
+  assert.equal(f.db.prepare("SELECT count(*) n FROM payments").get().n, 2);
+  assert.equal(
+    f.db
+      .prepare("SELECT count(*) n FROM deleted_accounts WHERE user_id=?")
+      .get(user.id).n,
+    1,
+  );
+  const replacement = await f.owner.call("/members", "POST", {
+    name: "New account",
+    email: user.email,
+    password: "123456",
+  });
+  assert.equal(replacement.httpStatus, 201);
+  assert.notEqual(replacement.id, user.id);
+  const fresh = f.client();
+  await fresh.call("/auth/login", "POST", {
+    email: user.email,
+    password: "123456",
+  });
+  fresh.stable = f.owner.stable;
+  assert.equal((await fresh.call("/data")).creditBalance, 0);
+  assert.deepEqual((await fresh.call("/data")).bookings, []);
+  assert.equal(
+    (await f.owner.call("/data")).bookings.find((b) => b.id === booking.id)
+      .status,
+    "cancelled",
+  );
+});
+
+test("last academy administrator deletion requires transfer and ordinary staff deletion removes their linked instructor photo", async (t) => {
+  const f = await fixture(t),
+    password = "Very secure password 123!";
+  assert.equal(
+    (await f.owner.call("/auth/account/deletion")).blockers.length,
+    1,
+  );
+  assert.equal(
+    (
+      await f.owner.call("/auth/account", "DELETE", {
+        currentPassword: password,
+        confirmation: "DELETE",
+      })
+    ).httpStatus,
+    409,
+  );
+  assert.equal((await f.owner.call("/auth/me")).httpStatus, 200);
+  const staff = await f.owner.call("/members", "POST", {
+    name: "Instructor",
+    email: "delete-instructor@test.com",
+    password: "123456",
+    role: "staff",
+  });
+  const profile = await f.create("instructors", {
+    name: "Instructor",
+    userId: staff.id,
+    email: "delete-instructor@test.com",
+    phone: "private",
+  });
+  f.db
+    .prepare("INSERT INTO records(id,org_id,kind,data) VALUES(?,?,?,?)")
+    .run(
+      "photo:" + f.owner.stable + ":instructors:" + profile.id,
+      f.owner.stable,
+      "profilePhotos",
+      JSON.stringify({ content: "private" }),
+    );
+  const actor = f.client();
+  await actor.call("/auth/login", "POST", {
+    email: "delete-instructor@test.com",
+    password: "123456",
+  });
+  assert.deepEqual((await actor.call("/auth/account/deletion")).blockers, []);
+  assert.equal(
+    (
+      await actor.call("/auth/account", "DELETE", {
+        currentPassword: "123456",
+        confirmation: "DELETE",
+      })
+    ).httpStatus,
+    200,
+  );
+  const remaining = (await f.owner.call("/data")).instructors.find(
+    (i) => i.id === profile.id,
+  );
+  assert.equal(remaining.name, "Former instructor");
+  assert.equal(remaining.email, "");
+  assert.equal(remaining.phone, "");
+  assert.equal(remaining.active, false);
+});
+
+test("member snapshots hide academy work and private records while owned-horse profiles retain full care and authorized photos", async (t) => {
+  const f = await fixture(t),
+    member = (await f.member.call("/auth/me")).user.id;
+  const teacher = await f.create("instructors", {
+    name: "Public teacher",
+    email: "private-teacher@test.com",
+    phone: "private",
+    notes: "private notes",
+  });
+  const own = await f.create("horses", {
+    name: "Owned horse",
+    ownerId: member,
+    instructorId: teacher.id,
+    microchip: "OWN",
+    notes: "Owner's private notes",
+  });
+  const { horse, cls } = await setup(f);
+  await f.owner.call("/records/horses/" + horse.id, "PUT", {
+    ...horse,
+    notes: "Other owner's private notes",
+    microchip: "PRIVATE",
+  });
+  const booking = await f.member.call("/bookings", "POST", { classId: cls.id });
+  const org = f.owner.stable;
+  const put = (kind, id, value) =>
+    f.db
+      .prepare("INSERT INTO records(id,org_id,kind,data) VALUES(?,?,?,?)")
+      .run(id, org, kind, JSON.stringify(value));
+  put("medical", "member-medical", {
+    title: "Owned care",
+    horseId: own.id,
+    date: "2026-11-11T10:00:00Z",
+    notes: "Full owner care details",
+  });
+  put("feeding", "member-feeding", {
+    horseId: own.id,
+    feed: "Hay",
+    quantity: "2 kg",
+    time: "07:00",
+    active: true,
+  });
+  put("tasks", "member-care-task", {
+    title: "Owned care task",
+    horseId: own.id,
+    medicalId: "member-medical",
+    dueAt: "2026-11-12T10:00:00Z",
+    done: false,
+  });
+  put("tasks", "other-task", {
+    title: "Academy internal work",
+    dueAt: "2026-11-12T10:00:00Z",
+    done: false,
+  });
+  for (const [id, kind] of [
+    [own.id, "horses"],
+    [horse.id, "horses"],
+    [teacher.id, "instructors"],
+  ])
+    put("profilePhotos", "photo:" + org + ":" + kind + ":" + id, {
+      mime: "image/png",
+      content: "cGhvdG8=",
+      updatedAt: "2026-11-11T10:00:00Z",
+    });
+  const data = await f.member.call("/data");
+  assert.deepEqual(data.tasks, []);
+  assert.deepEqual(data.taskHistory, []);
+  assert.deepEqual(data.permissions, []);
+  assert.deepEqual(data.actionPermissions, {});
+  assert.equal(data.isAdmin, false);
+  assert.ok(data.bookings.every((b) => b.member_id === member));
+  assert.equal(
+    data.horses.find((h) => h.id === own.id).notes,
+    "Owner's private notes",
+  );
+  assert.equal(data.horses.find((h) => h.id === horse.id).notes, undefined);
+  assert.equal(data.horses.find((h) => h.id === horse.id).microchip, undefined);
+  const instructor = data.instructors.find((i) => i.id === teacher.id);
+  assert.ok(instructor);
+  assert.equal(instructor.email, undefined);
+  assert.equal(instructor.phone, undefined);
+  const profile = await f.member.call("/horses/" + own.id + "/profile");
+  assert.equal(profile.medical.length, 1);
+  assert.equal(profile.feeding.length, 1);
+  assert.equal(profile.tasks.length, 1);
+  assert.equal(profile.horse.microchip, "OWN");
+  const shared = await f.member.call("/horses/" + horse.id + "/profile");
+  assert.deepEqual(shared.medical, []);
+  assert.deepEqual(shared.tasks, []);
+  assert.equal(shared.horse.notes, undefined);
+  assert.equal(
+    (await f.member.call("/photos/horses/" + own.id)).content,
+    "cGhvdG8=",
+  );
+  assert.equal(
+    (await f.member.call("/photos/instructors/" + teacher.id)).content,
+    "cGhvdG8=",
+  );
+  await f.member.call("/bookings/" + booking.id + "/cancel", "POST");
+  assert.equal(
+    (await f.member.call("/photos/horses/" + horse.id)).httpStatus,
+    200,
+  );
+  const staff = await f.owner.call("/members", "POST", {
+    name: "Horse reader",
+    email: "horse-reader@test.com",
+    password: "123456",
+    role: "staff",
+  });
+  await f.owner.call("/permissions/" + staff.id, "PUT", {
+    role: "staff",
+    permissions: ["horses"],
+    actionPermissions: { horses: [] },
+  });
+  const reader = f.client();
+  await reader.call("/auth/login", "POST", {
+    email: "horse-reader@test.com",
+    password: "123456",
+  });
+  reader.stable = org;
+  const limited = await reader.call("/horses/" + own.id + "/profile");
+  assert.equal(limited.httpStatus, 200);
+  assert.deepEqual(limited.medical, []);
+  assert.deepEqual(limited.feeding, []);
+  assert.deepEqual(limited.tasks, []);
+  assert.deepEqual(limited.boarding, []);
+  assert.deepEqual(limited.bookings, []);
+  assert.equal(
+    (await f.member.call("/tasks/other-task/toggle", "POST", { done: true }))
+      .httpStatus,
+    403,
+  );
+});

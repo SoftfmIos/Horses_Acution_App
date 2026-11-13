@@ -329,8 +329,9 @@ export function Boarding({
                     disabled={
                       !!form.id &&
                       ["memberId", "planId"].includes(k) &&
-                      (data.proformas.find((p) => p.id === form.invoiceId)
-                        ?.paid > 0 ||
+                      (form.financialTermsLocked ||
+                        data.proformas.find((p) => p.id === form.invoiceId)
+                          ?.paid > 0 ||
                         form.paymentStatus === "settled")
                     }
                     value={form[k] || ""}

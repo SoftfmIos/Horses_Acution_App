@@ -76,7 +76,7 @@ export function stableOperations(c) {
       !staff &&
       !owned &&
       !get(
-        "SELECT id FROM reservations WHERE org_id=? AND horse_id=? AND member_id=? AND status IN ('confirmed','pending_payment')",
+        "SELECT id FROM reservations WHERE org_id=? AND horse_id=? AND member_id=?",
         req.org.id,
         hid,
         req.user.id,
@@ -196,32 +196,44 @@ export function stableOperations(c) {
   app.get("/api/horses/:id/profile", (req, res) => {
     const { horse, staff, owned } = horseAccess(req, req.params.id),
       org = req.org.id;
+    const allowed = (page) =>
+      req.org.isAdmin || req.org.permissions.includes(page);
     const care = staff || owned;
-    const medical = care
-      ? records(org, "medical").filter((x) => x.horseId === horse.id)
-      : [];
-    const feeding = care
-      ? records(org, "feeding").filter((x) => x.horseId === horse.id)
-      : [];
+    const medical =
+      owned || (staff && allowed("medical"))
+        ? records(org, "medical").filter((x) => x.horseId === horse.id)
+        : [];
+    const feeding =
+      owned || (staff && allowed("feeding"))
+        ? records(org, "feeding").filter((x) => x.horseId === horse.id)
+        : [];
     const medicalIds = new Set(medical.map((x) => x.id)),
       feedIds = new Set(feeding.map((x) => x.id));
-    const tasks = care
-      ? records(org, "tasks").filter(
-          (x) => medicalIds.has(x.medicalId) || feedIds.has(x.feedingPlanId),
-        )
-      : [];
+    const tasks =
+      owned || (staff && allowed("tasks"))
+        ? records(org, "tasks").filter(
+            (x) =>
+              x.horseId === horse.id ||
+              medicalIds.has(x.medicalId) ||
+              feedIds.has(x.feedingPlanId),
+          )
+        : [];
     const documents = care
       ? records(org, "horseDocuments").filter((x) => x.horseId === horse.id)
       : [];
-    const boarding = care
-      ? records(org, "boarding")
-          .filter((x) => x.horseId === horse.id)
-          .map((x) => ({ ...x, stall: record(org, "stalls", x.stallId).name }))
-      : [];
+    const boarding =
+      owned || (staff && allowed("boarding"))
+        ? records(org, "boarding")
+            .filter((x) => x.horseId === horse.id)
+            .map((x) => ({
+              ...boardingView(org, x),
+              stall: record(org, "stalls", x.stallId).name,
+            }))
+        : [];
     const bookings = all(
       "SELECT * FROM reservations WHERE org_id=? AND horse_id=?" +
-        (staff ? "" : " AND member_id=?"),
-      ...[org, horse.id, ...(staff ? [] : [req.user.id])],
+        (staff && allowed("classes") ? "" : " AND member_id=?"),
+      ...[org, horse.id, ...(staff && allowed("classes") ? [] : [req.user.id])],
     ).map((b) => ({
       ...b,
       session: record(org, "classes", b.class_id),
@@ -282,7 +294,18 @@ export function stableOperations(c) {
           ? get("SELECT name FROM users WHERE id=?", horse.ownerId)?.name || ""
           : "",
       instructor: horse.instructorId
-        ? record(org, "instructors", horse.instructorId)
+        ? (() => {
+            const instructor = record(org, "instructors", horse.instructorId);
+            return staff && allowed("instructors")
+              ? instructor
+              : {
+                  id: instructor.id,
+                  name: instructor.name,
+                  nameEn: instructor.nameEn,
+                  nameAr: instructor.nameAr,
+                  active: instructor.active,
+                };
+          })()
         : null,
       horse:
         staff || owned

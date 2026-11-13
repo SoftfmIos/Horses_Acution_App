@@ -2465,3 +2465,19 @@ pre {
   color: var(--muted);
   line-height: 1.6;
 }
+
+.account-security {
+  max-width: 760px;
+}
+.account-security .member-modal-form {
+  max-width: 520px;
+  margin-block: 20px;
+}
+.account-delete-panel {
+  border-top: 1px solid var(--line);
+  margin-top: 30px;
+  padding-top: 24px;
+}
+.account-delete-button {
+  background: #923b32;
+}

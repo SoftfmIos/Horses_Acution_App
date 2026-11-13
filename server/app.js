@@ -1,3 +1,4 @@
+import { accountRoutes } from "./account.js";
 import { summarizeSessionCredits } from "../shared/session-credits.js";
 import {
   PERMISSION_PAGES,
@@ -553,6 +554,7 @@ export function createApp(
       schedulingVersion: 2,
       bookingVersion: 1,
       medicalScheduleVersion: 2,
+      accountVersion: 1,
     }),
   );
   const authLimit = rateLimit({
@@ -597,7 +599,7 @@ export function createApp(
     const user =
       raw &&
       get(
-        "SELECT u.id,u.email,u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>?",
+        "SELECT u.id,u.email,u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>? AND NOT EXISTS(SELECT 1 FROM deleted_accounts d WHERE d.user_id=u.id)",
         hash(raw),
         now(),
       );
@@ -640,9 +642,10 @@ export function createApp(
     if (!org) return res.status(403).json({ error: "Stable access denied" });
     req.org = {
       ...org,
-      isAdmin: adminUser(org.id, req.user.id),
-      permissions: userModules(org.id, req.user.id),
-      actionPermissions: userPolicy(org.id, req.user.id).actions,
+      isAdmin: org.role === "owner" && adminUser(org.id, req.user.id),
+      permissions: org.role === "owner" ? userModules(org.id, req.user.id) : [],
+      actionPermissions:
+        org.role === "owner" ? userPolicy(org.id, req.user.id).actions : {},
     };
     next();
   }
@@ -810,7 +813,10 @@ export function createApp(
   app.post("/api/auth/login", async (req, res) => {
     const email = text(req.body.email, "email", 254).toLowerCase(),
       password = text(req.body.password, "password", 128);
-    const user = get("SELECT * FROM users WHERE email=?", email);
+    const user = get(
+      "SELECT * FROM users WHERE email=? AND NOT EXISTS(SELECT 1 FROM deleted_accounts d WHERE d.user_id=users.id)",
+      email,
+    );
     const valid = await passwordValid(
       password,
       user?.password || dummyPassword,
@@ -836,9 +842,11 @@ export function createApp(
         const settings = records(o.id, "academySettings")[0];
         return {
           ...o,
-          isAdmin: adminUser(o.id, req.user.id),
-          permissions: userModules(o.id, req.user.id),
-          actionPermissions: userPolicy(o.id, req.user.id).actions,
+          isAdmin: o.role !== "member" && adminUser(o.id, req.user.id),
+          permissions:
+            o.role !== "member" ? userModules(o.id, req.user.id) : [],
+          actionPermissions:
+            o.role !== "member" ? userPolicy(o.id, req.user.id).actions : {},
           nameEn: settings?.academyNameEn ?? o.name,
           nameAr: settings?.academyNameAr || "",
         };
@@ -859,6 +867,25 @@ export function createApp(
       path: "/",
     });
     res.json({ ok: true });
+  });
+  accountRoutes({
+    app,
+    authenticate,
+    get,
+    all,
+    run,
+    transaction,
+    text,
+    fail,
+    now,
+    production,
+    passwordHash,
+    passwordValid,
+    records,
+    put,
+    audit,
+    notify,
+    creditEntry,
   });
   // Key protected traffic by verified account, not the shared Vercel egress IP.
   app.use(
@@ -1581,7 +1608,7 @@ export function createApp(
   }
   function boardingView(org, stay) {
     const invoice = get(
-      "SELECT status,gross FROM proformas WHERE org_id=? AND id=?",
+      "SELECT status,gross,paid,discount,voucher FROM proformas WHERE org_id=? AND id=?",
       org,
       stay.invoiceId,
     );
@@ -1589,6 +1616,12 @@ export function createApp(
       ...stay,
       paymentStatus: invoice?.status || "open",
       priceAmount: invoice?.gross ?? null,
+      financialTermsLocked:
+        !!invoice &&
+        (invoice.paid > 0 ||
+          invoice.status !== "open" ||
+          invoice.discount > 0 ||
+          invoice.voucher > 0),
     };
   }
   function reconcilePackageCredits(org, memberId = null) {
@@ -1810,30 +1843,41 @@ export function createApp(
       ...(manager ? [org] : [org, req.user.id]),
     );
     if (!manager) {
-      const bookedClasses = new Set(
-        result.bookings
-          .filter((b) => ["confirmed", "pending_payment"].includes(b.status))
-          .map((b) => b.class_id),
+      const bookedClasses = new Set(result.bookings.map((b) => b.class_id));
+      const horseIds = new Set(result.bookings.map((b) => b.horse_id));
+      result.classes = result.classes.filter(
+        (c) => c.endsAt > now() || bookedClasses.has(c.id),
       );
-      const horseIds = new Set(
-        result.bookings
-          .filter((b) => ["confirmed", "pending_payment"].includes(b.status))
-          .map((b) => b.horse_id),
-      );
-      result.horses = result.horses.filter(
-        (h) => h.ownerId === req.user.id || horseIds.has(h.id),
-      );
+      result.horses = result.horses
+        .filter((h) => h.ownerId === req.user.id || horseIds.has(h.id))
+        .map((h) =>
+          h.ownerId === req.user.id
+            ? h
+            : {
+                id: h.id,
+                name: h.name,
+                nameEn: h.nameEn,
+                nameAr: h.nameAr,
+                breed: h.breed,
+                status: h.status,
+              },
+        );
       const instructorIds = new Set(
-        result.horses.map((h) => h.instructorId).filter(Boolean),
+        [
+          ...result.horses.map((h) => h.instructorId),
+          ...result.classes.map((c) => c.instructorId),
+        ].filter(Boolean),
       );
-      const instructorNames = new Set(
-        result.classes
-          .filter((c) => bookedClasses.has(c.id))
-          .map((c) => c.instructor),
-      );
-      result.instructors = result.instructors.filter(
-        (i) => instructorIds.has(i.id) || instructorNames.has(i.name),
-      );
+      const instructorNames = new Set(result.classes.map((c) => c.instructor));
+      result.instructors = result.instructors
+        .filter((i) => instructorIds.has(i.id) || instructorNames.has(i.name))
+        .map((i) => ({
+          id: i.id,
+          name: i.name,
+          nameEn: i.nameEn,
+          nameAr: i.nameAr,
+          active: i.active,
+        }));
       result.tasks = [];
     }
     result.tasks = result.tasks

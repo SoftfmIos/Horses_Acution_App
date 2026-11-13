@@ -96,5 +96,8 @@ INSERT OR IGNORE INTO system_admins SELECT m.org_id,m.user_id FROM memberships m
   db.exec(
     "CREATE TABLE IF NOT EXISTS password_resets(token TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires_at TEXT NOT NULL,used INTEGER NOT NULL DEFAULT 0)",
   );
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS deleted_accounts(user_id TEXT PRIMARY KEY REFERENCES users(id),deleted_at TEXT NOT NULL)",
+  );
   return db;
 }
