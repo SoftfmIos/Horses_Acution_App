@@ -45,7 +45,9 @@ Care descriptions and quantities are illustrative, not veterinary instructions. 
 
 ## Photos
 
-Individual horse and instructor portraits are **not bundled**. The accessible `Riyadh_PoloAcademy` website branch contains facility illustrations, not a suitable set of individual animal/instructor portraits. The reset without a photo folder will report **zero photos** rather than mislabel facility images as portraits.
+For an **already populated demo database**, use the non-resetting [photo and document importer](DEMO_MEDIA.md): `npm run demo:media`. It adds the bundled generated horse images, fetches ready-made public-domain images for the remaining profiles, adds user avatars and links 24 bilingual PDFs. Keep the dataset you already created; do not run reset again just to attach media.
+
+The reset command itself attaches **zero photos** unless a photo folder is supplied. The separate `demo:media` command now includes six generated horse portraits, downloads ready-made images for the remaining profiles and supplies academy/user avatars. The accessible `Riyadh_PoloAcademy` website branch contains facility illustrations rather than a complete set of individual portraits.
 
 To populate all profile photos in the same operation, put approved JPEG/PNG files (at most 2 MB each) in a private server folder and run:
 

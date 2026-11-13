@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-export function AccountSecurity({ user, ar, request, onSignedOut }) {
+import { ProfilePhoto } from "./ProfilePhoto";
+export function AccountSecurity({
+  user,
+  ar,
+  request,
+  onSignedOut,
+  photoEnabled = false,
+}) {
   const l = (en, a) => (ar ? a : en);
   const [mode, setMode] = useState("email"),
     [current, setCurrent] = useState(""),
@@ -45,6 +52,16 @@ export function AccountSecurity({ user, ar, request, onSignedOut }) {
   return (
     <section className="panel account-security">
       <h2>{l("Account & security", "الحساب والأمان")}</h2>
+      {photoEnabled && (
+        <ProfilePhoto
+          kind="members"
+          id={user.id}
+          name={user.name}
+          request={request}
+          editable
+          ar={ar}
+        />
+      )}
       <p>
         <strong>{user.name}</strong> · <bdi>{user.email}</bdi>
       </p>

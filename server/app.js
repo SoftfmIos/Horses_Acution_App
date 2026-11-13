@@ -918,6 +918,13 @@ export function createApp(
   app.use("/api", (req, res, next) => {
     if (req.org.role !== "owner" || req.org.isAdmin) return next();
     const path = req.path;
+    const ownMemberPhoto = /^\/photos\/members\/([^/]+)$/.exec(path);
+    if (
+      ownMemberPhoto &&
+      ownMemberPhoto[1] === req.user.id &&
+      ["GET", "PUT", "DELETE"].includes(req.method)
+    )
+      return next();
     if (req.method === "GET") {
       const ownHorseRead =
         /^\/horses\/([^/]+)\/profile$/.exec(path) ||

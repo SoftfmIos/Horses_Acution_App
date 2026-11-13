@@ -2131,6 +2131,7 @@ function App() {
           {page === "accountSecurity" && (
             <AccountSecurity
               user={auth.user}
+              photoEnabled={Boolean(stable)}
               ar={ar}
               request={request}
               onSignedOut={(message) => {

@@ -1,0 +1,358 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "key": "horse-01",
+      "file": "photos/horse-01.jpg",
+      "mime": "image/jpeg",
+      "sha256": "abdd7dca0aa79c4c5b9be35e24f715dbc0451de58f42a11904ba094e5d9e2e13",
+      "source": "Generated fictional demo horse / صورة حصان تجريبي مولدة"
+    },
+    {
+      "key": "horse-02",
+      "file": "photos/horse-02.jpg",
+      "mime": "image/jpeg",
+      "sha256": "1549f39003a2c76a2baf5a774ad4d32462967ed83e3d127d9f3635b1524c4ccd",
+      "source": "Generated fictional demo horse / صورة حصان تجريبي مولدة"
+    },
+    {
+      "key": "horse-03",
+      "file": "photos/horse-03.jpg",
+      "mime": "image/jpeg",
+      "sha256": "5e2fd609cc3049fb524622506d0cd9e6799b7920f47ae7f417fd6cd701fc9187",
+      "source": "Generated fictional demo horse / صورة حصان تجريبي مولدة"
+    },
+    {
+      "key": "horse-04",
+      "file": "photos/horse-04.jpg",
+      "mime": "image/jpeg",
+      "sha256": "ed47c1aa012d33dc064b4dc7eabc5eacd98b003c043d89276347595a8eb65e31",
+      "source": "Generated fictional demo horse / صورة حصان تجريبي مولدة"
+    },
+    {
+      "key": "horse-05",
+      "file": "photos/horse-05.jpg",
+      "mime": "image/jpeg",
+      "sha256": "f310830b3276dcd7c26dbd1ae63026dcf074fee64298e30f5f265e7c03f8e0c6",
+      "source": "Generated fictional demo horse / صورة حصان تجريبي مولدة"
+    },
+    {
+      "key": "horse-06",
+      "file": "photos/horse-06.jpg",
+      "mime": "image/jpeg",
+      "sha256": "8b2a61220132f73f82e5601d0d10c2efbad5dee612ff060fad469b1a191a41a1",
+      "source": "Generated fictional demo horse / صورة حصان تجريبي مولدة"
+    },
+    {
+      "key": "avatar-club",
+      "file": "photos/avatar-club.jpg",
+      "mime": "image/jpeg",
+      "sha256": "a19d39371bb399c278ef9354abcb8fd5153b4cf1208322f0a5f4d84c7d42add1",
+      "source": "Riyadh Polo Hills supplied academy logo"
+    },
+    {
+      "key": "avatar-riding",
+      "file": "photos/avatar-riding.jpg",
+      "mime": "image/jpeg",
+      "sha256": "c0f1d86c2983b45f4c1c74ac9c0845a2c468849e86a0a63c57542ba657a05efd",
+      "source": "Existing academy app imagery"
+    },
+    {
+      "key": "avatar-polo",
+      "file": "photos/avatar-polo.jpg",
+      "mime": "image/jpeg",
+      "sha256": "fae4c381e8a65d633452176608c8463bdd7ba835f62119c2eb0b5781c0b8d7e9",
+      "source": "Existing academy app imagery"
+    }
+  ],
+  "documents": [
+    {
+      "id": "demo-document-01-profile",
+      "horseId": "demo-horse-01",
+      "title": "Demo horse profile · Shams",
+      "titleEn": "Demo horse profile · Shams",
+      "titleAr": "ملف حصان تجريبي · شمس",
+      "category": "other",
+      "filename": "demo-horse-01-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-01-profile.pdf",
+      "sha256": "e7024983738ae9f8870a4ae34e78a5c61d2e0fd1b71ad022e5bf3a42ed5ee74c"
+    },
+    {
+      "id": "demo-document-01-care",
+      "horseId": "demo-horse-01",
+      "title": "Demo care and feeding summary · Shams",
+      "titleEn": "Demo care and feeding summary · Shams",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · شمس",
+      "category": "other",
+      "filename": "demo-horse-01-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-01-care.pdf",
+      "sha256": "311dd1952b7393e3632e3de89b846edb8a6b6ce205dcba4fa04406714082b1d6"
+    },
+    {
+      "id": "demo-document-02-profile",
+      "horseId": "demo-horse-02",
+      "title": "Demo horse profile · Badr",
+      "titleEn": "Demo horse profile · Badr",
+      "titleAr": "ملف حصان تجريبي · بدر",
+      "category": "other",
+      "filename": "demo-horse-02-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-02-profile.pdf",
+      "sha256": "aea46915dbb79681055ec8abeb04f7606d78377543d2935026401d4dd2522957"
+    },
+    {
+      "id": "demo-document-02-care",
+      "horseId": "demo-horse-02",
+      "title": "Demo care and feeding summary · Badr",
+      "titleEn": "Demo care and feeding summary · Badr",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · بدر",
+      "category": "other",
+      "filename": "demo-horse-02-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-02-care.pdf",
+      "sha256": "c95e3753030689b0dbe9fd1d356f7df2dc05d65ae03e188feed76198b0495450"
+    },
+    {
+      "id": "demo-document-03-profile",
+      "horseId": "demo-horse-03",
+      "title": "Demo horse profile · Najma",
+      "titleEn": "Demo horse profile · Najma",
+      "titleAr": "ملف حصان تجريبي · نجمة",
+      "category": "other",
+      "filename": "demo-horse-03-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-03-profile.pdf",
+      "sha256": "27fffc4d7ff87b5b2545027ab898b2ebfaa8ea5393fd3e1b350e9baa263be47d"
+    },
+    {
+      "id": "demo-document-03-care",
+      "horseId": "demo-horse-03",
+      "title": "Demo care and feeding summary · Najma",
+      "titleEn": "Demo care and feeding summary · Najma",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · نجمة",
+      "category": "other",
+      "filename": "demo-horse-03-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-03-care.pdf",
+      "sha256": "0ef9f7f39763960a98b782766bcc36dc40587e24c3d005f7bc2e0bb04befa54f"
+    },
+    {
+      "id": "demo-document-04-profile",
+      "horseId": "demo-horse-04",
+      "title": "Demo horse profile · Sahab",
+      "titleEn": "Demo horse profile · Sahab",
+      "titleAr": "ملف حصان تجريبي · سحاب",
+      "category": "other",
+      "filename": "demo-horse-04-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-04-profile.pdf",
+      "sha256": "3e2467d7a0c09a2d243a9bbb3199e07b68850b30d9d0392b1b2162273519947e"
+    },
+    {
+      "id": "demo-document-04-care",
+      "horseId": "demo-horse-04",
+      "title": "Demo care and feeding summary · Sahab",
+      "titleEn": "Demo care and feeding summary · Sahab",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · سحاب",
+      "category": "other",
+      "filename": "demo-horse-04-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-04-care.pdf",
+      "sha256": "ad4819fe13a0ff20de09180d7a3ca3713215bc0f7df4e63b519c0c89fa5509fa"
+    },
+    {
+      "id": "demo-document-05-profile",
+      "horseId": "demo-horse-05",
+      "title": "Demo horse profile · Rimal",
+      "titleEn": "Demo horse profile · Rimal",
+      "titleAr": "ملف حصان تجريبي · رمال",
+      "category": "other",
+      "filename": "demo-horse-05-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-05-profile.pdf",
+      "sha256": "d8927d3af4a15a94162ebaf40e53b873493a9056cfff889bb527084727b2ccaa"
+    },
+    {
+      "id": "demo-document-05-care",
+      "horseId": "demo-horse-05",
+      "title": "Demo care and feeding summary · Rimal",
+      "titleEn": "Demo care and feeding summary · Rimal",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · رمال",
+      "category": "other",
+      "filename": "demo-horse-05-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-05-care.pdf",
+      "sha256": "55b879c86035f6f8334e526ae2db1e6e85744d67126e9bc711b8aaf3ac56c12a"
+    },
+    {
+      "id": "demo-document-06-profile",
+      "horseId": "demo-horse-06",
+      "title": "Demo horse profile · Barq",
+      "titleEn": "Demo horse profile · Barq",
+      "titleAr": "ملف حصان تجريبي · برق",
+      "category": "other",
+      "filename": "demo-horse-06-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-06-profile.pdf",
+      "sha256": "48b135c0efe8f9147e5826388f2d85ee6ff39a65274b48da9d51885fcd5f648e"
+    },
+    {
+      "id": "demo-document-06-care",
+      "horseId": "demo-horse-06",
+      "title": "Demo care and feeding summary · Barq",
+      "titleEn": "Demo care and feeding summary · Barq",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · برق",
+      "category": "other",
+      "filename": "demo-horse-06-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-06-care.pdf",
+      "sha256": "5d25663aafc7b0693e109cd590f3535808a8155b546f67a34c551b0eb5ea6743"
+    },
+    {
+      "id": "demo-document-07-profile",
+      "horseId": "demo-horse-07",
+      "title": "Demo horse profile · Lulwa",
+      "titleEn": "Demo horse profile · Lulwa",
+      "titleAr": "ملف حصان تجريبي · لؤلؤة",
+      "category": "other",
+      "filename": "demo-horse-07-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-07-profile.pdf",
+      "sha256": "286c998b732e84fb16d5b9e09b66fee42d4c35488bea6371311b5c681f503114"
+    },
+    {
+      "id": "demo-document-07-care",
+      "horseId": "demo-horse-07",
+      "title": "Demo care and feeding summary · Lulwa",
+      "titleEn": "Demo care and feeding summary · Lulwa",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · لؤلؤة",
+      "category": "other",
+      "filename": "demo-horse-07-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-07-care.pdf",
+      "sha256": "abf61c794f70906cb676f520ef3d1d2fecc09c946bd4be36065d2662684c6b09"
+    },
+    {
+      "id": "demo-document-08-profile",
+      "horseId": "demo-horse-08",
+      "title": "Demo horse profile · Faris",
+      "titleEn": "Demo horse profile · Faris",
+      "titleAr": "ملف حصان تجريبي · فارس",
+      "category": "other",
+      "filename": "demo-horse-08-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-08-profile.pdf",
+      "sha256": "04bb8f8f5d688a7dc70684c230133a38a90c43e011a07cac3616fe62acb645db"
+    },
+    {
+      "id": "demo-document-08-care",
+      "horseId": "demo-horse-08",
+      "title": "Demo care and feeding summary · Faris",
+      "titleEn": "Demo care and feeding summary · Faris",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · فارس",
+      "category": "other",
+      "filename": "demo-horse-08-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-08-care.pdf",
+      "sha256": "e01e647919c52eeadda9be3f98c2bb7695ab26e0a4f3df8ea6912e4652acf518"
+    },
+    {
+      "id": "demo-document-09-profile",
+      "horseId": "demo-horse-09",
+      "title": "Demo horse profile · Al Anoud",
+      "titleEn": "Demo horse profile · Al Anoud",
+      "titleAr": "ملف حصان تجريبي · العنود",
+      "category": "other",
+      "filename": "demo-horse-09-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-09-profile.pdf",
+      "sha256": "c990479486e4d025bf4682e713c5f6621b5de689d76e4b3f1d5a964065d4e8d9"
+    },
+    {
+      "id": "demo-document-09-care",
+      "horseId": "demo-horse-09",
+      "title": "Demo care and feeding summary · Al Anoud",
+      "titleEn": "Demo care and feeding summary · Al Anoud",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · العنود",
+      "category": "other",
+      "filename": "demo-horse-09-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-09-care.pdf",
+      "sha256": "2c04fd2a35bd6d4109e6d920162c92ff6ae0eb213056c88a6de6e71b30437046"
+    },
+    {
+      "id": "demo-document-10-profile",
+      "horseId": "demo-horse-10",
+      "title": "Demo horse profile · Sultan",
+      "titleEn": "Demo horse profile · Sultan",
+      "titleAr": "ملف حصان تجريبي · سلطان",
+      "category": "other",
+      "filename": "demo-horse-10-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-10-profile.pdf",
+      "sha256": "c5542366e173b09bcbafb9fc975c878bb9d30c53d68b517a31cbe071e52a6b4b"
+    },
+    {
+      "id": "demo-document-10-care",
+      "horseId": "demo-horse-10",
+      "title": "Demo care and feeding summary · Sultan",
+      "titleEn": "Demo care and feeding summary · Sultan",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · سلطان",
+      "category": "other",
+      "filename": "demo-horse-10-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-10-care.pdf",
+      "sha256": "a72262781a987b038c30ce723df9de79a583826dde84e2ff8b2a3661c6c42d78"
+    },
+    {
+      "id": "demo-document-11-profile",
+      "horseId": "demo-horse-11",
+      "title": "Demo horse profile · Reem",
+      "titleEn": "Demo horse profile · Reem",
+      "titleAr": "ملف حصان تجريبي · ريم",
+      "category": "other",
+      "filename": "demo-horse-11-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-11-profile.pdf",
+      "sha256": "3b209efe654a8b08d2d0c247927925a47e7a1f37f4d81614ea90be8f47224f3d"
+    },
+    {
+      "id": "demo-document-11-care",
+      "horseId": "demo-horse-11",
+      "title": "Demo care and feeding summary · Reem",
+      "titleEn": "Demo care and feeding summary · Reem",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · ريم",
+      "category": "other",
+      "filename": "demo-horse-11-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-11-care.pdf",
+      "sha256": "c755dfe40212e149ace26bc2449278fab932c702104cb234ae6b535e4048aebe"
+    },
+    {
+      "id": "demo-document-12-profile",
+      "horseId": "demo-horse-12",
+      "title": "Demo horse profile · Wadi",
+      "titleEn": "Demo horse profile · Wadi",
+      "titleAr": "ملف حصان تجريبي · وادي",
+      "category": "other",
+      "filename": "demo-horse-12-profile.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-12-profile.pdf",
+      "sha256": "3dc2b3a2676edacbb17b9cc03ee2ea5d922d199861869e573105db0acf715803"
+    },
+    {
+      "id": "demo-document-12-care",
+      "horseId": "demo-horse-12",
+      "title": "Demo care and feeding summary · Wadi",
+      "titleEn": "Demo care and feeding summary · Wadi",
+      "titleAr": "ملخص رعاية وتغذية تجريبي · وادي",
+      "category": "other",
+      "filename": "demo-horse-12-care.pdf",
+      "mime": "application/pdf",
+      "file": "documents/horse-12-care.pdf",
+      "sha256": "b03e44e3b5c46efb770945a1f4b96b29e2c9baef2fd16fea06738f215558202b"
+    }
+  ]
+}
