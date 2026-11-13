@@ -166,3 +166,9 @@ Validation: 99 API/system tests and the account-security, member-account and boa
 Account snapshots now include a dedicated ownedHorses collection for both member and staff horse owners. Restricted staff retain ownership fields and notes for their own horses, and may read their own horse profile, photo, assigned instructor photo and documents without academy horse-management permission. Management mutations and unrelated horse profile access still require the existing grants.
 
 Deploy frontend/backend from this release and restart Node.js for the owned-horse fixes used by iOS 1.1.3. No production ownership links were changed.
+
+## 1.31.0
+
+Adds operator-only `demo:preview` and `demo:reset` commands for the explicitly requested existing-database demo replacement. Apply backs up the committed database and SMTP encryption key before deleting anything, preserves only abdul@softfm.com and its password, retains a selected academy with administrator access, revokes old sessions and transactionally creates bilingual demo users, horses, instructors, bookings, invoices, payments, session balances, feeding/care work and boarding. `--empty` performs a reset without adding demo records. Startup, deployment and public APIs never invoke this command.
+
+Demo email is explicitly disabled. New login credentials are generated independently and saved only in a private file; approved profile portraits can be imported from a validated `--photos-dir`. No individual portraits are bundled. See docs/DEMO_RESET.md for cPanel execution and recovery. No live database was accessed or reset during development.
