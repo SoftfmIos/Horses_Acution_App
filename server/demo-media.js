@@ -50,10 +50,20 @@ export async function commonsPhoto(
   query,
   { fetcher = fetch, used = new Set() } = {},
 ) {
-  for (const search of [
-    `${query} incategory:CC-Zero filetype:bitmap`,
-    `${query} filetype:bitmap`,
-  ]) {
+  const subjects = [
+    ...new Set([
+      query,
+      ...(query.includes("Arabian") ? ["Arabian horse"] : []),
+      ...(query.includes("horse")
+        ? ["horse portrait", "horse head", "horse"]
+        : ["equestrian equipment", "horse riding", "horse"]),
+    ]),
+  ];
+  const searches = subjects.flatMap((subject) => [
+    `${subject} incategory:CC-Zero filetype:bitmap`,
+    `${subject} filetype:bitmap`,
+  ]);
+  for (const search of searches) {
     const params = new URLSearchParams({
       action: "query",
       generator: "search",
@@ -139,7 +149,7 @@ export async function commonsPhoto(
     }
   }
   throw new Error(
-    `No suitable CC0/public-domain image found for '${query}'. No database changes were made. Retry later or provide a local photo folder.`,
+    `No suitable CC0/public-domain image found for '${query}', including broader equestrian searches. No database changes were made. Cached downloads are retained; retry or provide a local photo folder.`,
   );
 }
 function target(db, academyId, adminEmail) {

@@ -182,3 +182,7 @@ Account & security now includes the existing own-photo upload control. Restricte
 ## 1.31.2
 
 The photo/document importer recognises Abdul's updated login, a.alsagier@riyadhpolohills.com, while retaining the original email as a compatibility candidate. Adds an explicit --admin-email selector for later email changes or ambiguous accounts. The selected account must be an existing administrator of the demo academy; no account is renamed, created or reset. Regression coverage performs the full import after changing the administrator's email and verifies that all account, session, booking and financial rows remain unchanged.
+
+## 1.31.3
+
+Demo image searches fall back from specific breed/colour/equipment descriptions to broader horse and equestrian searches. This addresses the real cPanel failure at "bay Arabian horse" while preserving public-domain/CC0 filtering, download-host restrictions, size validation, duplicate exclusion and the existing download cache. No database or profile updates occur unless acquisition and validation finish successfully. Regression coverage simulates empty specific-query results and verifies successful broader searches for both horses and instructor avatars.
