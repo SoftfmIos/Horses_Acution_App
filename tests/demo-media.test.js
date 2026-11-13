@@ -57,6 +57,35 @@ test("online selector accepts public-domain photos and refuses restricted licenc
     /No suitable/,
   );
 });
+test("specific horse and equipment searches fall back without weakening licence, file or uniqueness checks", async () => {
+  for (const query of ["bay Arabian horse", "polo mallet"]) {
+    const searches = [];
+    const fake = network();
+    const photo = await commonsPhoto(query, {
+      fetcher: async (url) => {
+        if (url.startsWith("https://commons.wikimedia.org/w/api.php")) {
+          const search = new URL(url).searchParams.get("gsrsearch");
+          searches.push(search);
+          if (search !== "horse incategory:CC-Zero filetype:bitmap")
+            return Response.json({ query: { pages: [] } });
+        }
+        return fake(url);
+      },
+    });
+    assert.equal(photo.source.license, "Public domain");
+    assert.ok(searches.some((search) => search.startsWith(query)));
+    assert.ok(searches.includes("horse incategory:CC-Zero filetype:bitmap"));
+  }
+  const query = "bay Arabian horse",
+    used = new Set([
+      `https://upload.wikimedia.org/${id(query + " incategory:CC-Zero filetype:bitmap")}.png`,
+    ]);
+  const photo = await commonsPhoto(query, { fetcher: network(), used });
+  assert.notEqual(
+    photo.source.original,
+    `https://upload.wikimedia.org/${id(query + " incategory:CC-Zero filetype:bitmap")}.png`,
+  );
+});
 test("photo/document import preserves every account and transaction, links bilingual PDFs and is repeatable", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "academy-media-")),
     path = join(dir, "academy.sqlite");

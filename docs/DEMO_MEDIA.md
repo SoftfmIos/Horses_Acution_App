@@ -1,6 +1,6 @@
 # Add demo photos, user avatars and horse documents — without resetting
 
-Pull `main` version **1.31.2** in cPanel. Keep the existing database and demo users. This command does **not** invoke the reset, change passwords, revoke sessions, recreate bookings or modify payments/balances.
+Pull `main` version **1.31.3** in cPanel. Keep the existing database and demo users. This command does **not** invoke the reset, change passwords, revoke sessions, recreate bookings or modify payments/balances.
 
 Activate the Node 24 environment shown in cPanel and change to the application root:
 
@@ -48,6 +48,8 @@ Source/creator/licence information is saved in the photo's `demoSource` metadata
 Online acquisition requires outbound HTTPS to `commons.wikimedia.org` and `upload.wikimedia.org` from the cPanel server. This development environment cannot reach those domains, so live online acquisition must be verified by running the command in cPanel. The downloader is covered by simulated API tests, including licence checks, download-host restrictions and failure handling.
 
 If a search/download fails, **no database records are changed**. Successfully downloaded files remain cached so retrying the same command does not download them again. Do not run `demo:reset` to fix a photo download.
+
+Specific breed, colour and equipment searches automatically fall back to broader horse/equestrian searches if no eligible photo is returned. Public-domain/CC0, download-host, file-size and duplicate checks remain enforced throughout. A specific description such as "bay Arabian horse" is a preference, not a requirement that blocks the remaining import when broader suitable images exist.
 
 If Wikimedia is blocked or no suitable public-domain image is returned, supply a folder using:
 
