@@ -50,5 +50,20 @@ try {
  await owner.call('/records/feeding','POST',{horseId:horse.id,feed:'Test hay',quantity:'2 kg',time:'07:00',durationMinutes:30,assigneeId:auth.user.id,startDate:'2026-11-12',endDate:'2026-11-14',active:true,notes:'Fictional feeding plan'});
  for(const[name,value]of [['member-horse-profile',await member.call('/horses/'+horse.id+'/profile')],['member-horse-photo',await member.call('/photos/horses/'+horse.id)],['member-instructor-photo',await member.call('/photos/instructors/'+instructor.id)]])
   writeFileSync(out+name+'.json',JSON.stringify(value,null,2)+'\n');
+ const packagePlan=await owner.call('/records/plans','POST',{name:'Test five-session package',kind:'package',amount:10000,credits:5,active:true});
+ const order=await member.call('/packages','POST',{planId:packagePlan.id});
+ const balances={};
+ const readBalance=async()=>{
+  const summary=await member.call('/members/'+me.user.id+'/credits');
+  const snapshot=await member.call('/data');
+  return {summary,snapshot:{creditBalance:snapshot.creditBalance,creditLedger:snapshot.creditLedger,proformas:snapshot.proformas.filter(p=>p.id===order.id)}};
+ };
+ balances.unpaid=await readBalance();
+ await owner.call('/proformas/'+order.id+'/payment','POST',{amount:4000,reference:'PACKAGE-PARTIAL',externalRef:'Test partial payment'});
+ balances.partial=await readBalance();
+ await owner.call('/proformas/'+order.id+'/payment','POST',{amount:6000,reference:'PACKAGE-FULL',externalRef:'Test final payment'});
+ balances.paid=await readBalance();
+ balances.refreshed=await readBalance();
+ writeFileSync(out+'member-package-balances.json',JSON.stringify(balances,null,2)+'\n');
  console.log('Generated fictional fixtures for native backend decoding tests.');
 } finally {server.close();db.close();}

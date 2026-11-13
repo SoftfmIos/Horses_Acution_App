@@ -1,0 +1,224 @@
+{
+  "unpaid": {
+    "summary": {
+      "memberId": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+      "balance": 0,
+      "credited": 0,
+      "used": 0,
+      "restored": 0,
+      "refunded": 0,
+      "needsReview": [],
+      "pendingPackages": 1,
+      "paidRequestsWithoutSessions": 0
+    },
+    "snapshot": {
+      "creditBalance": 0,
+      "creditLedger": [],
+      "proformas": [
+        {
+          "id": "f19838f8-db92-42bf-95a9-3f76a29afd9a",
+          "org_id": "dde22cad-63c0-4e31-b53d-2c3ca4b7e92a",
+          "member_id": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+          "reservation_id": null,
+          "description": "Test five-session package",
+          "gross": 10000,
+          "discount": 0,
+          "voucher": 0,
+          "due": 10000,
+          "paid": 0,
+          "status": "open",
+          "discount_id": null,
+          "voucher_id": null,
+          "external_ref": "",
+          "created_at": "2026-11-12T07:00:00.000Z",
+          "plan_id": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+          "credit_quantity": 5,
+          "credit_awarded": 0,
+          "credit_used": 0,
+          "descriptionEn": "Test five-session package",
+          "descriptionAr": "",
+          "sessionCreditStatus": {
+            "quantity": 5,
+            "awarded": false,
+            "status": "pending",
+            "canRepair": false,
+            "matchedPlanId": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+            "suggestedQuantity": 5
+          },
+          "activation": "pending_payment"
+        }
+      ]
+    }
+  },
+  "partial": {
+    "summary": {
+      "memberId": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+      "balance": 0,
+      "credited": 0,
+      "used": 0,
+      "restored": 0,
+      "refunded": 0,
+      "needsReview": [],
+      "pendingPackages": 1,
+      "paidRequestsWithoutSessions": 0
+    },
+    "snapshot": {
+      "creditBalance": 0,
+      "creditLedger": [],
+      "proformas": [
+        {
+          "id": "f19838f8-db92-42bf-95a9-3f76a29afd9a",
+          "org_id": "dde22cad-63c0-4e31-b53d-2c3ca4b7e92a",
+          "member_id": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+          "reservation_id": null,
+          "description": "Test five-session package",
+          "gross": 10000,
+          "discount": 0,
+          "voucher": 0,
+          "due": 10000,
+          "paid": 4000,
+          "status": "open",
+          "discount_id": null,
+          "voucher_id": null,
+          "external_ref": "Test partial payment",
+          "created_at": "2026-11-12T07:00:00.000Z",
+          "plan_id": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+          "credit_quantity": 5,
+          "credit_awarded": 0,
+          "credit_used": 0,
+          "descriptionEn": "Test five-session package",
+          "descriptionAr": "",
+          "sessionCreditStatus": {
+            "quantity": 5,
+            "awarded": false,
+            "status": "pending",
+            "canRepair": false,
+            "matchedPlanId": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+            "suggestedQuantity": 5
+          },
+          "activation": "pending_payment"
+        }
+      ]
+    }
+  },
+  "paid": {
+    "summary": {
+      "memberId": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+      "balance": 5,
+      "credited": 5,
+      "used": 0,
+      "restored": 0,
+      "refunded": 0,
+      "needsReview": [],
+      "pendingPackages": 0,
+      "paidRequestsWithoutSessions": 0
+    },
+    "snapshot": {
+      "creditBalance": 5,
+      "creditLedger": [
+        {
+          "id": "f084bae7-4f1a-4fde-ba4f-5a3dc48457f5",
+          "delta": 5,
+          "reason": "package.paid",
+          "created_at": "2026-11-12T07:00:00.000Z",
+          "reservation_id": null,
+          "proforma_id": "f19838f8-db92-42bf-95a9-3f76a29afd9a"
+        }
+      ],
+      "proformas": [
+        {
+          "id": "f19838f8-db92-42bf-95a9-3f76a29afd9a",
+          "org_id": "dde22cad-63c0-4e31-b53d-2c3ca4b7e92a",
+          "member_id": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+          "reservation_id": null,
+          "description": "Test five-session package",
+          "gross": 10000,
+          "discount": 0,
+          "voucher": 0,
+          "due": 10000,
+          "paid": 10000,
+          "status": "settled",
+          "discount_id": null,
+          "voucher_id": null,
+          "external_ref": "Test final payment",
+          "created_at": "2026-11-12T07:00:00.000Z",
+          "plan_id": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+          "credit_quantity": 5,
+          "credit_awarded": 1,
+          "credit_used": 0,
+          "descriptionEn": "Test five-session package",
+          "descriptionAr": "",
+          "sessionCreditStatus": {
+            "quantity": 5,
+            "awarded": true,
+            "status": "credited",
+            "canRepair": false,
+            "matchedPlanId": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+            "suggestedQuantity": 5
+          },
+          "activation": "active"
+        }
+      ]
+    }
+  },
+  "refreshed": {
+    "summary": {
+      "memberId": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+      "balance": 5,
+      "credited": 5,
+      "used": 0,
+      "restored": 0,
+      "refunded": 0,
+      "needsReview": [],
+      "pendingPackages": 0,
+      "paidRequestsWithoutSessions": 0
+    },
+    "snapshot": {
+      "creditBalance": 5,
+      "creditLedger": [
+        {
+          "id": "f084bae7-4f1a-4fde-ba4f-5a3dc48457f5",
+          "delta": 5,
+          "reason": "package.paid",
+          "created_at": "2026-11-12T07:00:00.000Z",
+          "reservation_id": null,
+          "proforma_id": "f19838f8-db92-42bf-95a9-3f76a29afd9a"
+        }
+      ],
+      "proformas": [
+        {
+          "id": "f19838f8-db92-42bf-95a9-3f76a29afd9a",
+          "org_id": "dde22cad-63c0-4e31-b53d-2c3ca4b7e92a",
+          "member_id": "9382c688-3c48-4f40-8ec0-7b91295c89ba",
+          "reservation_id": null,
+          "description": "Test five-session package",
+          "gross": 10000,
+          "discount": 0,
+          "voucher": 0,
+          "due": 10000,
+          "paid": 10000,
+          "status": "settled",
+          "discount_id": null,
+          "voucher_id": null,
+          "external_ref": "Test final payment",
+          "created_at": "2026-11-12T07:00:00.000Z",
+          "plan_id": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+          "credit_quantity": 5,
+          "credit_awarded": 1,
+          "credit_used": 0,
+          "descriptionEn": "Test five-session package",
+          "descriptionAr": "",
+          "sessionCreditStatus": {
+            "quantity": 5,
+            "awarded": true,
+            "status": "credited",
+            "canRepair": false,
+            "matchedPlanId": "0d600fa7-78d1-444a-acf9-8e5bcb6787a9",
+            "suggestedQuantity": 5
+          },
+          "activation": "active"
+        }
+      ]
+    }
+  }
+}

@@ -8,6 +8,7 @@ import SwiftUI
     @Published var snapshotLoaded = false
     @Published var dataRevision = UUID()
     private var requestGeneration = UUID()
+    private var reloadTask: (id: UUID, task: Task<Void, Never>)?
     @Published var busy = false
     @Published var restoring = true
     @Published var error: String?
@@ -30,6 +31,7 @@ import SwiftUI
     func canView(_ invoice: Invoice) -> Bool { invoice.member_id == account?.id || allowed("billing") }
     func canView(_ booking: Booking) -> Bool { booking.member_id == account?.id || allowed("classes") }
     private func resetSnapshot() {
+        reloadTask?.task.cancel(); reloadTask = nil
         requestGeneration = UUID(); ClassReminderService.shared.clear()
         data = AcademyData(); snapshotLoaded = false; dataRevision = UUID()
     }
@@ -69,8 +71,7 @@ import SwiftUI
         defer { busy = false }
         do { try await work() }
         catch APIError.unauthorized { clear(); error = APIError.unauthorized.localizedDescription }
-        catch is CancellationError { }
-        catch { self.error = error.localizedDescription }
+        catch { if !RequestCancellation.matches(error) { self.error = error.localizedDescription } }
     }
     func restore() async {
         restoring = true
@@ -99,6 +100,13 @@ import SwiftUI
         guard let id = stable?.id, let accountID = account?.id else { return }
         let generation = requestGeneration
         var snapshot: AcademyData = try await api.send("data", stableID: id)
+        if !AcademyAccess.isStaff(authRole: stable?.role, snapshotRole: snapshot.userRole, loaded: true) {
+            let balance: SessionBalance = try await api.send("members/\(accountID)/credits", stableID: id)
+            guard balance.memberId == accountID else { throw APIError.invalidResponse }
+            snapshot.sessionBalance = balance
+            snapshot.creditBalance = balance.balance
+        }
+        try Task.checkCancellation()
         guard stable?.id == id, account?.id == accountID, generation == requestGeneration else { return }
         if !AcademyAccess.isStaff(authRole: stable?.role, snapshotRole: snapshot.userRole, loaded: true) {
             snapshot = snapshot.memberView(accountID: accountID)
@@ -112,7 +120,15 @@ import SwiftUI
         dataRevision = UUID()
         await synchronizeReminders()
     }
-    func reload() async { await perform { try await refresh() } }
+    func reload() async {
+        if let pending = reloadTask { await pending.task.value; return }
+        let id = UUID()
+        // Keep network refresh alive when SwiftUI ends the pull gesture or replaces its view task.
+        let task = Task { @MainActor in await self.perform { try await self.refresh() } }
+        reloadTask = (id, task)
+        await task.value
+        if reloadTask?.id == id { reloadTask = nil }
+    }
     func chooseStable(_ id: String) async {
         guard !busy, id != stable?.id else { return }
         resetSnapshot()

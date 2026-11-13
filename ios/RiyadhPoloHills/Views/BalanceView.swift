@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CreditBalanceCard: View {
     @EnvironmentObject var store: AcademyStore
-    var totals: SessionTotals { SessionTotals(store.data.creditLedger) }
+    var totals: SessionTotals { SessionTotals(store.data.creditLedger, summary: store.data.sessionBalance) }
     var body: some View {
         AcademyCard {
             HStack { Label(store.text("Sessions remaining", "الحصص المتبقية"), systemImage: "ticket").font(.headline); Spacer(); Text("\(store.data.creditBalance)").font(.system(size: 38, weight: .bold, design: .rounded)).foregroundStyle(Brand.navy) }
@@ -27,6 +27,18 @@ struct BalanceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 CreditBalanceCard()
+                if let balance = store.data.sessionBalance {
+                    ForEach(balance.needsReview) { invoice in
+                        AcademyCard {
+                            Label(store.text("Paid package needs review", "تحتاج الباقة المدفوعة إلى مراجعة"), systemImage: "exclamationmark.triangle").font(.headline).foregroundStyle(Brand.gold)
+                            Text(invoice.description)
+                            Text(store.text("Ask the academy to check the session quantity on this paid invoice. Its payment is recorded, but sessions have not been added yet.", "اطلب من الأكاديمية مراجعة عدد الحصص في هذه الفاتورة المدفوعة. تم تسجيل الدفع، لكن الحصص لم تُضف إلى الرصيد بعد.")).font(.subheadline)
+                        }
+                    }
+                    if balance.paidRequestsWithoutSessions > 0 {
+                        Text(store.text("Payments for individual bookings and other services do not add package sessions to your balance.", "مدفوعات الحجوزات الفردية والخدمات الأخرى لا تضيف حصص باقات إلى الرصيد.")).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 NavigationLink { PackagesView() } label: { Label(store.text("Buy sessions", "شراء حصص"), systemImage: "plus.circle") }.buttonStyle(PrimaryButtonStyle())
                 ForEach(store.visibleInvoices.filter { $0.sessionCreditStatus != nil }) { invoice in
                     NavigationLink { InvoiceDetailView(invoice: invoice) } label: {

@@ -1,5 +1,13 @@
 import Foundation
 
+enum RequestCancellation {
+    static func matches(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let networkError = error as NSError
+        return networkError.domain == NSURLErrorDomain && networkError.code == NSURLErrorCancelled
+    }
+}
+
 enum APIError: LocalizedError {
     case unauthorized, message(String), invalidResponse
     var errorDescription: String? {
@@ -12,18 +20,20 @@ enum APIError: LocalizedError {
 }
 @MainActor final class APIClient: NSObject, URLSessionTaskDelegate {
     let configuration: AppConfiguration
+    private let sessionConfiguration: URLSessionConfiguration
     private var token: String?
     private(set) var sessionRevision = UUID()
     private lazy var session: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
+        let config = sessionConfiguration
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false
         config.urlCache = nil
         config.timeoutIntervalForRequest = 30
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
-    init(configuration: AppConfiguration = .current) {
+    init(configuration: AppConfiguration = .current, sessionConfiguration: URLSessionConfiguration = .ephemeral) {
         self.configuration = configuration
+        self.sessionConfiguration = sessionConfiguration
         self.token = SessionVault.load(server: configuration.apiOrigin.absoluteString)
         super.init()
     }

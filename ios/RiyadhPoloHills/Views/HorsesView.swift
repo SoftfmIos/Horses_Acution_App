@@ -148,6 +148,7 @@ struct HorseDetailView: View {
             profile = loaded; loading = false
         } catch {
             guard key == scope, !Task.isCancelled else { return }
+            if RequestCancellation.matches(error) { loading = false; return }
             loading = false; failure = error.localizedDescription
         }
     }
@@ -161,6 +162,6 @@ struct HorseDetailView: View {
             let url = folder.appendingPathComponent(UUID().uuidString + "-" + URL(fileURLWithPath: file.filename).lastPathComponent)
             try bytes.write(to: url, options: [.atomic, .completeFileProtection])
             sharedFile = url
-        } catch { if key == scope { store.error = error.localizedDescription } }
+        } catch { if key == scope && !RequestCancellation.matches(error) { store.error = error.localizedDescription } }
     }
 }

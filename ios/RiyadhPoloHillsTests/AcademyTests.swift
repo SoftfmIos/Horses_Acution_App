@@ -3,6 +3,51 @@ import PDFKit
 @testable import RiyadhPoloHills
 
 final class AcademyTests: XCTestCase {
+    @MainActor func testRefreshSurvivesCancelledViewTaskAndLoadsAuthoritativeBalance() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BalanceRefreshURLProtocol.self]
+        let origin = try XCTUnwrap(URL(string: "https://native-refresh.example.test"))
+        let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration)
+        let store = AcademyStore(api: api)
+        store.account = try JSONDecoder().decode(Account.self, from: Data(#"{"id":"rider","name":"Test Rider","email":"rider@example.test"}"#.utf8))
+        store.stable = try JSONDecoder().decode(Stable.self, from: Data(#"{"id":"academy","name":"Test Academy","role":"member"}"#.utf8))
+        let viewTask = Task { await store.reload() }
+        viewTask.cancel()
+        await viewTask.value
+        XCTAssertTrue(store.snapshotLoaded)
+        XCTAssertEqual(store.data.creditBalance, 5)
+        XCTAssertEqual(store.data.sessionBalance?.credited, 5)
+        XCTAssertNil(store.error)
+        XCTAssertFalse(store.busy)
+    }
+    @MainActor func testCancelledRefreshDoesNotDisplayAnAlertButRealNetworkErrorsDo() async {
+        let store = AcademyStore()
+        for cancellation in [CancellationError() as Error, URLError(.cancelled), NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)] {
+            await store.perform { throw cancellation }
+            XCTAssertNil(store.error)
+            XCTAssertFalse(store.busy)
+        }
+        await store.perform { throw URLError(.notConnectedToInternet) }
+        XCTAssertNotNil(store.error)
+        XCTAssertFalse(store.busy)
+    }
+    func testPaidPackageBalanceFromRealBackendContracts() throws {
+        struct State: Decodable { let summary: SessionBalance; let snapshot: AcademyData }
+        let url = try XCTUnwrap(Bundle(for: AcademyTests.self).url(forResource: "member-package-balances", withExtension: "json"))
+        let states = try JSONDecoder().decode([String: State].self, from: Data(contentsOf: url))
+        for name in ["unpaid", "partial", "paid", "refreshed"] {
+            let state = try XCTUnwrap(states[name])
+            let expected = ["paid", "refreshed"].contains(name) ? 5 : 0
+            XCTAssertEqual(state.summary.balance, expected)
+            XCTAssertEqual(state.snapshot.creditBalance, expected)
+            XCTAssertEqual(SessionTotals(state.snapshot.creditLedger, summary: state.summary).purchased, expected)
+            XCTAssertTrue(state.summary.needsReview.isEmpty)
+            XCTAssertEqual(state.summary.pendingPackages, expected == 0 ? 1 : 0)
+            XCTAssertEqual(state.snapshot.proformas.first?.credit_quantity, 5)
+            XCTAssertEqual(state.snapshot.proformas.first?.status, expected == 0 ? "open" : "settled")
+            XCTAssertEqual(state.snapshot.creditLedger.filter { $0.reason == "package.paid" }.count, expected == 0 ? 0 : 1)
+        }
+    }
     func testAcademySnapshotDecodesStallAvailability() throws {
         let payload = Data(#"{"stalls":[{"id":"stall","name":"A","capacity":2,"active":true}],"stallOccupancy":[{"id":"stay","stallId":"stall","status":"active","startDate":"2026-11-01","endDate":"2026-11-30"}]}"#.utf8)
         let snapshot = try JSONDecoder().decode(AcademyData.self, from: payload)
@@ -76,6 +121,23 @@ final class AcademyTests: XCTestCase {
         XCTAssertFalse(store.allowed("tasks", "edit"), "A newly revoked grant must not fall back to stale login permissions")
 
     }
+}
+
+private final class BalanceRefreshURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "native-refresh.example.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url else { return }
+        let isBalance = url.path == "/api/members/rider/credits"
+        let payload = isBalance
+            ? #"{"memberId":"rider","balance":5,"credited":5,"used":0,"restored":0,"refunded":0,"needsReview":[],"pendingPackages":0,"paidRequestsWithoutSessions":0}"#
+            : #"{"userRole":"member","creditBalance":0,"creditLedger":[]}"#
+        guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"]) else { return }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(payload.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() { }
 }
 
 extension AcademyTests {

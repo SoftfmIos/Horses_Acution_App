@@ -109,6 +109,8 @@ struct HorseProfileData: Decodable {
 }
 struct InstructorIdentity: Decodable { let id: String }
 struct AcademyData: Decodable {
+    // Loaded from the same own-account balance endpoint used by the member web portal.
+    var sessionBalance: SessionBalance?
     var classes: [RidingSession] = []; var bookings: [Booking] = []; var plans: [PricePlan] = []
     var proformas: [Invoice] = []; var payments: [Payment] = []; var horses: [Horse] = []
     var tasks: [CareTask] = []; var notifications: [InboxItem] = []; var members: [Member] = []
@@ -175,13 +177,22 @@ struct HorseRide: Decodable, Identifiable { let id: String; let member_id: Strin
 struct DeletionBlocker: Decodable, Identifiable { let id: String; let name: String }
 struct DeletionPreview: Decodable { let blockers: [DeletionBlocker]; let creditBalance: Int; let openInvoices: Int; let activeBookings: Int }
 
+struct SessionCreditReview: Decodable, Identifiable {
+    let id: String; let description: String
+}
+struct SessionBalance: Decodable {
+    let memberId: String
+    let balance: Int; let credited: Int; let used: Int; let restored: Int; let refunded: Int
+    let needsReview: [SessionCreditReview]
+    let pendingPackages: Int; let paidRequestsWithoutSessions: Int
+}
 struct SessionTotals {
     let purchased: Int; let used: Int; let restored: Int; let refunded: Int
-    init(_ ledger: [CreditEntry]) {
-        purchased = ledger.filter { $0.reason == "package.paid" }.reduce(0) { $0 + $1.delta }
-        used = -ledger.filter { $0.reason == "booking.used" }.reduce(0) { $0 + $1.delta }
-        restored = ledger.filter { $0.reason == "booking.cancelled" }.reduce(0) { $0 + $1.delta }
-        refunded = -ledger.filter { $0.reason == "package.refunded" }.reduce(0) { $0 + $1.delta }
+    init(_ ledger: [CreditEntry], summary: SessionBalance? = nil) {
+        purchased = summary?.credited ?? ledger.filter { $0.reason == "package.paid" }.reduce(0) { $0 + $1.delta }
+        used = summary?.used ?? -ledger.filter { $0.reason == "booking.used" }.reduce(0) { $0 + $1.delta }
+        restored = summary?.restored ?? ledger.filter { $0.reason == "booking.cancelled" }.reduce(0) { $0 + $1.delta }
+        refunded = summary?.refunded ?? -ledger.filter { $0.reason == "package.refunded" }.reduce(0) { $0 + $1.delta }
     }
 }
 enum AcademyAccess {

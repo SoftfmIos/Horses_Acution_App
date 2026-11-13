@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.1 (15)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.2 (16)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -86,9 +86,15 @@ Use Apple's Standard EULA in App Store Connect. No custom license text is requir
 
 ## Codemagic version declaration
 
-The signed workflow declares `APP_VERSION: "1.1.1"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+The signed workflow declares `APP_VERSION: "1.1.2"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
 
-## Member and staff experience (1.1.1)
+## Balance and refresh fixes (1.1.2)
+
+Member refreshes also read the web portal's own-account session balance endpoint, including purchased, used, restored and refunded totals. Paid packages that need a session-quantity review show an explanation in My balance. Payments for individual bookings do not create package credits.
+
+Pull-to-refresh uses a shared store-owned task so ending the gesture does not cancel the network update. Account/academy changes still cancel pending refreshes. Swift task cancellation and URLSession cancellation are handled silently; real network failures remain visible. Native regression tests cover a cancelled view task, authoritative balance loading and real backend package contracts before/after partial and full payment.
+
+## Member and staff experience (1.1.0)
 
 Deploy backend/web **1.30.0 or later** before distributing this version. See [the feature comparison and validation guide](WEB_PORTAL_PARITY.md). Members receive only their own bookings, invoices and notifications; the directory shows their owned horses. Horse cards load authenticated horse/instructor photos and offer complete authorized care, feeding, boarding, ride, document and monthly history sections, plus PDF sharing/printing. Account & security supports password-confirmed email/password changes and account deletion.
 
