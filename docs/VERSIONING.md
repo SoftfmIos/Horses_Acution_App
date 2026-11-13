@@ -160,3 +160,9 @@ Adds password-confirmed self-service email/password changes and account deletion
 New endpoints are PUT /api/auth/account/email, PUT /api/auth/account/password, GET /api/auth/account/deletion and DELETE /api/auth/account. They require authentication without a stable header, current-password confirmation for mutations, and DELETE confirmation for deletion. Mutations are rate-limited. Health advertises accountVersion 1. Boarding responses also expose whether financial terms are locked so restricted staff cannot accidentally edit partially paid terms.
 
 Validation: 99 API/system tests and the account-security, member-account and boarding browser scenarios. Deploy the same commit to frontend/backend, restart Node.js, then distribute native iOS 1.1.0. The native app depends on these new account endpoints and privacy filters. No production accounts or balances were changed during development.
+
+## 1.30.1
+
+Account snapshots now include a dedicated ownedHorses collection for both member and staff horse owners. Restricted staff retain ownership fields and notes for their own horses, and may read their own horse profile, photo, assigned instructor photo and documents without academy horse-management permission. Management mutations and unrelated horse profile access still require the existing grants.
+
+Deploy frontend/backend from this release and restart Node.js for the owned-horse fixes used by iOS 1.1.3. No production ownership links were changed.

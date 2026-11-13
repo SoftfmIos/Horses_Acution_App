@@ -918,11 +918,42 @@ export function createApp(
   app.use("/api", (req, res, next) => {
     if (req.org.role !== "owner" || req.org.isAdmin) return next();
     const path = req.path;
+    if (req.method === "GET") {
+      const ownHorseRead =
+        /^\/horses\/([^/]+)\/profile$/.exec(path) ||
+        /^\/photos\/horses\/([^/]+)$/.exec(path);
+      if (
+        ownHorseRead &&
+        records(req.org.id, "horses").some(
+          (h) => h.id === ownHorseRead[1] && h.ownerId === req.user.id,
+        )
+      )
+        return next();
+      const ownDocumentRead = /^\/horse-documents\/([^/]+)$/.exec(path);
+      if (ownDocumentRead) {
+        const document = records(req.org.id, "horseDocuments").find(
+          (d) => d.id === ownDocumentRead[1],
+        );
+        if (
+          document &&
+          records(req.org.id, "horses").some(
+            (h) => h.id === document.horseId && h.ownerId === req.user.id,
+          )
+        )
+          return next();
+      }
+    }
     const instructorPhoto = /^\/photos\/instructors\/([^/]+)$/.exec(path);
     if (
       instructorPhoto &&
       (ownsInstructor(req, instructorPhoto[1]) ||
-        (req.method === "GET" && req.org.permissions.includes("classes")))
+        (req.method === "GET" &&
+          (req.org.permissions.includes("classes") ||
+            records(req.org.id, "horses").some(
+              (h) =>
+                h.ownerId === req.user.id &&
+                h.instructorId === instructorPhoto[1],
+            ))))
     )
       return next();
     const required = permissionForRoute(path, req.method);
@@ -1746,6 +1777,9 @@ export function createApp(
     result.members = manager
       ? members
       : members.filter((m) => m.id === req.user.id);
+    result.ownedHorses = records(org, "horses").filter(
+      (h) => h.ownerId === req.user.id,
+    );
     result.creditBalance = creditBalance(org, req.user.id);
     result.creditLedger = all(
       "SELECT id,delta,reason,created_at,reservation_id,proforma_id FROM credit_ledger WHERE org_id=? AND member_id=? ORDER BY rowid DESC",
@@ -1961,13 +1995,17 @@ export function createApp(
           }));
       }
       if (!allowed("horses"))
-        result.horses = result.horses.map((h) => ({
-          id: h.id,
-          name: h.name,
-          nameEn: h.nameEn,
-          nameAr: h.nameAr,
-          status: h.status,
-        }));
+        result.horses = result.horses.map((h) =>
+          h.ownerId === req.user.id
+            ? h
+            : {
+                id: h.id,
+                name: h.name,
+                nameEn: h.nameEn,
+                nameAr: h.nameAr,
+                status: h.status,
+              },
+        );
       if (!allowed("members"))
         result.members = result.members.map((m) => ({
           id: m.id,

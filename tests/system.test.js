@@ -3962,6 +3962,72 @@ test("last academy administrator deletion requires transfer and ordinary staff d
   assert.equal(remaining.active, false);
 });
 
+test("staff horse owners retain their own horses and notes without academy horse-management access", async (t) => {
+  const f = await fixture(t);
+  const staff = await f.owner.call("/members", "POST", {
+    name: "Staff horse owner",
+    email: "staff-horse-owner@test.com",
+    password: "123456",
+    role: "staff",
+  });
+  await f.owner.call("/permissions/" + staff.id, "PUT", {
+    role: "staff",
+    permissions: ["tasks"],
+    actionPermissions: { tasks: [] },
+  });
+  const own = await f.create("horses", {
+    name: "Staff-owned horse",
+    ownerId: staff.id,
+    notes: "Owner care instructions",
+    microchip: "OWNER-CHIP",
+  });
+  const other = await f.create("horses", {
+    name: "Other horse",
+    notes: "Private other notes",
+    microchip: "OTHER-CHIP",
+  });
+  const reader = f.client();
+  await reader.call("/auth/login", "POST", {
+    email: "staff-horse-owner@test.com",
+    password: "123456",
+  });
+  reader.stable = f.owner.stable;
+  const snapshot = await reader.call("/data");
+  assert.equal(snapshot.httpStatus, 200);
+  assert.ok(!snapshot.permissions.includes("horses"));
+  const owned = snapshot.horses.find((h) => h.id === own.id);
+  assert.equal(owned.ownerId, staff.id);
+  assert.equal(owned.notes, "Owner care instructions");
+  assert.equal(owned.microchip, "OWNER-CHIP");
+  assert.deepEqual(
+    snapshot.ownedHorses.map((h) => h.id),
+    [own.id],
+  );
+  const unrelated = snapshot.horses.find((h) => h.id === other.id);
+  assert.equal(unrelated.notes, undefined);
+  assert.equal(unrelated.microchip, undefined);
+  const profile = await reader.call("/horses/" + own.id + "/profile");
+  assert.equal(profile.httpStatus, 200);
+  assert.equal(profile.horse.notes, "Owner care instructions");
+  assert.equal((await reader.call("/photos/horses/" + own.id)).httpStatus, 200);
+  assert.equal(
+    (await reader.call("/photos/horses/" + other.id)).httpStatus,
+    403,
+  );
+  assert.equal(
+    (await reader.call("/horses/" + other.id + "/profile")).httpStatus,
+    403,
+  );
+  assert.equal(
+    (
+      await reader.call("/records/horses/" + own.id, "PUT", {
+        name: "Unauthorized edit",
+      })
+    ).httpStatus,
+    403,
+  );
+});
+
 test("member snapshots hide academy work and private records while owned-horse profiles retain full care and authorized photos", async (t) => {
   const f = await fixture(t),
     member = (await f.member.call("/auth/me")).user.id;
@@ -4026,6 +4092,10 @@ test("member snapshots hide academy work and private records while owned-horse p
       updatedAt: "2026-11-11T10:00:00Z",
     });
   const data = await f.member.call("/data");
+  assert.deepEqual(
+    data.ownedHorses.map((h) => h.id),
+    [own.id],
+  );
   assert.deepEqual(data.tasks, []);
   assert.deepEqual(data.taskHistory, []);
   assert.deepEqual(data.permissions, []);
