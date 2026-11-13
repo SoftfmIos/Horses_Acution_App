@@ -66,7 +66,9 @@ enum APIError: LocalizedError {
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
         // Match the web portal: local cache policy alone cannot bypass an intermediary cache.
         if method == "GET" {
-            components?.queryItems = (components?.queryItems ?? []) + [URLQueryItem(name: "_fresh", value: UUID().uuidString)]
+            var queryItems = components?.queryItems ?? []
+            queryItems.append(URLQueryItem(name: "_fresh", value: UUID().uuidString))
+            components?.queryItems = queryItems
         }
         guard let url = components?.url else { throw APIError.invalidResponse }
         guard url.scheme == "https" else { throw APIError.message("Use a secure HTTPS API address.") }

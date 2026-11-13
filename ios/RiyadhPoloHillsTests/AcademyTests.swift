@@ -93,6 +93,23 @@ final class AcademyTests: XCTestCase {
         XCTAssertNil(store.error)
         XCTAssertFalse(store.busy)
     }
+    @MainActor func testRefreshKeepsOwnedHorsesVisibleForMemberAndRestrictedStaff() async throws {
+        for role in ["member", "staff"] {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [BalanceRefreshURLProtocol.self]
+            let origin = try XCTUnwrap(URL(string: "https://native-refresh.example.test"))
+            let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration, tokenStore: TestSessionTokenStore())
+            let store = AcademyStore(api: api)
+            store.account = try JSONDecoder().decode(Account.self, from: Data(#"{"id":"rider","name":"Rider","email":"rider@example.test"}"#.utf8))
+            store.stable = try JSONDecoder().decode(Stable.self, from: JSONSerialization.data(withJSONObject: ["id":role, "name":"Academy", "role":role]))
+            await store.reload()
+            XCTAssertTrue(store.snapshotLoaded)
+            XCTAssertTrue(store.canBrowseHorses)
+            XCTAssertEqual(store.directoryHorses.map(\.id), ["own"])
+            XCTAssertEqual(store.directoryHorses.first?.notes, "Owner care")
+            XCTAssertNil(store.error)
+        }
+    }
     @MainActor func testCancelledRefreshDoesNotDisplayAnAlertButRealNetworkErrorsDo() async {
         let store = AcademyStore()
         for cancellation in [CancellationError() as Error, URLError(.cancelled), NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)] {
@@ -260,9 +277,10 @@ private final class BalanceRefreshURLProtocol: URLProtocol {
     override func startLoading() {
         guard let url = request.url else { return }
         let isBalance = url.path == "/api/members/rider/credits"
+        let role = request.value(forHTTPHeaderField: "X-Stable-Id") == "staff" ? "staff" : "member"
         let payload = isBalance
             ? #"{"memberId":"rider","balance":5,"credited":5,"used":0,"restored":0,"refunded":0,"needsReview":[],"pendingPackages":0,"paidRequestsWithoutSessions":0}"#
-            : #"{"userRole":"member","creditBalance":0,"creditLedger":[]}"#
+            : "{\"userRole\":\"\(role)\",\"creditBalance\":0,\"creditLedger\":[],\"horses\":[{\"id\":\"other\",\"name\":\"Other horse\",\"ownerId\":\"someone-else\"}],\"ownedHorses\":[{\"id\":\"own\",\"name\":\"Owned horse\",\"ownerId\":\"rider\",\"notes\":\"Owner care\"}]}"
         guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"]) else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(payload.utf8))

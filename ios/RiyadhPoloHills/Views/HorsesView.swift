@@ -6,7 +6,17 @@ struct HorsesView: View {
     var horses: [Horse] { store.directoryHorses.filter { search.isEmpty || $0.display(store.arabic).localizedCaseInsensitiveContains(search) } }
     var body: some View {
         List {
-            if horses.isEmpty { EmptyMessage(title: store.text("No horses to show", "لا توجد خيول للعرض"), symbol: "figure.equestrian.sports") }
+            if horses.isEmpty {
+                EmptyMessage(title: search.isEmpty ? store.text("No horses linked to this account", "لا توجد خيول مرتبطة بهذا الحساب") : store.text("No matching horses", "لا توجد خيول مطابقة"), symbol: "figure.equestrian.sports")
+                if search.isEmpty && !store.allowed("horses") {
+                    Section(store.text("Horse owner account", "حساب مالك الخيل")) {
+                        Text(store.account?.email ?? "").textSelection(.enabled)
+                        Text(store.stable?.display(store.arabic) ?? "")
+                        Text(store.text("Ask the academy to check that your horse's registered owner is this account in this academy.", "اطلب من الأكاديمية التحقق من ربط مالك حصانك بهذا الحساب في هذه الأكاديمية.")).font(.caption).foregroundStyle(.secondary)
+                        Button(store.text("Refresh horses", "تحديث الخيل")) { Task { await store.reload() } }.disabled(store.busy)
+                    }
+                }
+            }
             ForEach(horses) { horse in
                 NavigationLink { HorseDetailView(horse: horse) } label: {
                     HStack(spacing: 16) {

@@ -32,8 +32,13 @@ import SwiftUI
         let ids = Set(owned.map(\.id))
         return owned + data.horses.filter { $0.ownerId == accountID && !ids.contains($0.id) }
     }
-    var canBrowseHorses: Bool { !isStaff || allowed("horses") || !ownedHorses.isEmpty }
-    var directoryHorses: [Horse] { isStaff && allowed("horses") ? data.horses : ownedHorses }
+    var canBrowseHorses: Bool { account != nil }
+    var directoryHorses: [Horse] {
+        let owned = ownedHorses
+        guard isStaff && allowed("horses") else { return owned }
+        let ownedIDs = Set(owned.map(\.id))
+        return owned + data.horses.filter { !ownedIDs.contains($0.id) }
+    }
     func instructor(for session: RidingSession) -> Instructor? { data.instructors.first { $0.id == session.instructorId || $0.name == session.instructor || $0.nameEn == session.instructor || $0.nameAr == session.instructor } }
     func canView(_ invoice: Invoice) -> Bool { invoice.member_id == account?.id || allowed("billing") }
     func canView(_ booking: Booking) -> Bool { booking.member_id == account?.id || allowed("classes") }

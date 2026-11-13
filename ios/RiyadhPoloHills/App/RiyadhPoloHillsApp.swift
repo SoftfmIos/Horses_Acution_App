@@ -47,7 +47,7 @@ struct MainTabs: View {
                 NavigationStack { SessionsView() }.tabItem { Label(store.text("Bookings", "الحجوزات"), systemImage: "calendar") }
             }
             if store.canBrowseHorses {
-                NavigationStack { HorsesView() }.tabItem { Label(store.text("Horses", "الخيل"), systemImage: "figure.equestrian.sports") }
+                NavigationStack { HorsesView() }.tabItem { Label(store.allowed("horses") ? store.text("Horses", "الخيل") : store.text("My horses", "خيولي"), systemImage: "figure.equestrian.sports") }
             }
             if store.allowed("tasks") {
                 NavigationStack { TasksView() }.tabItem { Label(store.text("Tasks", "المهام"), systemImage: "checklist") }

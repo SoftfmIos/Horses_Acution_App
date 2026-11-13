@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.5 (19)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.6 (20)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -86,7 +86,11 @@ Use Apple's Standard EULA in App Store Connect. No custom license text is requir
 
 ## Codemagic version declaration
 
-The signed workflow declares `APP_VERSION: "1.1.5"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+The signed workflow declares `APP_VERSION: "1.1.6"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+
+## Horse visibility and cache request compilation (1.1.6)
+
+Builds the fresh URL query items in a separate local array to satisfy Swift's exclusive-access rules. My horses stays available for every signed-in member/staff account, while academy-wide horses still require the horses grant. The staff directory merges the authenticated owned-horse collection with the permitted catalogue without duplicates. Empty ownership views show the current account/academy and explain how to verify the registered owner link. Refresh-path regression tests cover members and staff without management grants.
 
 ## Fresh account requests (1.1.5)
 
