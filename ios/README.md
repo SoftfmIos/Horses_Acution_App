@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.3 (17)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.4 (18)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -86,7 +86,11 @@ Use Apple's Standard EULA in App Store Connect. No custom license text is requir
 
 ## Codemagic version declaration
 
-The signed workflow declares `APP_VERSION: "1.1.3"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+The signed workflow declares `APP_VERSION: "1.1.4"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+
+## Simulator session tests (1.1.4)
+
+Account-switching tests inject a per-test in-memory session store instead of accessing Keychain from the unsigned simulator runner. The application continues to use Keychain by default, including production simulator/device builds. Tests assert that logout removes the persisted token and the next login saves the new account's token. A separate failure scenario verifies that a failed secure-store save leaves the user signed out.
 
 ## Account switching and owned horses (1.1.3)
 

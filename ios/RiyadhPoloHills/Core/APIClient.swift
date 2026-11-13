@@ -21,6 +21,7 @@ enum APIError: LocalizedError {
 @MainActor final class APIClient: NSObject, URLSessionTaskDelegate {
     let configuration: AppConfiguration
     private let sessionConfiguration: URLSessionConfiguration
+    private let tokenStore: any SessionTokenStore
     private var token: String?
     private(set) var sessionRevision = UUID()
     private lazy var session: URLSession = {
@@ -31,21 +32,22 @@ enum APIError: LocalizedError {
         config.timeoutIntervalForRequest = 30
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
-    init(configuration: AppConfiguration = .current, sessionConfiguration: URLSessionConfiguration = .ephemeral) {
+    init(configuration: AppConfiguration = .current, sessionConfiguration: URLSessionConfiguration = .ephemeral, tokenStore: any SessionTokenStore = KeychainSessionTokenStore()) {
         self.configuration = configuration
         self.sessionConfiguration = sessionConfiguration
-        self.token = SessionVault.load(server: configuration.apiOrigin.absoluteString)
+        self.tokenStore = tokenStore
+        self.token = tokenStore.load(server: configuration.apiOrigin.absoluteString)
         super.init()
     }
     var hasSession: Bool { token != nil }
     func clearSession() {
         sessionRevision = UUID()
         token = nil
-        SessionVault.clear(server: configuration.apiOrigin.absoluteString)
+        tokenStore.clear(server: configuration.apiOrigin.absoluteString)
     }
     func endSession() -> Task<Void, Never> {
         // Revoke only the old token; its response must never affect a subsequent login.
-        let revoker = APIClient(configuration: configuration, sessionConfiguration: sessionConfiguration)
+        let revoker = APIClient(configuration: configuration, sessionConfiguration: sessionConfiguration, tokenStore: tokenStore)
         revoker.token = token
         let hadSession = hasSession
         clearSession()
@@ -86,7 +88,7 @@ enum APIError: LocalizedError {
                 if let key = pair.key as? String, let value = pair.value as? String { result[key] = value }
             }
             guard let cookie = HTTPCookie.cookies(withResponseHeaderFields: headers, for: url).first(where: { $0.name == "rp_session" }) else { throw APIError.invalidResponse }
-            try SessionVault.save(cookie.value, server: configuration.apiOrigin.absoluteString)
+            try tokenStore.save(cookie.value, server: configuration.apiOrigin.absoluteString)
             token = cookie.value
             sessionRevision = UUID()
         }

@@ -1,6 +1,18 @@
 import Foundation
 import Security
 
+protocol SessionTokenStore {
+    func load(server: String) -> String?
+    func save(_ value: String, server: String) throws
+    func clear(server: String)
+}
+
+struct KeychainSessionTokenStore: SessionTokenStore {
+    func load(server: String) -> String? { SessionVault.load(server: server) }
+    func save(_ value: String, server: String) throws { try SessionVault.save(value, server: server) }
+    func clear(server: String) { SessionVault.clear(server: server) }
+}
+
 enum SessionVault {
     static func query(_ server: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,

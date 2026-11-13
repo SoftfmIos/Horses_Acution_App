@@ -7,24 +7,43 @@ final class AcademyTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AccountSwitchURLProtocol.self]
         let origin = try XCTUnwrap(URL(string: "https://native-account-switch.example.test"))
-        let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration)
+        let tokens = TestSessionTokenStore()
+        let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration, tokenStore: tokens)
         let store = AcademyStore(api: api)
         await store.signIn(email: "staff@example.test", password: "Test only")
         XCTAssertEqual(store.account?.id, "staff")
+        XCTAssertEqual(tokens.load(server: origin.absoluteString), "staff-token")
         store.busy = true // Logout must remain available during a background refresh.
         await store.signOut()
         XCTAssertNil(store.account)
         XCTAssertFalse(api.hasSession)
+        XCTAssertNil(tokens.load(server: origin.absoluteString))
         XCTAssertFalse(store.busy)
         XCTAssertTrue(store.data.horses.isEmpty)
         await store.signIn(email: "member@example.test", password: "Test only")
         XCTAssertEqual(store.account?.id, "member")
         XCTAssertEqual(store.account?.email, "member@example.test")
+        XCTAssertEqual(tokens.load(server: origin.absoluteString), "member-token")
         XCTAssertNil(store.error)
         await store.signOut()
         await store.signIn(email: "wrong@example.test", password: "Test only")
         XCTAssertNil(store.account, "A server response for another account must never be displayed")
         XCTAssertFalse(api.hasSession)
+        XCTAssertNotNil(store.error)
+        XCTAssertNil(tokens.load(server: origin.absoluteString))
+    }
+    @MainActor func testLoginDoesNotRetainSessionWhenSecureStorageFails() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AccountSwitchURLProtocol.self]
+        let origin = try XCTUnwrap(URL(string: "https://native-account-switch.example.test"))
+        let tokens = TestSessionTokenStore()
+        tokens.failSaving = true
+        let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration, tokenStore: tokens)
+        let store = AcademyStore(api: api)
+        await store.signIn(email: "staff@example.test", password: "Test only")
+        XCTAssertNil(store.account)
+        XCTAssertFalse(api.hasSession)
+        XCTAssertNil(tokens.load(server: origin.absoluteString))
         XCTAssertNotNil(store.error)
     }
     @MainActor func testOwnedHorsesRemainVisibleForMembersAndStaffWithoutHorseGrants() throws {
@@ -161,6 +180,17 @@ final class AcademyTests: XCTestCase {
         XCTAssertFalse(store.allowed("tasks", "edit"), "A newly revoked grant must not fall back to stale login permissions")
 
     }
+}
+
+private final class TestSessionTokenStore: SessionTokenStore {
+    private var tokens: [String: String] = [:]
+    var failSaving = false
+    func load(server: String) -> String? { tokens[server] }
+    func save(_ value: String, server: String) throws {
+        if failSaving { throw SessionVault.VaultError.failed }
+        tokens[server] = value
+    }
+    func clear(server: String) { tokens.removeValue(forKey: server) }
 }
 
 private final class AccountSwitchURLProtocol: URLProtocol {
