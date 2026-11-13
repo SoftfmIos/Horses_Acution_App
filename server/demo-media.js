@@ -142,11 +142,24 @@ export async function commonsPhoto(
     `No suitable CC0/public-domain image found for '${query}'. No database changes were made. Retry later or provide a local photo folder.`,
   );
 }
-function target(db, academyId) {
-  const keeper = db
-    .prepare("SELECT id FROM users WHERE lower(email)=?")
-    .get(DEMO_KEEP_EMAIL);
-  if (!keeper) throw new Error("Abdul account not found. No data changed.");
+function target(db, academyId, adminEmail) {
+  const emails = adminEmail
+    ? [adminEmail.trim().toLowerCase()]
+    : ["a.alsagier@riyadhpolohills.com", DEMO_KEEP_EMAIL];
+  const matches = db
+    .prepare(
+      `SELECT id,email FROM users WHERE lower(email) IN (${emails.map(() => "?").join(",")})`,
+    )
+    .all(...emails);
+  if (!matches.length)
+    throw new Error(
+      "Demo administrator account not found. Use --admin-email with your current login email. No data changed.",
+    );
+  if (matches.length !== 1)
+    throw new Error(
+      "Multiple administrator email matches. Select the current administrator using --admin-email. No data changed.",
+    );
+  const keeper = matches[0];
   const eligible = db
     .prepare(
       "SELECT o.id,o.name,r.data FROM organizations o JOIN memberships m ON m.org_id=o.id JOIN system_admins a ON a.org_id=o.id AND a.user_id=m.user_id JOIN records r ON r.org_id=o.id AND r.kind='academySettings' WHERE m.user_id=? AND m.role='owner'",
@@ -216,6 +229,7 @@ function target(db, academyId) {
 export async function importDemoMedia({
   databasePath,
   academyId,
+  adminEmail,
   preview = false,
   replace = false,
   root = assetRoot,
@@ -238,9 +252,10 @@ export async function importDemoMedia({
   let db = new DatabaseSync(databasePath, { readOnly: preview });
   let locked = false;
   try {
-    const before = target(db, academyId),
+    const before = target(db, academyId, adminEmail),
       summary = {
         academyId: before.org.id,
+        adminEmail: before.keeper.email,
         academy: before.org.name,
         plannedPhotos: 37,
         plannedDocuments: 24,
@@ -362,7 +377,7 @@ export async function importDemoMedia({
       "PRAGMA foreign_keys=ON; PRAGMA busy_timeout=10000; BEGIN IMMEDIATE",
     );
     locked = true;
-    const current = target(db, academyId);
+    const current = target(db, academyId, adminEmail);
     if (
       current.org.id !== before.org.id ||
       current.keeper.id !== before.keeper.id

@@ -6,6 +6,7 @@ try {
       preview: { type: "boolean", default: false },
       replace: { type: "boolean", default: false },
       "academy-id": { type: "string" },
+      "admin-email": { type: "string" },
       "photos-dir": { type: "string" },
     },
   });
@@ -14,6 +15,7 @@ try {
     preview: values.preview,
     replace: values.replace,
     academyId: values["academy-id"],
+    adminEmail: values["admin-email"],
     localPhotosDirectory: values["photos-dir"],
     log: (message) => console.log(message),
   });

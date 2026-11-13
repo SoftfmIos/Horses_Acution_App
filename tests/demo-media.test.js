@@ -70,6 +70,16 @@ test("photo/document import preserves every account and transaction, links bilin
   });
   db.close();
   await resetDemo({ databasePath: path, apply: true, day: "2026-11-13" });
+  const oldPreview = await importDemoMedia({
+    databasePath: path,
+    preview: true,
+  });
+  assert.equal(oldPreview.adminEmail, "abdul@softfm.com");
+  const changed = new DatabaseSync(path);
+  changed
+    .prepare("UPDATE users SET email=? WHERE email=?")
+    .run("a.alsagier@riyadhpolohills.com", "abdul@softfm.com");
+  changed.close();
   const snapshot = () => {
     const data = new DatabaseSync(path);
     try {
@@ -95,6 +105,33 @@ test("photo/document import preserves every account and transaction, links bilin
   const before = snapshot();
   const preview = await importDemoMedia({ databasePath: path, preview: true });
   assert.equal(preview.plannedPhotos, 37);
+  assert.equal(preview.adminEmail, "a.alsagier@riyadhpolohills.com");
+  const ambiguous = new DatabaseSync(path);
+  ambiguous
+    .prepare(
+      "INSERT INTO users(id,email,name,password,created_at) VALUES(?,?,?,?,?)",
+    )
+    .run(
+      "old-address-user",
+      "abdul@softfm.com",
+      "Different old-address account",
+      "not-a-login-hash",
+      "2026-11-13T00:00:00Z",
+    );
+  ambiguous.close();
+  await assert.rejects(
+    importDemoMedia({ databasePath: path, preview: true }),
+    /Multiple administrator email matches/,
+  );
+  const selected = await importDemoMedia({
+    databasePath: path,
+    preview: true,
+    adminEmail: "a.alsagier@riyadhpolohills.com",
+  });
+  assert.equal(selected.adminEmail, "a.alsagier@riyadhpolohills.com");
+  const cleanup = new DatabaseSync(path);
+  cleanup.prepare("DELETE FROM users WHERE id='old-address-user'").run();
+  cleanup.close();
   assert.deepEqual(snapshot(), before);
   await assert.rejects(
     importDemoMedia({
