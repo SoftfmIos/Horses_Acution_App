@@ -104,8 +104,6 @@ struct HorseProfileData: Decodable {
         tasks = try c.decodeIfPresent([CareTask].self, forKey: .tasks) ?? []
         documents = try c.decodeIfPresent([HorseDocument].self, forKey: .documents) ?? []
         boarding = try c.decodeIfPresent([BoardingStay].self, forKey: .boarding) ?? []
-        stalls = try c.decodeIfPresent([Stall].self, forKey: .stalls) ?? []
-        stallOccupancy = try c.decodeIfPresent([StallOccupancy].self, forKey: .stallOccupancy) ?? []
         bookings = try c.decodeIfPresent([HorseRide].self, forKey: .bookings) ?? []
     }
 }
@@ -134,6 +132,8 @@ struct AcademyData: Decodable {
         instructors = try c.decodeIfPresent([Instructor].self, forKey: .instructors) ?? []
         creditLedger = try c.decodeIfPresent([CreditEntry].self, forKey: .creditLedger) ?? []
         boarding = try c.decodeIfPresent([BoardingStay].self, forKey: .boarding) ?? []
+        stalls = try c.decodeIfPresent([Stall].self, forKey: .stalls) ?? []
+        stallOccupancy = try c.decodeIfPresent([StallOccupancy].self, forKey: .stallOccupancy) ?? []
         myInstructorProfiles = try c.decodeIfPresent([InstructorIdentity].self, forKey: .myInstructorProfiles) ?? []
         emailConfigured = try c.decodeIfPresent(Bool.self, forKey: .emailConfigured) ?? false
         creditBalance = try c.decodeIfPresent(Int.self, forKey: .creditBalance) ?? 0

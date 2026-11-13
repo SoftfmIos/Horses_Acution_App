@@ -1,6 +1,6 @@
 # Apple Developer → Codemagic → TestFlight
 
-The native app is **Riyadh Polo Hills**, version **1.1.0**, branch **iOSApp**. It uses bundle ID **com.riyadhpolohills.academy** and the website **https://app.riyadhpolohills.com**. Administrative settings stay in the web portal.
+The native app is **Riyadh Polo Hills**, version **1.1.1**, branch **iOSApp**. It uses bundle ID **com.riyadhpolohills.academy** and the website **https://app.riyadhpolohills.com**. Administrative settings stay in the web portal.
 
 ## 1. Register the Bundle ID in Apple Developer
 

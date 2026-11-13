@@ -3,7 +3,7 @@ import UIKit
 @MainActor enum AcademyTextDocument {
     static func create(title: String, lines: [String], arabic: Bool) throws -> URL {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842))
-        let data = renderer.pdfData { context in
+        let data: Data = renderer.pdfData { context in
             var y: CGFloat = 55
             func beginPage() {
                 context.beginPage(); y = 55
@@ -14,7 +14,7 @@ import UIKit
             let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12), .paragraphStyle: paragraph]
             for line in lines {
                 let text = line as NSString
-                let height = max(22, text.boundingRect(with: CGSize(width: 515, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil).height + 10)
+                let height: CGFloat = max(22, text.boundingRect(with: CGSize(width: 515, height: CGFloat.greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil).height + 10)
                 if y + height > 795 { beginPage() }
                 text.draw(in: CGRect(x: 40, y: y, width: 515, height: height), withAttributes: attributes); y += height
             }
@@ -22,7 +22,7 @@ import UIKit
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("AccountExports")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appendingPathComponent("Riyadh-Polo-Hills-" + UUID().uuidString + ".pdf")
-        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        try data.write(to: url, options: Data.WritingOptions([.atomic, .completeFileProtection]))
         return url
     }
 }

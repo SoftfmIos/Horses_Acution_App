@@ -1,7 +1,28 @@
 import XCTest
+import PDFKit
 @testable import RiyadhPoloHills
 
 final class AcademyTests: XCTestCase {
+    func testAcademySnapshotDecodesStallAvailability() throws {
+        let payload = Data(#"{"stalls":[{"id":"stall","name":"A","capacity":2,"active":true}],"stallOccupancy":[{"id":"stay","stallId":"stall","status":"active","startDate":"2026-11-01","endDate":"2026-11-30"}]}"#.utf8)
+        let snapshot = try JSONDecoder().decode(AcademyData.self, from: payload)
+        let stall = try XCTUnwrap(snapshot.stalls.first)
+        XCTAssertEqual(snapshot.stallOccupancy.count, 1)
+        XCTAssertEqual(StallSlots.available(stall, stays: snapshot.stallOccupancy, from: "2026-11-13", to: "2026-11-14"), 1)
+        let empty = try JSONDecoder().decode(AcademyData.self, from: Data("{}".utf8))
+        XCTAssertTrue(empty.stalls.isEmpty)
+        XCTAssertTrue(empty.stallOccupancy.isEmpty)
+    }
+    @MainActor func testAccountPDFExportProducesReadableMultiplePages() throws {
+        for arabic in [false, true] {
+            let line = arabic ? "سجل الحساب والحصص" : "Account and session history"
+            let url = try AcademyTextDocument.create(title: line, lines: Array(repeating: line, count: 100), arabic: arabic)
+            defer { try? FileManager.default.removeItem(at: url) }
+            let document = try XCTUnwrap(PDFDocument(url: url))
+            XCTAssertGreaterThan(document.pageCount, 1)
+            XCTAssertTrue(document.page(at: 0)?.string?.contains("Riyadh Polo Hills") == true)
+        }
+    }
     func testRealBackendContractFixtures() throws {
         for name in ["member-data", "staff-data"] {
             let url = try XCTUnwrap(Bundle(for: AcademyTests.self).url(forResource: name, withExtension: "json"))
