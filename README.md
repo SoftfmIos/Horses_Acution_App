@@ -76,6 +76,8 @@ In-app notifications work without external services. To enable email, configure 
 
 To replace the existing database with fictional demonstration data while preserving only `abdul@softfm.com`, use the explicit server-side [demo reset instructions](docs/DEMO_RESET.md). Deployment alone never resets data. The preview, automatic backup and transactional replacement are separate from ordinary schema updates.
 
+To add photos, user avatars and linked bilingual horse PDFs to an **existing demo dataset**, use `npm run demo:media` and the [photo/document instructions](docs/DEMO_MEDIA.md). This command preserves users, passwords, bookings and balances; it does not run the reset.
+
 Run one Node instance against a persistent local disk and terminate HTTPS at a reverse proxy. Set `NODE_ENV=production`, `PUBLIC_ORIGIN=https://your-approved-domain`, and an absolute persistent `DATABASE_PATH`. This is a **single-instance SQLite architecture**, not a horizontally scaled service. Keep the process running for reminder jobs. Back up the database consistently using SQLite's backup API (`npm run db:backup -- /secure/path/academy.sqlite`) or stop the process before copying the database and WAL files together. Backups contain account and business records; restrict access and verify restores in an isolated environment.
 
 ```sh

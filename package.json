@@ -1,6 +1,6 @@
 {
   "name": "riyadh-polo-club-academy",
-  "version": "1.31.0",
+  "version": "1.31.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,8 @@
     "test:stable-browser": "node tests/stable-features.mjs",
     "version:next": "npm version minor --no-git-tag-version",
     "demo:preview": "node --env-file-if-exists=.env scripts/reset-demo.mjs",
-    "demo:reset": "node --env-file-if-exists=.env scripts/reset-demo.mjs --apply"
+    "demo:reset": "node --env-file-if-exists=.env scripts/reset-demo.mjs --apply",
+    "demo:media": "node --env-file-if-exists=.env scripts/import-demo-media.mjs"
   },
   "dependencies": {
     "express": "^5.3.0",
