@@ -43,6 +43,18 @@ enum APIError: LocalizedError {
         token = nil
         SessionVault.clear(server: configuration.apiOrigin.absoluteString)
     }
+    func endSession() -> Task<Void, Never> {
+        // Revoke only the old token; its response must never affect a subsequent login.
+        let revoker = APIClient(configuration: configuration, sessionConfiguration: sessionConfiguration)
+        revoker.token = token
+        let hadSession = hasSession
+        clearSession()
+        return Task { @MainActor in
+            guard hadSession else { return }
+            defer { revoker.session.finishTasksAndInvalidate() }
+            let _: APIResult? = try? await revoker.send("auth/logout", method: "POST")
+        }
+    }
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask,
         willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
         completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
@@ -56,7 +68,7 @@ enum APIError: LocalizedError {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("RiyadhAcademy", forHTTPHeaderField: "X-Requested-With")
         request.setValue(configuration.websiteOrigin.absoluteString, forHTTPHeaderField: "Origin")
-        if let token { request.setValue("rp_session=\(token)", forHTTPHeaderField: "Cookie") }
+        if path != "auth/login", let token { request.setValue("rp_session=\(token)", forHTTPHeaderField: "Cookie") }
         if let stableID { request.setValue(stableID, forHTTPHeaderField: "X-Stable-Id") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let revision = sessionRevision
@@ -68,6 +80,7 @@ enum APIError: LocalizedError {
             let error = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             throw APIError.message(error?["error"] as? String ?? "Request failed (\(response.statusCode)). / تعذر إكمال الطلب.")
         }
+        let decoded = try JSONDecoder().decode(T.self, from: data)
         if path == "auth/login" {
             let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in
                 if let key = pair.key as? String, let value = pair.value as? String { result[key] = value }
@@ -77,6 +90,6 @@ enum APIError: LocalizedError {
             token = cookie.value
             sessionRevision = UUID()
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return decoded
     }
 }

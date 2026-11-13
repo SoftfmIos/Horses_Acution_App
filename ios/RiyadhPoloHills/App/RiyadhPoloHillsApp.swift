@@ -46,7 +46,7 @@ struct MainTabs: View {
             if !store.isStaff || store.allowed("classes") {
                 NavigationStack { SessionsView() }.tabItem { Label(store.text("Bookings", "الحجوزات"), systemImage: "calendar") }
             }
-            if !store.isStaff || store.allowed("horses") {
+            if store.canBrowseHorses {
                 NavigationStack { HorsesView() }.tabItem { Label(store.text("Horses", "الخيل"), systemImage: "figure.equestrian.sports") }
             }
             if store.allowed("tasks") {

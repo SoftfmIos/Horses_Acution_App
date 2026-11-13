@@ -45,7 +45,7 @@ struct HomeView: View {
                     if upcoming.isEmpty { EmptyMessage(title: store.text("No upcoming bookings", "لا توجد حجوزات قادمة"), symbol: "calendar") }
                     ForEach(Array(upcoming.prefix(5))) { booking in NavigationLink { BookingDetailView(booking: booking) } label: { BookingCard(booking: booking) }.buttonStyle(.plain) }
                 }
-                if !store.ownedHorses.isEmpty && (!store.isStaff || store.allowed("horses")) {
+                if !store.ownedHorses.isEmpty {
                     Text(store.text("Your horses", "خيولك")).font(.title2.bold())
                     ForEach(Array(store.ownedHorses.prefix(3))) { horse in
                         NavigationLink { HorseDetailView(horse: horse) } label: { AcademyCard { HStack(spacing: 16) { AcademyPhoto(kind: "horses", id: horse.id, size: 66); VStack(alignment: .leading, spacing: 5) { Text(horse.display(store.arabic)).font(.headline); Text(horse.breed ?? "").font(.caption).foregroundStyle(.secondary) }; Spacer(); Image(systemName: "chevron.forward").font(.caption) } } }.buttonStyle(.plain)

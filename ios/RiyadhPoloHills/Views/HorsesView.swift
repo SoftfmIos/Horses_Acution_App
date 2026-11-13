@@ -17,7 +17,7 @@ struct HorsesView: View {
                     }.padding(.vertical, 8)
                 }
             }
-        }.scrollContentBackground(.hidden).background(Brand.ivory).navigationTitle(store.isStaff ? store.text("Horses", "الخيل") : store.text("My horses", "خيولي"))
+        }.scrollContentBackground(.hidden).background(Brand.ivory).navigationTitle(store.allowed("horses") ? store.text("Horses", "الخيل") : store.text("My horses", "خيولي"))
             .searchable(text: $search, prompt: store.text("Search horses", "البحث عن الخيل")).refreshable { await store.reload() }
     }
 }
@@ -70,7 +70,12 @@ struct HorseDetailView: View {
             LabeledContent(store.text("Date of birth", "تاريخ الميلاد"), value: AcademyDates.dayDisplay(current.birthDate, arabic: store.arabic))
             if let name = profile.ownerName?.nonempty { LabeledContent(store.text("Owner", "المالك"), value: name) }
             if let instructor = profile.instructor { HStack(spacing: 12) { AcademyPhoto(kind: "instructors", id: instructor.id, symbol: "person.fill", size: 48); VStack(alignment: .leading) { Text(store.text("Instructor", "المدرب")).font(.caption).foregroundStyle(.secondary); Text(instructor.display(store.arabic)) } } }
-            if let notes = current.notes?.nonempty { Text(notes) }
+            if let notes = current.notes?.nonempty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.text("Notes", "ملاحظات")).font(.headline)
+                    Text(notes).textSelection(.enabled)
+                }
+            }
             HStack { Label("\(profile.medical.count)", systemImage: "cross.case"); Spacer(); Label("\(profile.documents.count)", systemImage: "doc"); Spacer(); Label("\(profile.bookings.count)", systemImage: "calendar") }.font(.caption).foregroundStyle(.secondary)
         }
     }

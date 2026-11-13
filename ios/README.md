@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.2 (16)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.3 (17)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -86,7 +86,13 @@ Use Apple's Standard EULA in App Store Connect. No custom license text is requir
 
 ## Codemagic version declaration
 
-The signed workflow declares `APP_VERSION: "1.1.2"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+The signed workflow declares `APP_VERSION: "1.1.3"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+
+## Account switching and owned horses (1.1.3)
+
+Sign-out clears local identity and Keychain immediately, including when offline or while a refresh is active. Server revocation uses a separate client holding only the old token. New login requests omit previous cookies and verify the returned email before displaying the account; outdated operations cannot clear a newer login.
+
+Owned horses remain visible for members and staff without academy horse-management grants. The app uses the backend's dedicated ownedHorses collection with a fallback for older servers, and labels horse-card notes in both languages. Deploy backend/web 1.30.1 for complete staff ownership/profile access. Native regression scenarios cover offline logout, switching staff/member accounts, rejecting a mismatched identity and owned-horse visibility without management grants.
 
 ## Balance and refresh fixes (1.1.2)
 

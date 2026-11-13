@@ -3,6 +3,46 @@ import PDFKit
 @testable import RiyadhPoloHills
 
 final class AcademyTests: XCTestCase {
+    @MainActor func testAccountSwitchClearsOldIdentityEvenWhenLogoutIsOffline() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AccountSwitchURLProtocol.self]
+        let origin = try XCTUnwrap(URL(string: "https://native-account-switch.example.test"))
+        let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration)
+        let store = AcademyStore(api: api)
+        await store.signIn(email: "staff@example.test", password: "Test only")
+        XCTAssertEqual(store.account?.id, "staff")
+        store.busy = true // Logout must remain available during a background refresh.
+        await store.signOut()
+        XCTAssertNil(store.account)
+        XCTAssertFalse(api.hasSession)
+        XCTAssertFalse(store.busy)
+        XCTAssertTrue(store.data.horses.isEmpty)
+        await store.signIn(email: "member@example.test", password: "Test only")
+        XCTAssertEqual(store.account?.id, "member")
+        XCTAssertEqual(store.account?.email, "member@example.test")
+        XCTAssertNil(store.error)
+        await store.signOut()
+        await store.signIn(email: "wrong@example.test", password: "Test only")
+        XCTAssertNil(store.account, "A server response for another account must never be displayed")
+        XCTAssertFalse(api.hasSession)
+        XCTAssertNotNil(store.error)
+    }
+    @MainActor func testOwnedHorsesRemainVisibleForMembersAndStaffWithoutHorseGrants() throws {
+        let payload = Data(#"{"userRole":"staff","permissions":[],"horses":[{"id":"school","name":"School"}],"ownedHorses":[{"id":"own","name":"Owned horse","ownerId":"rider","notes":"Owner care notes"},{"id":"other","name":"Other horse","ownerId":"someone-else"}]}"#.utf8)
+        for role in ["member", "staff"] {
+            let store = AcademyStore()
+            store.account = try JSONDecoder().decode(Account.self, from: Data(#"{"id":"rider","name":"Rider","email":"rider@example.test"}"#.utf8))
+            store.stable = try JSONDecoder().decode(Stable.self, from: JSONSerialization.data(withJSONObject: ["id":"academy", "name":"Academy", "role":role]))
+            var snapshot = try JSONDecoder().decode(AcademyData.self, from: payload)
+            snapshot.userRole = role
+            store.data = role == "member" ? snapshot.memberView(accountID: "rider") : snapshot
+            store.snapshotLoaded = true
+            XCTAssertTrue(store.canBrowseHorses)
+            XCTAssertEqual(store.directoryHorses.map(\.id), ["own"])
+            XCTAssertEqual(store.ownedHorses.first?.notes, "Owner care notes")
+            XCTAssertFalse(store.allowed("horses", "edit"))
+        }
+    }
     @MainActor func testRefreshSurvivesCancelledViewTaskAndLoadsAuthoritativeBalance() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [BalanceRefreshURLProtocol.self]
@@ -121,6 +161,47 @@ final class AcademyTests: XCTestCase {
         XCTAssertFalse(store.allowed("tasks", "edit"), "A newly revoked grant must not fall back to stale login permissions")
 
     }
+}
+
+private final class AccountSwitchURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "native-account-switch.example.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url else { return }
+        if url.path == "/api/auth/logout" {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet)); return
+        }
+        var headers = ["Content-Type": "application/json"]
+        let payload: String
+        if url.path == "/api/auth/login" {
+            guard request.value(forHTTPHeaderField: "Cookie") == nil else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse)); return
+            }
+            // URLSession may expose the JSON body as a stream to URLProtocol.
+            var bytes = request.httpBody ?? Data()
+            if bytes.isEmpty, let stream = request.httpBodyStream {
+                stream.open(); defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }; bytes.append(contentsOf: buffer.prefix(count))
+                }
+            }
+            let body = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: String]
+            let token = body?["email"] == "member@example.test" ? "member-token" : "staff-token"
+            headers["Set-Cookie"] = "rp_session=\(token); Path=/; Secure; HttpOnly"
+            payload = #"{"ok":true}"#
+        } else {
+            let member = request.value(forHTTPHeaderField: "Cookie") == "rp_session=member-token"
+            let id = member ? "member" : "staff"
+            payload = "{\"user\":{\"id\":\"\(id)\",\"name\":\"Test user\",\"email\":\"\(id)@example.test\"},\"stables\":[]}"
+        }
+        guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: headers) else { return }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(payload.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() { }
 }
 
 private final class BalanceRefreshURLProtocol: URLProtocol {

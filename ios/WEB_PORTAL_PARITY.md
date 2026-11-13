@@ -1,6 +1,6 @@
-# Web portal and native iOS comparison — 1.1.2
+# Web portal and native iOS comparison — 1.1.3
 
-Backend/web prerequisite: **1.30.0**. Native version: **1.1.2**, base build **16** (Codemagic assigns a newer unused build when needed).
+Backend/web prerequisite: **1.30.1**. Native version: **1.1.3**, base build **17** (Codemagic assigns a newer unused build when needed).
 
 | Flow | Member app | Staff app |
 | --- | --- | --- |

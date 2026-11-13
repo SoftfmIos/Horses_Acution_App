@@ -113,13 +113,14 @@ struct AcademyData: Decodable {
     var sessionBalance: SessionBalance?
     var classes: [RidingSession] = []; var bookings: [Booking] = []; var plans: [PricePlan] = []
     var proformas: [Invoice] = []; var payments: [Payment] = []; var horses: [Horse] = []
+    var ownedHorses: [Horse] = []
     var tasks: [CareTask] = []; var notifications: [InboxItem] = []; var members: [Member] = []
     var instructors: [Instructor] = []; var creditLedger: [CreditEntry] = []; var boarding: [BoardingStay] = []; var stalls: [Stall] = []; var stallOccupancy: [StallOccupancy] = []
     var myInstructorProfiles: [InstructorIdentity] = []
     var creditBalance: Int = 0; var isAdmin: Bool = false; var userRole: String?; var emailConfigured = false
     var permissions: [String] = []; var actionPermissions: [String: [String]] = [:]
     init() {}
-    enum CodingKeys: String, CodingKey { case emailConfigured, classes, bookings, plans, proformas, payments, horses, tasks, notifications, members, instructors, creditLedger, boarding, stalls, stallOccupancy, myInstructorProfiles, creditBalance, isAdmin, userRole, permissions, actionPermissions }
+    enum CodingKeys: String, CodingKey { case ownedHorses, emailConfigured, classes, bookings, plans, proformas, payments, horses, tasks, notifications, members, instructors, creditLedger, boarding, stalls, stallOccupancy, myInstructorProfiles, creditBalance, isAdmin, userRole, permissions, actionPermissions }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         classes = try c.decodeIfPresent([RidingSession].self, forKey: .classes) ?? []
@@ -128,6 +129,7 @@ struct AcademyData: Decodable {
         proformas = try c.decodeIfPresent([Invoice].self, forKey: .proformas) ?? []
         payments = try c.decodeIfPresent([Payment].self, forKey: .payments) ?? []
         horses = try c.decodeIfPresent([Horse].self, forKey: .horses) ?? []
+        ownedHorses = try c.decodeIfPresent([Horse].self, forKey: .ownedHorses) ?? []
         tasks = try c.decodeIfPresent([CareTask].self, forKey: .tasks) ?? []
         notifications = try c.decodeIfPresent([InboxItem].self, forKey: .notifications) ?? []
         members = try c.decodeIfPresent([Member].self, forKey: .members) ?? []
@@ -212,6 +214,11 @@ extension AcademyData {
         let classIDs = Set(view.bookings.map(\.class_id)), horseIDs = Set(view.bookings.compactMap(\.horse_id))
         view.classes = classes.filter { $0.isUpcoming || classIDs.contains($0.id) }
         view.horses = horses.filter { $0.ownerId == accountID || horseIDs.contains($0.id) }.map { $0.ownerId == accountID ? $0 : $0.publicSummary }
+        view.ownedHorses = ownedHorses.filter { $0.ownerId == accountID }
+        for horse in view.ownedHorses {
+            view.horses.removeAll { $0.id == horse.id }
+            view.horses.append(horse)
+        }
         view.proformas = proformas.filter { $0.member_id == accountID }
         let invoiceIDs = Set(view.proformas.map(\.id))
         view.payments = payments.filter { invoiceIDs.contains($0.proforma_id) }

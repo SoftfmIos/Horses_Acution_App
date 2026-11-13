@@ -8,6 +8,7 @@ import SwiftUI
     @Published var snapshotLoaded = false
     @Published var dataRevision = UUID()
     private var requestGeneration = UUID()
+    private var operationGeneration = UUID()
     private var reloadTask: (id: UUID, task: Task<Void, Never>)?
     @Published var busy = false
     @Published var restoring = true
@@ -25,8 +26,14 @@ import SwiftUI
     }
     var visibleBookings: [Booking] { isStaff && allowed("classes") ? data.bookings : data.bookings.filter { $0.member_id == account?.id } }
     var visibleInvoices: [Invoice] { isStaff && allowed("billing") ? data.proformas : data.proformas.filter { $0.member_id == account?.id } }
-    var ownedHorses: [Horse] { data.horses.filter { $0.ownerId == account?.id } }
-    var directoryHorses: [Horse] { isStaff ? (allowed("horses") ? data.horses : []) : ownedHorses }
+    var ownedHorses: [Horse] {
+        guard let accountID = account?.id else { return [] }
+        let owned = data.ownedHorses.filter { $0.ownerId == accountID }
+        let ids = Set(owned.map(\.id))
+        return owned + data.horses.filter { $0.ownerId == accountID && !ids.contains($0.id) }
+    }
+    var canBrowseHorses: Bool { !isStaff || allowed("horses") || !ownedHorses.isEmpty }
+    var directoryHorses: [Horse] { isStaff && allowed("horses") ? data.horses : ownedHorses }
     func instructor(for session: RidingSession) -> Instructor? { data.instructors.first { $0.id == session.instructorId || $0.name == session.instructor || $0.nameEn == session.instructor || $0.nameAr == session.instructor } }
     func canView(_ invoice: Invoice) -> Bool { invoice.member_id == account?.id || allowed("billing") }
     func canView(_ booking: Booking) -> Bool { booking.member_id == account?.id || allowed("classes") }
@@ -66,12 +73,20 @@ import SwiftUI
     }
     func perform(_ work: () async throws -> Void) async {
         guard !busy else { return }
+        let operation = UUID()
+        operationGeneration = operation
         busy = true
         error = nil
-        defer { busy = false }
+        defer { if operationGeneration == operation { busy = false } }
         do { try await work() }
-        catch APIError.unauthorized { clear(); error = APIError.unauthorized.localizedDescription }
-        catch { if !RequestCancellation.matches(error) { self.error = error.localizedDescription } }
+        catch APIError.unauthorized {
+            guard operationGeneration == operation else { return }
+            clear(); error = APIError.unauthorized.localizedDescription
+        }
+        catch {
+            guard operationGeneration == operation else { return }
+            if !RequestCancellation.matches(error) { self.error = error.localizedDescription }
+        }
     }
     func restore() async {
         restoring = true
@@ -80,15 +95,22 @@ import SwiftUI
         await perform { try await loadAccount() }
     }
     func signIn(email: String, password: String) async {
+        guard !busy else { return }
+        clear()
+        let loginEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         await perform {
-            let _: APIResult = try await api.send("auth/login", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password])
-            try await loadAccount()
+            let _: APIResult = try await api.send("auth/login", method: "POST", body: ["email": loginEmail, "password": password])
+            try await loadAccount(expectedEmail: loginEmail)
         }
     }
-    private func loadAccount() async throws {
+    private func loadAccount(expectedEmail: String? = nil) async throws {
         resetSnapshot()
         account = nil; stable = nil; stables = []
         let auth: Authentication = try await api.send("auth/me")
+        if let expectedEmail, auth.user.email.caseInsensitiveCompare(expectedEmail) != .orderedSame {
+            api.clearSession()
+            throw APIError.message(text("The signed-in account did not match your email. Please sign in again.", "الحساب الذي تم تسجيل الدخول إليه لا يطابق بريدك. يرجى تسجيل الدخول مجدداً."))
+        }
         account = auth.user
         stables = auth.stables
         let preferred = UserDefaults.standard.string(forKey: "academy.stable")
@@ -150,12 +172,12 @@ import SwiftUI
         catch { notice = text("Class reminders could not be scheduled. Your booking is saved; reopen the app to retry.", "تعذر جدولة تذكيرات الحصص. حجزك محفوظ؛ أعد فتح التطبيق للمحاولة.") }
     }
     func signOut() async {
-        await perform {
-            let _: APIResult = try await api.send("auth/logout", method: "POST")
-            clear()
-        }
+        let revocation = api.endSession()
+        clear()
+        await revocation.value
     }
     func clear() {
+        operationGeneration = UUID(); busy = false; error = nil
         resetSnapshot()
         api.clearSession()
         account = nil; stable = nil; stables = []; data = AcademyData(); snapshotLoaded = false; notice = nil

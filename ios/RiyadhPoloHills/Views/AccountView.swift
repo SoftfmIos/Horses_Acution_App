@@ -46,7 +46,7 @@ struct AccountView: View {
                 Link(destination: store.api.configuration.websiteOrigin) { Label(store.text("Open academy website", "فتح موقع الأكاديمية"), systemImage: "safari") }
                 NavigationLink { PrivacyView() } label: { Label(store.text("Privacy & your account", "الخصوصية وحسابك"), systemImage: "lock.shield") }
             }
-            Section { Button(store.text("Sign out", "تسجيل الخروج"), role: .destructive) { signOut = true }.disabled(store.busy) }
+            Section { Button(store.text("Sign out", "تسجيل الخروج"), role: .destructive) { signOut = true } }
         }.scrollContentBackground(.hidden).background(Brand.ivory).navigationTitle(store.text("My account", "حسابي"))
             .confirmationDialog(store.text("Sign out of this account?", "تسجيل الخروج من الحساب؟"), isPresented: $signOut, titleVisibility: .visible) {
                 Button(store.text("Sign out", "تسجيل الخروج"), role: .destructive) { Task { await store.signOut() } }
