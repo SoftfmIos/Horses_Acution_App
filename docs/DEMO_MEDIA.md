@@ -1,6 +1,6 @@
 # Add demo photos, user avatars and horse documents — without resetting
 
-Pull `main` version **1.31.1** in cPanel. Keep the existing database and demo users. This command does **not** invoke the reset, change passwords, revoke sessions, recreate bookings or modify payments/balances.
+Pull `main` version **1.31.2** in cPanel. Keep the existing database and demo users. This command does **not** invoke the reset, change passwords, revoke sessions, recreate bookings or modify payments/balances.
 
 Activate the Node 24 environment shown in cPanel and change to the application root:
 
@@ -22,6 +22,14 @@ Add photos and documents:
 ```sh
 npm run demo:media
 ```
+
+The importer recognises Abdul's current email `a.alsagier@riyadhpolohills.com` and the original `abdul@softfm.com`. If both addresses exist as separate accounts, or the administrator changes email again, select the current login explicitly:
+
+```sh
+npm run demo:media -- --admin-email a.alsagier@riyadhpolohills.com
+```
+
+The selected account must still be an administrator of the existing demo academy. Matching uses the existing user ID for photo linkage; the command does not edit the login email or create a replacement account.
 
 The bundled assets need no browser or image-processing software on cPanel. The command downloads the remaining ready-made photos through the Wikimedia Commons API, selecting only CC0/public-domain JPEG/PNG thumbnails, saves a validated private download cache, then backs up the database and imports everything in one transaction. It reports **37 profile photos** and **24 documents** on a new demo dataset. Refresh the website and iOS app afterward; deploy the new web build to see the account-photo control in Account & security.
 
