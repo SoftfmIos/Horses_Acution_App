@@ -3,6 +3,20 @@ import PDFKit
 @testable import RiyadhPoloHills
 
 final class AcademyTests: XCTestCase {
+    @MainActor func testAccountReadsUseUniqueURLsAndExplicitCacheHeaders() async throws {
+        struct Probe: Decodable { let nonce: String; let cacheControl: String; let pragma: String }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AccountSwitchURLProtocol.self]
+        let origin = try XCTUnwrap(URL(string: "https://native-account-switch.example.test"))
+        let api = APIClient(configuration: AppConfiguration(apiOrigin: origin, websiteOrigin: origin), sessionConfiguration: configuration, tokenStore: TestSessionTokenStore())
+        let first: Probe = try await api.send("probe")
+        let second: Probe = try await api.send("probe")
+        XCTAssertNotNil(UUID(uuidString: first.nonce))
+        XCTAssertNotNil(UUID(uuidString: second.nonce))
+        XCTAssertNotEqual(first.nonce, second.nonce)
+        XCTAssertEqual(first.cacheControl, "no-cache, no-store")
+        XCTAssertEqual(first.pragma, "no-cache")
+    }
     @MainActor func testAccountSwitchClearsOldIdentityEvenWhenLogoutIsOffline() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AccountSwitchURLProtocol.self]
@@ -203,7 +217,12 @@ private final class AccountSwitchURLProtocol: URLProtocol {
         }
         var headers = ["Content-Type": "application/json"]
         let payload: String
-        if url.path == "/api/auth/login" {
+        let nonce = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "_fresh" }?.value ?? ""
+        if url.path == "/api/probe" {
+            let probe = ["nonce": nonce, "cacheControl": request.value(forHTTPHeaderField: "Cache-Control") ?? "", "pragma": request.value(forHTTPHeaderField: "Pragma") ?? ""]
+            guard let data = try? JSONSerialization.data(withJSONObject: probe), let text = String(data: data, encoding: .utf8) else { return }
+            payload = text
+        } else if url.path == "/api/auth/login" {
             guard request.value(forHTTPHeaderField: "Cookie") == nil else {
                 client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse)); return
             }
@@ -222,7 +241,8 @@ private final class AccountSwitchURLProtocol: URLProtocol {
             headers["Set-Cookie"] = "rp_session=\(token); Path=/; Secure; HttpOnly"
             payload = #"{"ok":true}"#
         } else {
-            let member = request.value(forHTTPHeaderField: "Cookie") == "rp_session=member-token"
+            // Simulate an intermediary serving the previous account unless the URL is fresh.
+            let member = !nonce.isEmpty && request.value(forHTTPHeaderField: "Cookie") == "rp_session=member-token"
             let id = member ? "member" : "staff"
             payload = "{\"user\":{\"id\":\"\(id)\",\"name\":\"Test user\",\"email\":\"\(id)@example.test\"},\"stables\":[]}"
         }

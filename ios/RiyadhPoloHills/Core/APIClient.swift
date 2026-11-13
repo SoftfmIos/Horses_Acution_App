@@ -62,12 +62,20 @@ enum APIError: LocalizedError {
         completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 
     func send<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, stableID: String? = nil) async throws -> T {
-        let url = configuration.apiOrigin.appendingPathComponent("api").appendingPathComponent(path)
+        let endpoint = configuration.apiOrigin.appendingPathComponent("api").appendingPathComponent(path)
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        // Match the web portal: local cache policy alone cannot bypass an intermediary cache.
+        if method == "GET" {
+            components?.queryItems = (components?.queryItems ?? []) + [URLQueryItem(name: "_fresh", value: UUID().uuidString)]
+        }
+        guard let url = components?.url else { throw APIError.invalidResponse }
         guard url.scheme == "https" else { throw APIError.message("Use a secure HTTPS API address.") }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
         request.setValue("RiyadhAcademy", forHTTPHeaderField: "X-Requested-With")
         request.setValue(configuration.websiteOrigin.absoluteString, forHTTPHeaderField: "Origin")
         if path != "auth/login", let token { request.setValue("rp_session=\(token)", forHTTPHeaderField: "Cookie") }

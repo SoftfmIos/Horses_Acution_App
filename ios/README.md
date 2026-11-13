@@ -1,6 +1,6 @@
 # Riyadh Polo Hills — iOS
 
-Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.4 (18)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
+Native SwiftUI app for existing academy members and staff. English and Arabic, iPhone and iPad, iOS 17+. The native app has its own version, currently **1.1.5 (19)**; web/backend releases are versioned separately. Development is isolated on branch **iOSApp**.
 
 ## Open and run
 
@@ -86,7 +86,11 @@ Use Apple's Standard EULA in App Store Connect. No custom license text is requir
 
 ## Codemagic version declaration
 
-The signed workflow declares `APP_VERSION: "1.1.4"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+The signed workflow declares `APP_VERSION: "1.1.5"` in `codemagic.yaml`. Preparation validates and writes it to `MARKETING_VERSION` in `Configuration/App.xcconfig` before tests/archiving, and prints both the version and assigned build number. Local builds use the checked-in Xcode configuration. Build numbers remain automatic and advance beyond the latest TestFlight build/CI counter; do not hardcode a reused build number in YAML.
+
+## Fresh account requests (1.1.5)
+
+Every native GET uses a unique `_fresh` query value, matching the web portal, and API requests send explicit no-cache/no-store headers. This prevents a previous auth/me or academy-data response from being reused by an intermediary cache that ignores URLSession's local cache policy. Login continues to omit the previous cookie, persist the new cookie and verify the returned account email. Regression scenarios simulate stale account responses without a fresh URL and verify distinct nonces and cache headers on repeated reads. No backend update is required for this request change.
 
 ## Simulator session tests (1.1.4)
 
