@@ -10,3 +10,4 @@ test-results/
 
 # Server-only SMTP encryption keys
 *.email-key
+*.demo-logins.json

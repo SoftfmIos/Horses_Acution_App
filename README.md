@@ -74,6 +74,8 @@ In-app notifications work without external services. To enable email, configure 
 
 ## Deployment and backups
 
+To replace the existing database with fictional demonstration data while preserving only `abdul@softfm.com`, use the explicit server-side [demo reset instructions](docs/DEMO_RESET.md). Deployment alone never resets data. The preview, automatic backup and transactional replacement are separate from ordinary schema updates.
+
 Run one Node instance against a persistent local disk and terminate HTTPS at a reverse proxy. Set `NODE_ENV=production`, `PUBLIC_ORIGIN=https://your-approved-domain`, and an absolute persistent `DATABASE_PATH`. This is a **single-instance SQLite architecture**, not a horizontally scaled service. Keep the process running for reminder jobs. Back up the database consistently using SQLite's backup API (`npm run db:backup -- /secure/path/academy.sqlite`) or stop the process before copying the database and WAL files together. Backups contain account and business records; restrict access and verify restores in an isolated environment.
 
 ```sh
