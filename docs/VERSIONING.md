@@ -186,3 +186,7 @@ The photo/document importer recognises Abdul's updated login, a.alsagier@riyadhp
 ## 1.31.3
 
 Demo image searches fall back from specific breed/colour/equipment descriptions to broader horse and equestrian searches. This addresses the real cPanel failure at "bay Arabian horse" while preserving public-domain/CC0 filtering, download-host restrictions, size validation, duplicate exclusion and the existing download cache. No database or profile updates occur unless acquisition and validation finish successfully. Regression coverage simulates empty specific-query results and verifies successful broader searches for both horses and instructor avatars.
+
+## 1.32.0
+
+Adds bilingual public first-lesson requests, staff review and booking approval, clinics and open days in the riding calendar, and member-visible lesson feedback with private staff notes. Deploy the same release to Vercel and cPanel, then restart Passenger. The backend creates the new SQLite tables on startup. Health reports version 1.32.0 and academyUpdatesVersion 1.
