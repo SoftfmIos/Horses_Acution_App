@@ -4274,6 +4274,22 @@ test("lesson feedback is restricted to completed bookings and private notes are 
     feedback.staffNotes,
   );
   const [row] = (await f.member.call("/data")).lessonFeedback;
+  assert.equal(row.mark, null);
+  assert.equal(
+    (await f.owner.call(path, "PUT", { ...feedback, mark: 101 })).httpStatus,
+    400,
+  );
+  assert.equal(
+    (await f.owner.call(path, "PUT", { ...feedback, mark: 0 })).httpStatus,
+    200,
+  );
+  assert.equal((await f.owner.call(path, "PUT", feedback)).httpStatus, 200);
+  assert.equal((await f.member.call("/data")).lessonFeedback[0].mark, 0);
+  assert.equal(
+    (await f.owner.call(path, "PUT", { mark: null })).httpStatus,
+    200,
+  );
+  assert.deepEqual((await f.member.call("/data")).lessonFeedback, []);
   assert.equal(row.next_step, feedback.nextStep);
   assert.equal(row.staff_notes, undefined);
   assert.deepEqual((await f.other.call("/data")).lessonFeedback, []);

@@ -2550,3 +2550,58 @@ pre {
   display: grid;
   gap: 0.25rem;
 }
+
+.rider-history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+.rider-history-controls label {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1 1 14rem;
+}
+.rider-history-report {
+  margin-block-start: 1rem;
+}
+.rider-history-ride {
+  margin-block: 0.75rem;
+}
+.rider-history-ride dl {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) 3fr;
+  gap: 0.35rem 1rem;
+}
+.rider-history-ride dt {
+  font-weight: 600;
+}
+.rider-history-ride dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media print {
+  body:has(.rider-history) #root,
+  body:has(.rider-history) #root > div,
+  body:has(.rider-history) .workspace,
+  body:has(.rider-history) main {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  body:has(.rider-history) .sidebar,
+  body:has(.rider-history) .workspace > header,
+  body:has(.rider-history) main > :not(.rider-history),
+  .rider-history .no-print {
+    display: none !important;
+  }
+  .rider-history-ride {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

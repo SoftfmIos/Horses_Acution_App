@@ -307,7 +307,7 @@ export function LessonRequests({
   );
 }
 
-function feedbackFields(ar) {
+export function feedbackFields(ar) {
   return [
     ["focus", "focus", copy(ar, "Lesson focus", "محور الحصة")],
     ["feedback", "feedback", copy(ar, "Rider feedback", "ملاحظات للفارس")],
@@ -324,7 +324,7 @@ function feedbackFields(ar) {
   ];
 }
 
-export function LessonFeedback({ record, ar, busy, save }) {
+export function LessonFeedback({ record, ar, busy, save, marksEnabled }) {
   const fields = feedbackFields(ar);
   const [saved, setSaved] = useState(false);
   return (
@@ -335,8 +335,14 @@ export function LessonFeedback({ record, ar, busy, save }) {
         onChange={() => setSaved(false)}
         onSubmit={async (event) => {
           event.preventDefault();
+          const values = Object.fromEntries(new FormData(event.currentTarget));
+          const { mark, ...fields } = values;
           setSaved(
-            await save(Object.fromEntries(new FormData(event.currentTarget))),
+            await save(
+              marksEnabled
+                ? { ...fields, mark: mark === "" ? null : Number(mark) }
+                : fields,
+            ),
           );
         }}
       >
@@ -351,6 +357,19 @@ export function LessonFeedback({ record, ar, busy, save }) {
             />
           </label>
         ))}
+        {marksEnabled && (
+          <label>
+            {copy(ar, "Mark out of 100 (optional)", "الدرجة من 100 (اختياري)")}
+            <input
+              type="number"
+              name="mark"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue={record?.mark ?? ""}
+            />
+          </label>
+        )}
         <button className="primary" disabled={busy}>
           {copy(ar, "Save feedback", "حفظ الملاحظات")}
         </button>
@@ -379,6 +398,12 @@ export function FeedbackHistory({ data, ar, when }) {
               {when(session?.startsAt || row.updated_at)}
             </summary>
             <dl>
+              {row.mark != null && (
+                <>
+                  <dt>{copy(ar, "Mark", "الدرجة")}</dt>
+                  <dd>{row.mark}/100</dd>
+                </>
+              )}
               {feedbackFields(ar)
                 .slice(0, 3)
                 .filter(([, column]) => row[column])

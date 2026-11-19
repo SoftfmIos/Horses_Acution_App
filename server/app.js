@@ -1969,10 +1969,10 @@ export function createApp(
     result.lessonFeedback =
       !manager || req.org.isAdmin || req.org.permissions.includes("classes")
         ? all(
-            `SELECT f.reservation_id, f.focus, f.feedback, f.next_step, f.updated_at
+            `SELECT f.reservation_id, f.focus, f.feedback, f.next_step, f.updated_at, f.mark
           ${manager ? ", f.staff_notes" : ""}
           FROM lesson_feedback f JOIN reservations r ON r.id=f.reservation_id
-          WHERE r.org_id=? ${manager ? "" : "AND r.member_id=? AND (f.focus<>'' OR f.feedback<>'' OR f.next_step<>'')"}
+          WHERE r.org_id=? ${manager ? "" : "AND r.member_id=? AND (f.focus<>'' OR f.feedback<>'' OR f.next_step<>'' OR f.mark IS NOT NULL)"}
           ORDER BY f.updated_at DESC`,
             ...(manager ? [org] : [org, req.user.id]),
           )
@@ -2122,6 +2122,7 @@ export function createApp(
           timeZone: "Asia/Riyadh",
         };
     }
+    result.riderHistoryVersion = 1;
     result.backendVersion = release.version;
     result.myInstructorProfiles = manager
       ? records(org, "instructors")
@@ -3337,13 +3338,22 @@ export function createApp(
         ? ""
         : text(req.body[key], key, 2000),
     );
+    const hasMark = Object.hasOwn(req.body, "mark");
+    const mark =
+      hasMark && req.body.mark !== null
+        ? integer(req.body.mark, "mark", 0, 100)
+        : null;
     run(
-      `INSERT INTO lesson_feedback VALUES(?,?,?,?,?,?)
+      `INSERT INTO lesson_feedback(reservation_id,focus,feedback,next_step,staff_notes,updated_at,mark)
+      VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(reservation_id) DO UPDATE SET focus=excluded.focus,feedback=excluded.feedback,
-      next_step=excluded.next_step,staff_notes=excluded.staff_notes,updated_at=excluded.updated_at`,
+      next_step=excluded.next_step,staff_notes=excluded.staff_notes,updated_at=excluded.updated_at,
+      mark=CASE WHEN ? THEN excluded.mark ELSE lesson_feedback.mark END`,
       b.id,
       ...fields,
       now(),
+      mark,
+      Number(hasMark),
     );
     audit(req, "lesson_feedback.update", b.id);
     res.json({ ok: true });

@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS email_outbox(id TEXT PRIMARY KEY,user_id TEXT REFEREN
 `);
   if (
     !db
+      .prepare("PRAGMA table_info(lesson_feedback)")
+      .all()
+      .some((column) => column.name === "mark")
+  )
+    db.exec(
+      "ALTER TABLE lesson_feedback ADD COLUMN mark INTEGER CHECK(mark BETWEEN 0 AND 100)",
+    );
+  if (
+    !db
       .prepare("PRAGMA table_info(payments)")
       .all()
       .some((c) => c.name === "external_ref")

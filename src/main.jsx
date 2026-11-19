@@ -1,3 +1,4 @@
+import { RiderHistory } from "./RiderHistory";
 import { AccountSecurity } from "./AccountSecurity";
 import { SessionTotals } from "./SessionTotals";
 import { BookingCredits } from "./BookingCredits";
@@ -130,6 +131,7 @@ const dict = {
     brand: "Riyadh Polo Club Academy",
     overview: "Overview",
     classes: "Classes & riding",
+    riderHistory: "Rider history",
     sessionType: "Session type",
     publicBooking: "Publish on the public booking page",
     horses: "Horses",
@@ -374,6 +376,7 @@ const dict = {
     brand: "أكاديمية نادي الرياض للبولو",
     overview: "نظرة عامة",
     classes: "الحصص والركوب",
+    riderHistory: "سجل الفرسان",
     sessionType: "نوع الموعد",
     publicBooking: "النشر في صفحة الحجز العامة",
     horses: "الخيول",
@@ -683,6 +686,7 @@ function App() {
   const moduleFor = (kind) =>
     ({
       plans: "pricing",
+      riderHistory: "classes",
       boardingManagement: "boarding",
       systemSettings: "settings",
     })[kind] || kind;
@@ -869,6 +873,7 @@ function App() {
   const nav = [
     ["overview", LayoutDashboard],
     ["classes", CalendarDays],
+    ...(manager ? [["riderHistory", BookOpen]] : []),
     ...(!manager
       ? [
           ["accountBalance", BookOpen],
@@ -2575,6 +2580,23 @@ function App() {
               </div>
             </>
           )}
+          {page === "riderHistory" && manager && permitted("classes") && (
+            <RiderHistory
+              key={stable.id}
+              data={data}
+              ar={ar}
+              t={t}
+              when={when}
+              stableName={localizedName(stable, ar)}
+              canEdit={canManage("classes", "edit")}
+              busy={busy}
+              save={(id, body) =>
+                action(() =>
+                  request("/lesson-feedback/" + id, { method: "PUT", body }),
+                )
+              }
+            />
+          )}
           {page === "classes" && (
             <>
               {manager && permitted("classes") && (
@@ -2922,6 +2944,7 @@ function App() {
                                 Date.parse(c.endsAt) <= Date.now(),
                             ) && (
                               <LessonFeedback
+                                marksEnabled={data.riderHistoryVersion === 1}
                                 key={stable.id + b.id}
                                 record={data.lessonFeedback?.find(
                                   (f) => f.reservation_id === b.id,
