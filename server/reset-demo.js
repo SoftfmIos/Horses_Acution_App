@@ -21,6 +21,8 @@ const tables = [
   "password_resets",
   "deleted_accounts",
   "attendance",
+  "lesson_feedback",
+  "public_lesson_requests",
   "waitlist",
   "credit_ledger",
   "payments",

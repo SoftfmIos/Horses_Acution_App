@@ -16,6 +16,11 @@ export function classOpenings(body) {
     invalid("Select between 1 and 50 instructors");
   const instructors = [...new Set(body.instructorIds)];
   if (
+    ["clinic", "open_day"].includes(body.sessionType) &&
+    instructors.length !== 1
+  )
+    invalid("Select one lead instructor for an event");
+  if (
     !Array.isArray(body.horseIds) ||
     new Set(body.horseIds).size < instructors.length
   )

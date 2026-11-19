@@ -77,29 +77,32 @@ export function permissionForRoute(path, method) {
       : null;
   page = { plans: "pricing" }[page] || page;
   if (!page)
-    page = /^\/(quote|bookings|class-series|attendance|waitlist)/.test(path)
-      ? "classes"
-      : /^\/(proformas|packages)/.test(path)
-        ? "billing"
-        : /^\/(horses|horse-documents)/.test(path)
-          ? "horses"
-          : /^\/boarding/.test(path)
-            ? "boarding"
-            : /^\/tasks/.test(path)
-              ? "tasks"
-              : /^\/inventory/.test(path)
-                ? "inventory"
-                : /^\/(members|invites)/.test(path)
-                  ? "members"
-                  : /^\/stables/.test(path)
-                    ? "stables"
-                    : /^\/settings\/email/.test(path)
-                      ? "emailSettings"
-                      : /^\/settings/.test(path)
-                        ? "settings"
-                        : /^\/(reports|audit)/.test(path)
-                          ? "reports"
-                          : null;
+    page =
+      /^\/(quote|bookings|class-series|attendance|waitlist|lesson-requests|lesson-feedback)/.test(
+        path,
+      )
+        ? "classes"
+        : /^\/(proformas|packages)/.test(path)
+          ? "billing"
+          : /^\/(horses|horse-documents)/.test(path)
+            ? "horses"
+            : /^\/boarding/.test(path)
+              ? "boarding"
+              : /^\/tasks/.test(path)
+                ? "tasks"
+                : /^\/inventory/.test(path)
+                  ? "inventory"
+                  : /^\/(members|invites)/.test(path)
+                    ? "members"
+                    : /^\/stables/.test(path)
+                      ? "stables"
+                      : /^\/settings\/email/.test(path)
+                        ? "emailSettings"
+                        : /^\/settings/.test(path)
+                          ? "settings"
+                          : /^\/(reports|audit)/.test(path)
+                            ? "reports"
+                            : null;
   if (!PERMISSION_PAGES.includes(page)) return null;
   const action =
     ["GET", "HEAD", "OPTIONS"].includes(method) || path === "/quote"

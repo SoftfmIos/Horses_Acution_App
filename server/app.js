@@ -555,7 +555,81 @@ export function createApp(
       bookingVersion: 1,
       medicalScheduleVersion: 2,
       accountVersion: 1,
+      academyUpdatesVersion: 1,
     }),
+  );
+  function publicOpening(org, c) {
+    if (!c.publicBooking || c.startsAt <= now()) return null;
+    const plan = records(org, "plans").find(
+      (p) => p.id === c.planId && p.active,
+    );
+    if (!plan) return null;
+    const { places } = safeClass({ org: { id: org } }, c);
+    return {
+      id: c.id,
+      title: c.title,
+      titleEn: c.titleEn,
+      titleAr: c.titleAr,
+      type: c.sessionType || "lesson",
+      startsAt: c.startsAt,
+      endsAt: c.endsAt,
+      arena: c.arena,
+      amount: plan.amount,
+      places,
+    };
+  }
+  app.get("/api/public/openings", (req, res) => {
+    const rows = all(
+      "SELECT org_id,data,id FROM records WHERE kind='classes' AND json_extract(data,'$.publicBooking')=1 AND json_extract(data,'$.startsAt')>? ORDER BY json_extract(data,'$.startsAt')",
+      now(),
+    );
+    res.json(
+      rows
+        .map((r) =>
+          publicOpening(r.org_id, { ...JSON.parse(r.data), id: r.id }),
+        )
+        .filter(Boolean),
+    );
+  });
+  app.post(
+    "/api/public/lesson-requests",
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 20,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      handler: (req, res) =>
+        res.status(429).json({ error: "Too many requests / طلبات كثيرة" }),
+    }),
+    (req, res) => {
+      const classId = text(req.body.classId, "opening");
+      const email = text(req.body.email, "email", 254).toLowerCase();
+      const name = text(req.body.name, "name", 100);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Invalid email");
+      transaction(() => {
+        const row = get(
+          "SELECT org_id,data FROM records WHERE id=? AND kind='classes'",
+          classId,
+        );
+        const opening =
+          row &&
+          publicOpening(row.org_id, { ...JSON.parse(row.data), id: classId });
+        if (!opening?.places)
+          fail("This opening is no longer available / الموعد غير متاح", 409);
+        run(
+          "INSERT INTO public_lesson_requests(id,org_id,class_id,name,email,requested_start,requested_amount,status,created_at) VALUES(?,?,?,?,?,?,?,'pending',?) ON CONFLICT(org_id,class_id,email) WHERE status='pending' DO NOTHING",
+          id(),
+          row.org_id,
+          classId,
+          name,
+          email,
+          opening.startsAt,
+          opening.amount,
+          now(),
+        );
+      });
+      res.status(202).json({ received: true });
+    },
   );
   const authLimit = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -1316,7 +1390,11 @@ export function createApp(
       if (Date.parse(endsAt) - Date.parse(startsAt) > 86400000)
         fail("A class cannot exceed 24 hours");
       const capacity = integer(b.capacity, "capacity", 1, 100);
-      if (b.instructorId && capacity !== 1)
+      if (
+        b.instructorId &&
+        capacity !== 1 &&
+        (!b.sessionType || b.sessionType === "lesson")
+      )
         fail("An instructor slot has exactly one place");
       const horseIds = [
         ...new Set(Array.isArray(b.horseIds) ? b.horseIds : []),
@@ -1336,8 +1414,13 @@ export function createApp(
       if (!plan.active) fail("Price is inactive");
       if (plan.credits > 0)
         fail("Use a per-session price for a class, not a package");
+      const sessionType = b.sessionType || "lesson";
+      if (!["lesson", "clinic", "open_day"].includes(sessionType))
+        fail("Invalid session type");
       const data = {
         title: text(b.title, "title", 100),
+        sessionType,
+        publicBooking: b.publicBooking === true,
         startsAt,
         endsAt,
         capacity,
@@ -1883,6 +1966,17 @@ export function createApp(
           : " AND reservation_id IN (SELECT id FROM reservations WHERE member_id=?)"),
       ...(manager ? [org] : [org, req.user.id]),
     );
+    result.lessonFeedback =
+      !manager || req.org.isAdmin || req.org.permissions.includes("classes")
+        ? all(
+            `SELECT f.reservation_id, f.focus, f.feedback, f.next_step, f.updated_at
+          ${manager ? ", f.staff_notes" : ""}
+          FROM lesson_feedback f JOIN reservations r ON r.id=f.reservation_id
+          WHERE r.org_id=? ${manager ? "" : "AND r.member_id=? AND (f.focus<>'' OR f.feedback<>'' OR f.next_step<>'')"}
+          ORDER BY f.updated_at DESC`,
+            ...(manager ? [org] : [org, req.user.id]),
+          )
+        : [];
     if (!manager) {
       const bookedClasses = new Set(result.bookings.map((b) => b.class_id));
       const horseIds = new Set(result.bookings.map((b) => b.horse_id));
@@ -2152,26 +2246,28 @@ export function createApp(
         if (kind === "classes" && slot.instructorId) {
           const teacher = record(req.org.id, "instructors", slot.instructorId);
           if (!teacher.active) fail("Instructor is inactive", 409);
-          const horseId = req.body.horseIds.find(
-            (h) =>
-              record(req.org.id, "horses", h).status === "ready" &&
-              !feedingBlocked(req.org.id, h, slot.startsAt, slot.endsAt) &&
-              !records(req.org.id, "classes").some(
-                (c) =>
-                  c.id !== (reuse ? rid : null) &&
-                  overlap(c, slot) &&
-                  c.horseIds.includes(h),
-              ),
-          );
-          if (!horseId)
-            fail(
-              "Not enough available horses for all instructors at " +
-                slot.startsAt,
-              409,
-            );
           body.instructor = teacher.name;
-          body.horseIds = [horseId];
-          body.capacity = 1;
+          if (!body.sessionType || body.sessionType === "lesson") {
+            const horseId = req.body.horseIds.find(
+              (h) =>
+                record(req.org.id, "horses", h).status === "ready" &&
+                !feedingBlocked(req.org.id, h, slot.startsAt, slot.endsAt) &&
+                !records(req.org.id, "classes").some(
+                  (c) =>
+                    c.id !== (reuse ? rid : null) &&
+                    overlap(c, slot) &&
+                    c.horseIds.includes(h),
+                ),
+            );
+            if (!horseId)
+              fail(
+                "Not enough available horses for all instructors at " +
+                  slot.startsAt,
+                409,
+              );
+            body.horseIds = [horseId];
+            body.capacity = 1;
+          }
         }
         const data = {
           ...validate(req, kind, body, reuse ? rid : undefined, { seriesId }),
@@ -2416,12 +2512,28 @@ export function createApp(
       memberId: q.memberId,
     });
   });
-  app.post("/api/bookings", (req, res) => {
+  function createBooking(req) {
     const org = req.org.id,
       uid = bookingMember(req);
-    const result = transaction(() => {
+    return transaction(() => {
       const q = quote(req),
         c = q.class;
+      if (req.publicLessonRequest) {
+        const pending = get(
+          "SELECT requested_start,requested_amount FROM public_lesson_requests WHERE id=? AND status='pending'",
+          req.publicLessonRequest,
+        );
+        if (
+          !c.publicBooking ||
+          !pending ||
+          pending.requested_start !== c.startsAt ||
+          pending.requested_amount !== q.due
+        )
+          fail(
+            "The opening changed. Decline this request and ask the visitor to submit a new one.",
+            409,
+          );
+      }
       if (
         req.body.expectedDue !== undefined &&
         (req.body.expectedDue !== q.due ||
@@ -2451,6 +2563,12 @@ export function createApp(
       if (
         c.instructorId &&
         active.some((b) => {
+          if (
+            b.class_id === c.id &&
+            c.sessionType &&
+            c.sessionType !== "lesson"
+          )
+            return false;
           const other = record(org, "classes", b.class_id);
           return (
             overlap(other, c) &&
@@ -2542,6 +2660,14 @@ export function createApp(
         uid,
         c.id,
       );
+      if (req.publicLessonRequest) {
+        run(
+          "UPDATE public_lesson_requests SET status='approved', booking_id=? WHERE id=?",
+          bid,
+          req.publicLessonRequest,
+        );
+        audit(req, "lesson_request.approve", req.publicLessonRequest);
+      }
       audit(req, "booking.create", bid);
       return {
         id: bid,
@@ -2555,7 +2681,53 @@ export function createApp(
         ).hold_expires_at,
       };
     });
-    res.status(201).json(result);
+  }
+  app.post("/api/bookings", (req, res) =>
+    res.status(201).json(createBooking(req)),
+  );
+  app.get("/api/lesson-requests", owner, (req, res) => {
+    res.json(
+      all(
+        `SELECT r.*, json_extract(c.data,'$.title') AS title,
+      json_extract(c.data,'$.startsAt') AS starts_at, m.user_id AS member_id
+      FROM public_lesson_requests r LEFT JOIN records c ON c.id=r.class_id
+      LEFT JOIN users u ON u.email=r.email
+      LEFT JOIN memberships m ON m.user_id=u.id AND m.org_id=r.org_id
+      WHERE r.org_id=? AND r.status='pending' ORDER BY r.created_at`,
+        req.org.id,
+      ),
+    );
+  });
+  app.put("/api/lesson-requests/:id", owner, (req, res) => {
+    const row = get(
+      "SELECT * FROM public_lesson_requests WHERE id=? AND org_id=?",
+      req.params.id,
+      req.org.id,
+    );
+    if (!row) fail("Request not found", 404);
+    if (row.status !== "pending") fail("Request already reviewed", 409);
+    if (req.body.status === "declined") {
+      run(
+        "UPDATE public_lesson_requests SET status='declined' WHERE id=?",
+        row.id,
+      );
+      audit(req, "lesson_request.decline", row.id);
+      return res.json({ ok: true });
+    }
+    if (req.body.status !== "approved") fail("Invalid request status");
+    if (!req.org.isAdmin && !req.org.actionPermissions.classes?.includes("add"))
+      fail("Booking permission required", 403);
+    const member = get(
+      `SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id
+      WHERE u.email=? AND m.org_id=?`,
+      row.email,
+      req.org.id,
+    );
+    if (!member)
+      fail("Add or invite a member with this email before approving", 409);
+    req.body = { memberId: member.id, classId: row.class_id };
+    req.publicLessonRequest = row.id;
+    res.json(createBooking(req));
   });
   app.post("/api/bookings/:id/cancel", (req, res) => {
     transaction(() => {
@@ -3149,6 +3321,31 @@ export function createApp(
         ? [req.params.id, req.org.id]
         : [req.params.id, req.org.id, req.user.id]),
     );
+    res.json({ ok: true });
+  });
+  app.put("/api/lesson-feedback/:id", owner, (req, res) => {
+    const b = get(
+      "SELECT * FROM reservations WHERE id=? AND org_id=?",
+      req.params.id,
+      req.org.id,
+    );
+    if (!b || b.status !== "confirmed") fail("Confirmed booking required", 409);
+    if (record(req.org.id, "classes", b.class_id).endsAt > now())
+      fail("Feedback can be saved after the session ends", 409);
+    const fields = ["focus", "feedback", "nextStep", "staffNotes"].map((key) =>
+      req.body[key] === "" || req.body[key] === undefined
+        ? ""
+        : text(req.body[key], key, 2000),
+    );
+    run(
+      `INSERT INTO lesson_feedback VALUES(?,?,?,?,?,?)
+      ON CONFLICT(reservation_id) DO UPDATE SET focus=excluded.focus,feedback=excluded.feedback,
+      next_step=excluded.next_step,staff_notes=excluded.staff_notes,updated_at=excluded.updated_at`,
+      b.id,
+      ...fields,
+      now(),
+    );
+    audit(req, "lesson_feedback.update", b.id);
     res.json({ ok: true });
   });
   app.put("/api/attendance/:id", owner, (req, res) => {

@@ -18,6 +18,20 @@ CREATE TABLE IF NOT EXISTS invites(token TEXT PRIMARY KEY,org_id TEXT REFERENCES
 CREATE TABLE IF NOT EXISTS records(id TEXT PRIMARY KEY,org_id TEXT REFERENCES organizations(id),kind TEXT NOT NULL,data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_org_kind ON records(org_id,kind);
 CREATE TABLE IF NOT EXISTS reservations(id TEXT PRIMARY KEY,org_id TEXT REFERENCES organizations(id),member_id TEXT REFERENCES users(id),class_id TEXT NOT NULL,horse_id TEXT,status TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS lesson_feedback(
+  reservation_id TEXT PRIMARY KEY REFERENCES reservations(id) ON DELETE CASCADE,
+  focus TEXT NOT NULL, feedback TEXT NOT NULL, next_step TEXT NOT NULL,
+  staff_notes TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS public_lesson_requests(
+  id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  class_id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL,
+  requested_start TEXT NOT NULL, requested_amount INTEGER NOT NULL,
+  status TEXT NOT NULL, booking_id TEXT REFERENCES reservations(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS public_lesson_pending
+  ON public_lesson_requests(org_id,class_id,email) WHERE status='pending';
 CREATE UNIQUE INDEX IF NOT EXISTS reservation_active ON reservations(org_id,member_id,class_id) WHERE status='confirmed';
 CREATE TABLE IF NOT EXISTS proformas(id TEXT PRIMARY KEY,org_id TEXT REFERENCES organizations(id),member_id TEXT REFERENCES users(id),reservation_id TEXT UNIQUE,description TEXT NOT NULL,gross INTEGER NOT NULL,discount INTEGER NOT NULL,voucher INTEGER NOT NULL,due INTEGER NOT NULL,paid INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,discount_id TEXT,voucher_id TEXT,external_ref TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS payments(id TEXT PRIMARY KEY,org_id TEXT REFERENCES organizations(id),proforma_id TEXT REFERENCES proformas(id),amount INTEGER NOT NULL,reference TEXT NOT NULL,created_at TEXT NOT NULL);

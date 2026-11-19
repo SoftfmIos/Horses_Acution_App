@@ -8,7 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 async function fixture(t) {
   const db = openDatabase(":memory:");
-  const app = createApp(db, { clock: () => new Date("2026-11-11T07:00:00Z") });
+  let time = "2026-11-11T07:00:00Z";
+  const app = createApp(db, { clock: () => new Date(time) });
   const server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   t.after(
@@ -78,7 +79,19 @@ async function fixture(t) {
     assert.equal(r.httpStatus, 201, JSON.stringify(r));
     return r;
   }
-  return { db, app, owner, member, other, create, client, base };
+  return {
+    db,
+    app,
+    owner,
+    member,
+    other,
+    create,
+    client,
+    base,
+    setTime: (value) => {
+      time = value;
+    },
+  };
 }
 async function setup(f, amount = 20000) {
   const horse = await f.create("horses", { name: "Shams", breed: "Arabian" });
@@ -4163,4 +4176,105 @@ test("member snapshots hide academy work and private records while owned-horse p
       .httpStatus,
     403,
   );
+});
+
+test("public requests approve once through regular booking and event capacity", async (t) => {
+  const f = await fixture(t);
+  const { horse, plan, cls } = await setup(f);
+  const secondHorse = await f.create("horses", {
+    name: "Badr",
+    breed: "Arabian",
+  });
+  const instructor = await f.create("instructors", {
+    name: "Noor",
+    active: true,
+  });
+  const event = await f.create("classes", {
+    titleEn: "Polo clinic",
+    titleAr: "ورشة بولو",
+    sessionType: "clinic",
+    publicBooking: true,
+    startsAt: "2026-11-13T10:00:00Z",
+    endsAt: "2026-11-13T11:00:00Z",
+    capacity: 2,
+    horseIds: [horse.id, secondHorse.id],
+    instructorIds: [instructor.id],
+    arena: "A",
+    planId: plan.id,
+  });
+  const eventId = event.id;
+  const visitor = f.client();
+  const listings = await visitor.call("/public/openings");
+  assert.equal(listings[0].id, eventId);
+  assert.equal(listings[0].places, 2);
+  assert.equal(listings[0].amount, 20000);
+  assert.equal(listings[0].horseIds, undefined);
+  assert.equal(listings[1], undefined);
+  const submit = (classId, email) =>
+    visitor.call("/public/lesson-requests", "POST", {
+      classId,
+      email,
+      name: "Visitor",
+    });
+  assert.equal((await submit(cls.id, "member@test.com")).httpStatus, 409);
+  for (const email of ["member@test.com", "MEMBER@test.com", "guest@test.com"])
+    assert.equal((await submit(eventId, email)).httpStatus, 202);
+  assert.equal((await visitor.call("/lesson-requests")).httpStatus, 401);
+  assert.equal((await f.member.call("/lesson-requests")).httpStatus, 403);
+  assert.equal((await f.other.call("/lesson-requests"))[0], undefined);
+  const queue = await f.owner.call("/lesson-requests");
+  assert.equal(queue[2], undefined);
+  const approve = (request) =>
+    f.owner.call("/lesson-requests/" + request.id, "PUT", {
+      status: "approved",
+    });
+  const guestRequest = [queue[0], queue[1]].find(
+    (row) => row.email === "guest@test.com",
+  );
+  const memberRequest = [queue[0], queue[1]].find(
+    (row) => row.email === "member@test.com",
+  );
+  assert.equal((await approve(guestRequest)).httpStatus, 409);
+  const first = await approve(memberRequest);
+  assert.equal(first.status, "pending_payment");
+  assert.ok(first.proformaId);
+  assert.equal((await approve(memberRequest)).httpStatus, 409);
+  const guest = await f.owner.call("/members", "POST", {
+    name: "Guest",
+    email: "guest@test.com",
+    password: "local123",
+  });
+  assert.equal(guest.httpStatus, 201);
+  const second = await approve(guestRequest);
+  assert.equal(second.memberId, guest.id);
+  assert.equal(second.status, "pending_payment");
+  assert.equal((await visitor.call("/public/openings"))[0].places, 0);
+  assert.equal((await submit(eventId, "third@test.com")).httpStatus, 409);
+});
+
+test("lesson feedback is restricted to completed bookings and private notes are staff-only", async (t) => {
+  const f = await fixture(t);
+  const { cls } = await setup(f, 0);
+  const booking = await f.member.call("/bookings", "POST", { classId: cls.id });
+  assert.equal(booking.status, "confirmed");
+  const path = "/lesson-feedback/" + booking.id;
+  const feedback = {
+    focus: "Balance",
+    feedback: "Improved posture",
+    nextStep: "Practice turns",
+    staffNotes: "Private note",
+  };
+  assert.equal((await f.owner.call(path, "PUT", feedback)).httpStatus, 409);
+  f.setTime("2026-11-12T12:00:00Z");
+  assert.equal((await f.member.call(path, "PUT", feedback)).httpStatus, 403);
+  assert.equal((await f.other.call(path, "PUT", feedback)).httpStatus, 409);
+  assert.equal((await f.owner.call(path, "PUT", feedback)).httpStatus, 200);
+  assert.equal(
+    (await f.owner.call("/data")).lessonFeedback[0].staff_notes,
+    feedback.staffNotes,
+  );
+  const [row] = (await f.member.call("/data")).lessonFeedback;
+  assert.equal(row.next_step, feedback.nextStep);
+  assert.equal(row.staff_notes, undefined);
+  assert.deepEqual((await f.other.call("/data")).lessonFeedback, []);
 });

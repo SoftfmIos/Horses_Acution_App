@@ -242,6 +242,11 @@ export function accountRoutes(c) {
       run("DELETE FROM staff_permissions WHERE user_id=?", row.id);
       run("DELETE FROM system_admins WHERE user_id=?", row.id);
       run("DELETE FROM waitlist WHERE member_id=?", row.id);
+      run("DELETE FROM public_lesson_requests WHERE email=?", row.email);
+      run(
+        "DELETE FROM lesson_feedback WHERE reservation_id IN (SELECT id FROM reservations WHERE member_id=?)",
+        row.id,
+      );
       run("DELETE FROM memberships WHERE user_id=?", row.id);
       run(
         "UPDATE users SET email=?,name='Deleted account',password=? WHERE id=?",

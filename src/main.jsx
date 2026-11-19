@@ -56,6 +56,13 @@ import { api } from "./api";
 import { localizeData, localizedName, missingCatalogues } from "./localization";
 import { HorseHead } from "./HorseHead";
 import { SettingsHub } from "./SettingsHub";
+import {
+  PublicAcademy,
+  LessonRequests,
+  LessonFeedback,
+  FeedbackHistory,
+  sessionLabel,
+} from "./AcademyUpdates";
 import { ClientHome } from "./ClientHome";
 import { CareTasks } from "./CareTasks";
 import { TaskPlanner } from "./TaskPlanner";
@@ -123,6 +130,8 @@ const dict = {
     brand: "Riyadh Polo Club Academy",
     overview: "Overview",
     classes: "Classes & riding",
+    sessionType: "Session type",
+    publicBooking: "Publish on the public booking page",
     horses: "Horses",
     medical: "Medical care",
     feeding: "Feeding plans",
@@ -365,6 +374,8 @@ const dict = {
     brand: "أكاديمية نادي الرياض للبولو",
     overview: "نظرة عامة",
     classes: "الحصص والركوب",
+    sessionType: "نوع الموعد",
+    publicBooking: "النشر في صفحة الحجز العامة",
     horses: "الخيول",
     medical: "الرعاية الطبية",
     feeding: "خطط التغذية",
@@ -1040,6 +1051,16 @@ function App() {
           ["active", "checkbox"],
         ],
         classes: [
+          [
+            "sessionType",
+            "select",
+            true,
+            ["lesson", "clinic", "open_day"].map((type) => [
+              type,
+              sessionLabel(type, ar),
+            ]),
+          ],
+          ["publicBooking", "checkbox"],
           ["titleEn", "text", true],
           ["titleAr", "text"],
           ["startsAt", "datetime-local", true],
@@ -1186,6 +1207,7 @@ function App() {
       repeatDays: [],
       repeatUntil: "",
       placeType: "arena",
+      sessionType: "lesson",
       capacity: kind === "classes" ? 1 : data.settings?.defaultCapacity || 1,
       creditCost: data.settings?.defaultCreditCost || 1,
       credits: 0,
@@ -1277,6 +1299,21 @@ function App() {
     try {
       const kind = modal.kind,
         savedStable = stable?.id;
+      if (
+        kind === "classes" &&
+        (b.publicBooking ||
+          b.sessionType !== "lesson" ||
+          modal.record?.publicBooking ||
+          (modal.record?.sessionType && modal.record.sessionType !== "lesson"))
+      ) {
+        const health = await request("/health");
+        if (health.academyUpdatesVersion !== 1)
+          throw new Error(
+            ar
+              ? "حدّث الخادم قبل حفظ الفعالية أو النشر العام."
+              : "Update the Academy backend before saving events or public openings.",
+          );
+      }
       if (expected && b.instructorIds) {
         const health = await request("/health");
         if (health.schedulingVersion !== 2)
@@ -1746,6 +1783,13 @@ function App() {
           )}
           <AuthForm t={t} ar={ar} onSuccess={init} />
           <p>
+            <a href={ar ? "/?visit=1&lang=ar" : "/?visit=1"}>
+              {ar
+                ? "احجز حصتك الأولى واستعرض الفعاليات"
+                : "Book your first lesson or browse events"}
+            </a>
+          </p>
+          <p>
             <a href="/app.html">{ar ? "عن التطبيق" : "About the app"}</a>
             {" · "}
             <a href="/privacy.html">
@@ -2146,6 +2190,9 @@ function App() {
             />
           )}
           {page === "overview" && client && (
+            <FeedbackHistory data={data} ar={ar} when={when} />
+          )}
+          {page === "overview" && client && (
             <ClientHome
               key={stable.id}
               request={request}
@@ -2321,6 +2368,11 @@ function App() {
                     return (
                       <article className="panel record-card" key={b.id}>
                         <h3>{c.title}</h3>
+                        {c.sessionType && c.sessionType !== "lesson" && (
+                          <span className="pill">
+                            {sessionLabel(c.sessionType, ar)}
+                          </span>
+                        )}
                         <p>{when(c.startsAt)}</p>
                         <InstructorBadge
                           session={c}
@@ -2525,6 +2577,18 @@ function App() {
           )}
           {page === "classes" && (
             <>
+              {manager && permitted("classes") && (
+                <LessonRequests
+                  key={stable.id}
+                  request={request}
+                  action={action}
+                  ar={ar}
+                  when={when}
+                  busy={busy}
+                  canEdit={canManage("classes", "edit")}
+                  canApprove={canManage("classes", "add")}
+                />
+              )}
               <p className="notice">
                 {ar
                   ? "احجز موعداً أخضر. الحجز الأصفر يحتفظ بالمقعد لمدة تصل إلى " +
@@ -2667,6 +2731,11 @@ function App() {
                           </span>
                         </div>
                         <h3>{c.title}</h3>
+                        {c.sessionType && c.sessionType !== "lesson" && (
+                          <span className="pill">
+                            {sessionLabel(c.sessionType, ar)}
+                          </span>
+                        )}
                         <p>{when(c.startsAt)}</p>
                         <p>
                           {c.arena} · {money(plan?.amount)}
@@ -2844,6 +2913,30 @@ function App() {
                                   </option>
                                 </select>
                               </label>
+                            )}
+                          {canManage("classes", "edit") &&
+                            b.status === "confirmed" &&
+                            data.classes.some(
+                              (c) =>
+                                c.id === b.class_id &&
+                                Date.parse(c.endsAt) <= Date.now(),
+                            ) && (
+                              <LessonFeedback
+                                key={stable.id + b.id}
+                                record={data.lessonFeedback?.find(
+                                  (f) => f.reservation_id === b.id,
+                                )}
+                                ar={ar}
+                                busy={busy}
+                                save={(body) =>
+                                  action(() =>
+                                    request("/lesson-feedback/" + b.id, {
+                                      method: "PUT",
+                                      body,
+                                    }),
+                                  )
+                                }
+                              />
                             )}
                         </td>
                         <td>
@@ -3765,7 +3858,8 @@ function App() {
                             readOnly={
                               modal.kind === "classes" &&
                               key === "capacity" &&
-                              !modal.record
+                              !modal.record &&
+                              modal.form.sessionType === "lesson"
                             }
                             list={
                               modal.kind === "classes" &&
@@ -4027,4 +4121,10 @@ function AuthForm({ t, ar, onSuccess }) {
     </>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  new URLSearchParams(location.search).has("visit") ? (
+    <PublicAcademy />
+  ) : (
+    <App />
+  ),
+);

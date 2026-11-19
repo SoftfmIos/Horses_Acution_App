@@ -75,6 +75,7 @@ for (const passenger of [false, true]) {
       bookingVersion: 1,
       medicalScheduleVersion: 2,
       accountVersion: 1,
+      academyUpdatesVersion: 1,
     });
     assert.ok(!stderr.includes("ERR_REQUIRE_ASYNC_MODULE"));
   });

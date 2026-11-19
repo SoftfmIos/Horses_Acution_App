@@ -2481,3 +2481,72 @@ pre {
 .account-delete-button {
   background: #923b32;
 }
+
+.academy-public {
+  min-height: 100vh;
+  background: #f7f3eb;
+  color: #0d2d45;
+}
+
+.academy-public > header,
+.academy-public > main {
+  width: min(100% - 2rem, 70rem);
+  margin-inline: auto;
+}
+
+.academy-public > header,
+.academy-public > header > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.academy-public > header {
+  padding-block: 1rem;
+  border-bottom: 1px solid #d8cbb6;
+}
+
+.academy-public-intro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: center;
+  padding-block: 3rem 2rem;
+}
+
+.academy-public-intro img {
+  width: 8rem;
+}
+
+.academy-public-intro > div {
+  flex: 1 1 17rem;
+}
+
+.academy-public-intro h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.academy-public-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+  padding-block: 1rem;
+}
+
+.academy-feedback {
+  display: grid;
+  gap: 0.75rem;
+  min-width: min(14rem, 100%);
+}
+
+.academy-public .academy-feedback {
+  max-width: 36rem;
+  margin-block: 1rem 2rem;
+}
+
+.academy-feedback label {
+  display: grid;
+  gap: 0.25rem;
+}
